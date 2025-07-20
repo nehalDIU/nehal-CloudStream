@@ -1,10 +1,10 @@
-package com.example
+package com.nehal
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-class MyCustomProvider : MainAPI() {
+class MovieBoxProvider : MainAPI() {
     override var mainUrl = "https://api.inmoviebox.com" // Replace with your target website
     override var name = "MovieBox"
     override val hasMainPage = true
@@ -123,7 +123,7 @@ class MyCustomProvider : MainAPI() {
             val videoUrl = element.attr("src")
             if (videoUrl.isNotEmpty()) {
                 callback.invoke(
-                    ExtractorLink(
+                    newExtractorLink(
                         source = name,
                         name = name,
                         url = videoUrl,
