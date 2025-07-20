@@ -36,5 +36,5 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "http://10.16.100.244/images/logo-purple.svg"
+    iconUrl = "https://github.com/nehalDIU/nehal-CloudStream/blob/master/BdixICCFtp/BdixICCFtp.png"
 }

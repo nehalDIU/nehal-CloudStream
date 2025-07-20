@@ -31,5 +31,5 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "http://new.circleftp.net/static/media/logo.fce2c9029060a10687b8.png"
+    iconUrl = "https://github.com/nehalDIU/nehal-CloudStream/blob/master/BdixICCFtp/BdixICCFtp.png"
 }
