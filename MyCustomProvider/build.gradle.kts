@@ -1,10 +1,17 @@
 // use an integer for version numbers
 version = 1
 
+android {
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
 cloudstream {
+    language = "ta"
     // All of these properties are optional, you can safely remove them
 
-    description = "MovieBox Provider"
+    description = "Custom Movies and Series Provider"
     authors = listOf("Nehal")
 
     /**
@@ -15,15 +22,10 @@ cloudstream {
      * 3: Beta only
      * */
     status = 1 // will be 3 if unspecified
-
-    // List of video source types. Users are able to filter for extensions in a given category.
-    // You can find a list of avaliable types here:
-    // https://recloudstream.github.io/cloudstream/html/app/com.lagradost.cloudstream3/-tv-type/index.html
     tvTypes = listOf(
         "Movie",
         "TvSeries"
     )
-    language = "ta"
 
-    iconUrl = "https://api.inmoviebox.com/favicon.ico"
+    iconUrl = "https://h5-static.aoneroom.com/oneroomStatic/public/_nuxt/web-logo.apJjVir2.svg" // Replace with your icon URL
 }
