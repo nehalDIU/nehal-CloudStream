@@ -5,13 +5,18 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    defaultConfig {
+        buildConfigField("String", "MOVIEBOX_SECRET_KEY_DEFAULT", "\"YWJjZGVmZ2hpams=\"")
+        buildConfigField("String", "MOVIEBOX_SECRET_KEY_ALT", "\"bG1ub3BxcnN0dXZ3eHl6=\"")
+    }
 }
 
 cloudstream {
     language = "ta"
     // All of these properties are optional, you can safely remove them
 
-    description = "Custom Movies and Series Provider"
+    description = "MovieBox Movies and Series Provider"
     authors = listOf("Nehal")
 
     /**
