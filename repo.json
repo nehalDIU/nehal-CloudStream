@@ -1,0 +1,8 @@
+{
+    "name": "Nehal's BDIX repository",
+    "description": "Nehal's BDIX repository",
+    "manifestVersion": 1,
+    "pluginLists": [
+      "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/plugins.json"
+    ]
+}
