@@ -20,8 +20,8 @@ class MovieBoxProvider : MainAPI() {
     override var lang = "ta"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    private val secretKeyDefault = "cGxhY2Vob2xkZXJfa2V5XzE="  // placeholder_key_1 in base64
-    private val secretKeyAlt = "cGxhY2Vob2xkZXJfa2V5XzI="      // placeholder_key_2 in base64
+    private val secretKeyDefault = BuildConfig.MOVIEBOX_SECRET_KEY_DEFAULT
+    private val secretKeyAlt = BuildConfig.MOVIEBOX_SECRET_KEY_ALT
 
 
     private fun md5(input: ByteArray): String {
@@ -131,18 +131,11 @@ class MovieBoxProvider : MainAPI() {
         
 
             val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
-            val response = try {
-                app.post(
-                    url,
-                    headers = headers,
-                    requestBody = requestBody
-                )
-            } catch (e: Exception) {
-                if (e.message?.contains("407") == true || e.message?.contains("Proxy") == true) {
-                    throw ErrorLoadingException("Proxy authentication required. Please check your network settings.")
-                }
-                throw ErrorLoadingException("Network error: ${e.message}")
-            }
+            val response = app.post(
+                url,
+                headers = headers,
+                requestBody = requestBody
+            )
             val responseCode = response.code
             val responseBody = response.body?.string() ?: ""
             // Use Jackson to parse the new API response structure
@@ -196,18 +189,11 @@ class MovieBoxProvider : MainAPI() {
             "x-client-status" to "0"
         )
         val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
-        val response = try {
-            app.post(
-                url,
-                headers = headers,
-                requestBody = requestBody
-            )
-        } catch (e: Exception) {
-            if (e.message?.contains("407") == true || e.message?.contains("Proxy") == true) {
-                throw ErrorLoadingException("Proxy authentication required. Please check your network settings.")
-            }
-            throw ErrorLoadingException("Network error: ${e.message}")
-        }
+        val response = app.post(
+            url,
+            headers = headers,
+            requestBody = requestBody
+        )
         val responseCode = response.code
         val responseBody = response.body.string()  
         val mapper = jacksonObjectMapper()
@@ -260,14 +246,7 @@ class MovieBoxProvider : MainAPI() {
             "x-client-status" to "0",
             "x-play-mode" to "2" // Optional, if needed for specific API behavior
         )
-        val response = try {
-            app.get(finalUrl, headers = headers)
-        } catch (e: Exception) {
-            if (e.message?.contains("407") == true || e.message?.contains("Proxy") == true) {
-                throw ErrorLoadingException("Proxy authentication required. Please check your network settings.")
-            }
-            throw ErrorLoadingException("Network error: ${e.message}")
-        }
+        val response = app.get(finalUrl, headers = headers)
         if (response.code != 200) {
             throw ErrorLoadingException("Failed to load data: ${response.body?.string()}")
         }
@@ -340,14 +319,7 @@ class MovieBoxProvider : MainAPI() {
                 "x-client-status" to "0"
             )
             
-            val seasonResponse = try {
-                app.get(seasonUrl, headers = seasonHeaders)
-            } catch (e: Exception) {
-                if (e.message?.contains("407") == true || e.message?.contains("Proxy") == true) {
-                    throw ErrorLoadingException("Proxy authentication required. Please check your network settings.")
-                }
-                throw ErrorLoadingException("Network error: ${e.message}")
-            }
+            val seasonResponse = app.get(seasonUrl, headers = seasonHeaders)
             val episodes = mutableListOf<Episode>()
             
             if (seasonResponse.code == 200) {
