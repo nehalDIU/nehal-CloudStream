@@ -20,8 +20,8 @@ class MovieBoxProvider : MainAPI() {
     override var lang = "ta"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    private val secretKeyDefault = ""
-    private val secretKeyAlt = ""
+    private val secretKeyDefault = "cGxhY2Vob2xkZXJfa2V5XzE="  // placeholder_key_1 in base64
+    private val secretKeyAlt = "cGxhY2Vob2xkZXJfa2V5XzI="      // placeholder_key_2 in base64
 
 
     private fun md5(input: ByteArray): String {
