@@ -1,0 +1,103 @@
+[
+    {
+        "iconUrl": "https://github.com/nehalDIU/nehal-CloudStream/blob/master/BdixICCFtp/BdixICCFtp.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 18515,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "Cartoon",
+            "AsianDrama",
+            "Others",
+            "Documentary"
+        ],
+        "version": 24,
+        "internalName": "BdixCircleftp",
+        "description": "Only works in Bangladesh. Works even in internet Shutdown",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixCircleftp.cs3",
+        "name": "BdixCircleftp"
+    },
+    {
+        "iconUrl": "https://dflix.discoveryftp.net/assets/images/icon.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 18071,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "Cartoon",
+            "AsianDrama",
+            "Others",
+            "Documentary"
+        ],
+        "version": 8,
+        "internalName": "BdixDflix",
+        "description": "Discovery BDIX Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixDflix.cs3",
+        "name": "BdixDflix"
+    },
+    {
+        "iconUrl": "https://github.com/nehalDIU/nehal-CloudStream/blob/master/BdixICCFtp/BdixICCFtp.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 13270,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "Cartoon",
+            "AsianDrama",
+            "Others",
+            "Documentary"
+        ],
+        "version": 1,
+        "internalName": "BdixICCFtp",
+        "description": "ICC BDIX Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixICCFtp.cs3",
+        "name": "BdixICCFtp"
+    },
+    {
+        "iconUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/CNC%20Verse/icon.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 42444,
+        "status": 1,
+        "language": "ta",
+        "authors": [
+            "NivinCNC"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 36,
+        "internalName": "Top OTT",
+        "description": "Netflix, PrimeVideo, Disney+ Hotstar Contents in Multiple Languages",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/Top OTT.cs3",
+        "name": "Top OTT"
+    }
+]
