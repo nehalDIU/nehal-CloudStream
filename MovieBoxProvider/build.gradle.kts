@@ -7,11 +7,6 @@ android {
     buildFeatures {
         buildConfig = true
     }
-
-    defaultConfig {
-        buildConfigField("String", "MOVIEBOX_SECRET_KEY_DEFAULT", "\"\"")
-        buildConfigField("String", "MOVIEBOX_SECRET_KEY_ALT", "\"\"")
-    }
 }
 
 cloudstream {
