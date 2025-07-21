@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 3
+version = 36
 
 android {
     buildFeatures {
@@ -11,8 +11,8 @@ cloudstream {
     language = "ta"
     // All of these properties are optional, you can safely remove them
 
-    description = "Castle TV Movies and Series Provider"
-    authors = listOf("CNCVerse")
+    description = "Netflix, PrimeVideo, Disney+ Hotstar Contents in Multiple Languages"
+    authors = listOf("NivinCNC")
 
     /**
      * Status int as the following:
@@ -27,6 +27,5 @@ cloudstream {
         "TvSeries"
     )
 
-    iconUrl = "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/CastleTvProvider/icon.png"
+    iconUrl = "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/CNC%20Verse/icon.png"
 }
-
