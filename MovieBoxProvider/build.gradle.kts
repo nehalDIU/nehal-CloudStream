@@ -1,9 +1,7 @@
 // use an integer for version numbers
-version = 1
+version = 4
 
 android {
-    namespace = "com.nehal"
-
     buildFeatures {
         buildConfig = true
     }
@@ -14,7 +12,7 @@ cloudstream {
     // All of these properties are optional, you can safely remove them
 
     description = "Multi Language Movies and Series Provider"
-    authors = listOf("Nehal")
+    authors = listOf("CNCVerse")
 
     /**
      * Status int as the following:

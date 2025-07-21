@@ -1,9 +1,8 @@
-package com.nehal
+package com.cncverse
 
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
-import com.nehal.MovieBoxProvider
 
 @CloudstreamPlugin
 class MovieBoxProviderPlugin: Plugin() {

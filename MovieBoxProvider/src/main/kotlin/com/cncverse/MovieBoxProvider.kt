@@ -1,4 +1,4 @@
-package com.nehal
+package com.cncverse
 
 import android.net.Uri
 import com.lagradost.cloudstream3.*
@@ -20,8 +20,8 @@ class MovieBoxProvider : MainAPI() {
     override var lang = "ta"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    private val secretKeyDefault = "cGxhY2Vob2xkZXJfa2V5XzE="  // placeholder_key_1 in base64
-    private val secretKeyAlt = "cGxhY2Vob2xkZXJfa2V5XzI="      // placeholder_key_2 in base64
+    private val secretKeyDefault = BuildConfig.MOVIEBOX_SECRET_KEY_DEFAULT
+    private val secretKeyAlt = BuildConfig.MOVIEBOX_SECRET_KEY_ALT
 
 
     private fun md5(input: ByteArray): String {
