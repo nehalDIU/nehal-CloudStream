@@ -3,6 +3,9 @@ version = 8
 
 android {
     namespace = "com.nehal"
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 cloudstream {

@@ -3,6 +3,9 @@ version = 24
 
 android {
     namespace = "com.nehal"
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 cloudstream {

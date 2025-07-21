@@ -12,6 +12,7 @@ import javax.crypto.spec.SecretKeySpec
 import java.security.MessageDigest
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.example.BuildConfig
 
 class MovieBoxProvider : MainAPI() {
     override var mainUrl = "https://api.inmoviebox.com"
