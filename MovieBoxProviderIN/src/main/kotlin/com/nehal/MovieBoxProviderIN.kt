@@ -16,7 +16,7 @@ import com.fasterxml.jackson.databind.JsonNode
 
 class MovieBoxProviderIN : MainAPI() {
     override var mainUrl = "https://api.inmoviebox.com"
-    override var name = "MovieBox"
+    override var name = "MovieBox IN"
     override val hasMainPage = true
     override var lang = "ta"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
