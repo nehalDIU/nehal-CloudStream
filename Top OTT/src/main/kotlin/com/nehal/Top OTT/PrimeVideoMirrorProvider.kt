@@ -1,11 +1,11 @@
-package com.horis.cncverse
+package com.nehal.TopOTT
 
-import com.horis.cncverse.entities.EpisodesData
-import com.horis.cncverse.entities.PlayList
-import com.horis.cncverse.entities.PostData
-import com.horis.cncverse.entities.SearchData
-import com.horis.cncverse.entities.MainPage
-import com.horis.cncverse.entities.PostCategory
+import com.nehal.TopOTT.entities.EpisodesData
+import com.nehal.TopOTT.entities.PlayList
+import com.nehal.TopOTT.entities.PostData
+import com.nehal.TopOTT.entities.SearchData
+import com.nehal.TopOTT.entities.MainPage
+import com.nehal.TopOTT.entities.PostCategory
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson

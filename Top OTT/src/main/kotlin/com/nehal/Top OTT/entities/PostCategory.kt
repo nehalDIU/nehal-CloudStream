@@ -1,4 +1,4 @@
-package com.horis.cncverse.entities
+package com.nehal.TopOTT.entities
 
 data class PostCategory(
     val ids: String,
