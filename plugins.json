@@ -80,25 +80,25 @@
         "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixICCFtp.cs3",
         "name": "BdixICCFtp"
     },
-        {
+    { 
         "iconUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/MovieBoxProvider/icon.png",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension",
-        "fileSize": 39740,
+        "fileSize": 44593,
         "status": 1,
         "language": "ta",
         "authors": [
-            "CNCVerse"
+            "NivinCNC"
         ],
         "tvTypes": [
             "Movie",
             "TvSeries"
         ],
-        "version": 4,
-        "internalName": "MovieBoxProvider",
-        "description": "Multi Language Movies and Series Provider",
-        "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/MovieBoxProvider.cs3",
-        "name": "MovieBoxProvider"
+        "version": 1,
+        "internalName": "MovieBoxProviderIN",
+        "description": "Multi Language Movies and Series Provider (IN)",
+        "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/MovieBoxProviderIN.cs3",
+        "name": "MovieBoxProviderIN"
     },
     {
         "iconUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/CNC%20Verse/icon.png",
