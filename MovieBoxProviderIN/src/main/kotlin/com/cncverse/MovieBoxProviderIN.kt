@@ -1,4 +1,4 @@
-package com.nehal
+package com.cncverse
 
 import android.net.Uri
 import com.lagradost.cloudstream3.*
