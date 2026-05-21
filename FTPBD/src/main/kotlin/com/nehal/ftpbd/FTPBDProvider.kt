@@ -95,7 +95,7 @@ open class FTPBDProvider : MainAPI() {
         }
     }
 
-    private fun loadMovie(url: String, doc: Document): LoadResponse {
+    private suspend fun loadMovie(url: String, doc: Document): LoadResponse {
         val title = doc.selectFirst("h1.jws-title")?.text()?.trim()
             ?: throw ErrorLoadingException("Missing title")
         val year = doc.selectFirst(".jws-meta-info2 .video-years")?.text()?.trim()?.toIntOrNull()
@@ -120,7 +120,7 @@ open class FTPBDProvider : MainAPI() {
         }
     }
 
-    private fun loadTvShow(url: String, doc: Document): LoadResponse {
+    private suspend fun loadTvShow(url: String, doc: Document): LoadResponse {
         val title = doc.selectFirst("h1.jws-title")?.text()?.trim()
             ?: throw ErrorLoadingException("Missing title")
         val year = doc.selectFirst(".video-years")?.text()?.trim()?.toIntOrNull()
