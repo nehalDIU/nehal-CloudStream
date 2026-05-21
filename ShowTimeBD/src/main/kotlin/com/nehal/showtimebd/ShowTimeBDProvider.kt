@@ -70,6 +70,16 @@ open class ShowTimeBDProvider : MainAPI() {
         }
     }
 
+    private fun fixUrlNull(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return when {
+            url.startsWith("http://") || url.startsWith("https://") -> url
+            url.startsWith("//") -> "https:$url"
+            url.startsWith("/") -> mainUrl.trimEnd('/') + url
+            else -> mainUrl.trimEnd('/') + "/" + url
+        }
+    }
+
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst(".single_page h1")?.text()?.trim()
