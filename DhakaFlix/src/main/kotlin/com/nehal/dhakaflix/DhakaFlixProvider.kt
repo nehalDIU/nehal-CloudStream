@@ -12,12 +12,9 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.DubStatus
-import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.addQuality
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
-import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -79,12 +76,12 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategoryMap = movieCategories.associateBy { it.key }
 
     override val mainPage = mainPageOf(
-        "tv:all" to "TV Series",
-        "movie:latest" to "English Movies - Latest",
+        "tv:all" to "TV Series 0-9 & A-Z",
+        "movie:latest" to "English Movies 1080p - Latest",
         "movie:hindi" to "Hindi Movies",
-        "movie:south-dubbed" to "South Indian Movies",
+        "movie:south-dubbed" to "South-Movie Hindi Dubbed",
         "movie:kolkata-bangla" to "Kolkata Bangla Movies",
-        "movie:animation-1080p" to "Animation Movies",
+        "movie:animation-1080p" to "Animation Movies - 1080p",
         "movie:imdb-top250" to "IMDb Top-250 Movies",
         "movie:korean-tv" to "KOREAN TV & WEB Series"
     )
@@ -104,20 +101,16 @@ open class DhakaFlixProvider : MainAPI() {
             get() = size == null && href.endsWith("/")
     }
 
-    private fun buildSearchResponse(
-        title: String,
-        url: String,
-        type: TvType,
-        isHd: Boolean
-    ): SearchResponse {
-        return newAnimeSearchResponse(title, url, type) {
-            addDubStatus(DubStatus.Dubbed)
-            if (isHd) addQuality("HD")
+    private fun buildSearchResponse(title: String, url: String, type: TvType): SearchResponse {
+        return if (type == TvType.TvSeries) {
+            newTvSeriesSearchResponse(title, url, type) {
+                addQuality("Dual Audio")
+            }
+        } else {
+            newMovieSearchResponse(title, url, type) {
+                addQuality("Dual Audio")
+            }
         }
-    }
-
-    private fun isHdCategory(path: String): Boolean {
-        return path.lowercase().contains("1080p")
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -133,7 +126,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries, false)
+                        buildSearchResponse(title, url, TvType.TvSeries)
                     }
             }
             request.data.startsWith("tv:") -> {
@@ -145,14 +138,13 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries, false)
+                        buildSearchResponse(title, url, TvType.TvSeries)
                     }
             }
             request.data.startsWith("movie:") -> {
                 val category = movieCategoryMap[request.data]
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
-                val isHd = isHdCategory(categoryPath)
                 val children = when (request.data) {
                     "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
@@ -168,7 +160,7 @@ open class DhakaFlixProvider : MainAPI() {
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(host, item.href)
                         val type = category?.type ?: TvType.Movie
-                        buildSearchResponse(title, url, type, isHd)
+                        buildSearchResponse(title, url, type)
                     }
             }
             else -> emptyList()
@@ -199,8 +191,7 @@ open class DhakaFlixProvider : MainAPI() {
                         buildSearchResponse(
                             title,
                             absoluteUrl(tvHost, item.href),
-                            TvType.TvSeries,
-                            false
+                            TvType.TvSeries
                         )
                     )
                 }
@@ -210,7 +201,6 @@ open class DhakaFlixProvider : MainAPI() {
         if (results.size < maxResults) {
             for (category in movieCategories.filter { it.key != "movie:latest" }) {
                 if (results.size >= maxResults) break
-                val isHd = isHdCategory(category.path)
                 val items = when (category.key) {
                     "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, 2009, 2026)
@@ -224,7 +214,7 @@ open class DhakaFlixProvider : MainAPI() {
                     if (title.lowercase().contains(queryLower)) {
                         val url = absoluteUrl(category.host, item.href)
                         results.add(
-                            buildSearchResponse(title, url, category.type, isHd)
+                            buildSearchResponse(title, url, category.type)
                         )
                     }
                 }
@@ -248,8 +238,7 @@ open class DhakaFlixProvider : MainAPI() {
                             buildSearchResponse(
                                 title,
                                 absoluteUrl(movieHost, item.href),
-                                TvType.Movie,
-                                isHdCategory(movieRootPath)
+                                TvType.Movie
                             )
                         )
                     }
