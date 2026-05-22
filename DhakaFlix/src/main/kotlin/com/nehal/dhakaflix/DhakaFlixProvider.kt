@@ -76,10 +76,7 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategoryMap = movieCategories.associateBy { it.key }
 
     override val mainPage = mainPageOf(
-        "tv:0-9" to "TV Series 0-9",
-        "tv:a-l" to "TV Series A-L",
-        "tv:m-r" to "TV Series M-R",
-        "tv:s-z" to "TV Series S-Z",
+        "tv:all" to "TV Series 0-9 & A-Z",
         "movie:latest" to "English Movies 1080p - Latest",
         "movie:hindi" to "Hindi Movies",
         "movie:south-indian" to "South Indian Movies",
@@ -109,6 +106,19 @@ open class DhakaFlixProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageSize = 40
         val items = when {
+            request.data == "tv:all" -> {
+                tvGroups.values
+                    .flatMap { groupPath -> fetchDirectChildren(tvHost, groupPath) }
+                    .filter { it.isFolder }
+                    .distinctBy { it.href }
+                    .sortedByDescending { it.time ?: 0L }
+                    .mapNotNull { item ->
+                        val title = cleanName(decodeNameFromHref(item.href))
+                        if (title.isEmpty()) return@mapNotNull null
+                        val url = absoluteUrl(tvHost, item.href)
+                        newTvSeriesSearchResponse(title, url, TvType.TvSeries)
+                    }
+            }
             request.data.startsWith("tv:") -> {
                 val groupPath = tvGroups[request.data] ?: tvRootPath
                 fetchDirectChildren(tvHost, groupPath)
