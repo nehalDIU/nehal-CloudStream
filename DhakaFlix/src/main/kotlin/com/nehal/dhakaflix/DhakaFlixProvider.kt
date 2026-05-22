@@ -135,10 +135,10 @@ open class DhakaFlixProvider : MainAPI() {
                 val category = movieCategoryMap[request.data]
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
-                val children = if (request.data == "movie:latest") {
-                    fetchLatestMovieFolders()
-                } else {
-                    fetchDirectChildren(host, categoryPath)
+                val children = when (request.data) {
+                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
+                    else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
                     .filter { it.isFolder }
@@ -192,8 +192,11 @@ open class DhakaFlixProvider : MainAPI() {
         if (results.size < maxResults) {
             for (category in movieCategories.filter { it.key != "movie:latest" }) {
                 if (results.size >= maxResults) break
-                val items = fetchDirectChildren(category.host, category.path)
-                    .filter { it.isFolder }
+                val items = if (category.key == "movie:hindi") {
+                    fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
+                } else {
+                    fetchDirectChildren(category.host, category.path)
+                }.filter { it.isFolder }
 
                 items.forEach { item ->
                     if (results.size >= maxResults) return@forEach
@@ -237,13 +240,22 @@ open class DhakaFlixProvider : MainAPI() {
         return results
     }
 
-    private suspend fun fetchLatestMovieFolders(): List<H5Item> {
-        val yearFolders = fetchDirectChildren(movieHost, movieRootPath)
+    private suspend fun fetchYearIndexedMovieFolders(
+        host: String,
+        rootPath: String,
+        minYear: Int? = null,
+        maxYear: Int? = null
+    ): List<H5Item> {
+        val yearFolders = fetchDirectChildren(host, rootPath)
             .filter { it.isFolder }
+            .filter { item ->
+                val year = extractYear(decodeNameFromHref(item.href)) ?: return@filter false
+                (minYear == null || year >= minYear) && (maxYear == null || year <= maxYear)
+            }
 
         val movies = ArrayList<H5Item>()
         for (yearFolder in yearFolders) {
-            val items = fetchDirectChildren(movieHost, yearFolder.href)
+            val items = fetchDirectChildren(host, yearFolder.href)
                 .filter { it.isFolder }
             movies.addAll(items)
         }
