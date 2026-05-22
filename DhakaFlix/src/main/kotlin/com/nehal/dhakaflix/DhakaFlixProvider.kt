@@ -138,6 +138,7 @@ open class DhakaFlixProvider : MainAPI() {
                 val children = when (request.data) {
                     "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -192,10 +193,10 @@ open class DhakaFlixProvider : MainAPI() {
         if (results.size < maxResults) {
             for (category in movieCategories.filter { it.key != "movie:latest" }) {
                 if (results.size >= maxResults) break
-                val items = if (category.key == "movie:hindi") {
-                    fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
-                } else {
-                    fetchDirectChildren(category.host, category.path)
+                val items = when (category.key) {
+                    "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, 2009, 2026)
+                    else -> fetchDirectChildren(category.host, category.path)
                 }.filter { it.isFolder }
 
                 items.forEach { item ->
