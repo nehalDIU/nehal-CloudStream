@@ -170,8 +170,7 @@ open class OldFTPBDProvider : MainAPI() {
                         this.name,
                         link.name,
                         url = link.url,
-                        type = ExtractorLinkType.M3U8,
-                        headers = defaultHeaders()
+                        type = ExtractorLinkType.M3U8
                     )
                 )
             } else {
@@ -179,8 +178,7 @@ open class OldFTPBDProvider : MainAPI() {
                     newExtractorLink(
                         this.name,
                         link.name,
-                        url = link.url,
-                        headers = defaultHeaders()
+                        url = link.url
                     )
                 )
             }
