@@ -136,6 +136,7 @@ open class DhakaFlixProvider : MainAPI() {
                     "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -193,6 +194,7 @@ open class DhakaFlixProvider : MainAPI() {
                 val items = when (category.key) {
                     "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, 2009, 2026)
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(category.host, category.path, 1999, 2024)
                     else -> fetchDirectChildren(category.host, category.path)
                 }.filter { it.isFolder }
 
