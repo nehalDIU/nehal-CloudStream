@@ -115,12 +115,10 @@ open class DhakaFlixProvider : MainAPI() {
         return when (type) {
             TvType.Movie -> newMovieSearchResponse(title, url, type) {
                 this.posterUrl = posterUrl
-                if (isDubbed) addDubStatus(DubStatus.Dubbed)
                 if (isHd) addQuality("HD")
             }
             TvType.TvSeries -> newTvSeriesSearchResponse(title, url, type) {
                 this.posterUrl = posterUrl
-                if (isDubbed) addDubStatus(DubStatus.Dubbed)
                 if (isHd) addQuality("HD")
             }
             else -> newAnimeSearchResponse(title, url, type) {
