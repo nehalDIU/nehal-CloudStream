@@ -100,6 +100,18 @@ open class DhakaFlixProvider : MainAPI() {
             get() = size == null && href.endsWith("/")
     }
 
+    private fun buildSearchResponse(title: String, url: String, type: TvType): SearchResponse {
+        return if (type == TvType.TvSeries) {
+            newTvSeriesSearchResponse(title, url, type) {
+                addQuality("Dual Audio")
+            }
+        } else {
+            newMovieSearchResponse(title, url, type) {
+                addQuality("Dual Audio")
+            }
+        }
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageSize = 40
         val items = when {
@@ -113,7 +125,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        newTvSeriesSearchResponse(title, url, TvType.TvSeries)
+                        buildSearchResponse(title, url, TvType.TvSeries)
                     }
             }
             request.data.startsWith("tv:") -> {
@@ -125,7 +137,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        newTvSeriesSearchResponse(title, url, TvType.TvSeries)
+                        buildSearchResponse(title, url, TvType.TvSeries)
                     }
             }
             request.data.startsWith("movie:") -> {
@@ -146,11 +158,8 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(host, item.href)
-                        if (category?.type == TvType.TvSeries) {
-                            newTvSeriesSearchResponse(title, url, TvType.TvSeries)
-                        } else {
-                            newMovieSearchResponse(title, url, TvType.Movie)
-                        }
+                        val type = category?.type ?: TvType.Movie
+                        buildSearchResponse(title, url, type)
                     }
             }
             else -> emptyList()
@@ -178,7 +187,7 @@ open class DhakaFlixProvider : MainAPI() {
                 val title = cleanName(decodeNameFromHref(item.href))
                 if (title.lowercase().contains(queryLower)) {
                     results.add(
-                        newTvSeriesSearchResponse(
+                        buildSearchResponse(
                             title,
                             absoluteUrl(tvHost, item.href),
                             TvType.TvSeries
@@ -204,8 +213,7 @@ open class DhakaFlixProvider : MainAPI() {
                     if (title.lowercase().contains(queryLower)) {
                         val url = absoluteUrl(category.host, item.href)
                         results.add(
-                            if (category.type == TvType.TvSeries) newTvSeriesSearchResponse(title, url, category.type)
-                            else newMovieSearchResponse(title, url, category.type)
+                            buildSearchResponse(title, url, category.type)
                         )
                     }
                 }
@@ -226,7 +234,7 @@ open class DhakaFlixProvider : MainAPI() {
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
                         results.add(
-                            newMovieSearchResponse(
+                            buildSearchResponse(
                                 title,
                                 absoluteUrl(movieHost, item.href),
                                 TvType.Movie
