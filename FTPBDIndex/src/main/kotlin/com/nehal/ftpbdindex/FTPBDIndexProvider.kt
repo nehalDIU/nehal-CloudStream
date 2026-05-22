@@ -256,7 +256,7 @@ open class FTPBDIndexProvider : MainAPI() {
         }
     }
 
-    private fun loadMovieFile(url: String): LoadResponse {
+    private suspend fun loadMovieFile(url: String): LoadResponse {
         val title = cleanFileName(decodeNameFromUrl(url))
         if (title.isEmpty()) throw ErrorLoadingException("Missing title")
         val year = extractYear(title)
