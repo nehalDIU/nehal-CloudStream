@@ -63,7 +63,6 @@ open class DhakaFlixProvider : MainAPI() {
 
     private val movieCategories = listOf(
         Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
-        Category("movie:collections", movieRootPath, "English Movies 1080p - Collections", TvType.TvSeries, movieHost),
         Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
         Category("movie:south-indian", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/", "South Indian Movies", TvType.Movie, movieHost),
         Category("movie:south-dubbed", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/", "South-Movie Hindi Dubbed", TvType.Movie, movieHost),
@@ -79,7 +78,6 @@ open class DhakaFlixProvider : MainAPI() {
     override val mainPage = mainPageOf(
         "tv:all" to "TV Series 0-9 & A-Z",
         "movie:latest" to "English Movies 1080p - Latest",
-        "movie:collections" to "English Movies 1080p - Collections",
         "movie:hindi" to "Hindi Movies",
         "movie:south-indian" to "South Indian Movies",
         "movie:south-dubbed" to "South-Movie Hindi Dubbed",
@@ -138,17 +136,11 @@ open class DhakaFlixProvider : MainAPI() {
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
                 val children = if (request.data == "movie:latest") {
-                    val latestPath = findLatestMovieYearPath() ?: movieRootPath
-                    fetchDirectChildren(host, latestPath)
+                    fetchLatestMovieFolders()
                 } else {
                     fetchDirectChildren(host, categoryPath)
                 }
-                val filteredChildren = if (request.data == "movie:collections") {
-                    children.filter { !isYearFolderName(decodeNameFromHref(it.href)) }
-                } else {
-                    children
-                }
-                filteredChildren
+                children
                     .filter { it.isFolder }
                     .sortedByDescending { it.time ?: 0L }
                     .mapNotNull { item ->
@@ -203,13 +195,7 @@ open class DhakaFlixProvider : MainAPI() {
                 val items = fetchDirectChildren(category.host, category.path)
                     .filter { it.isFolder }
 
-                val filteredItems = if (category.key == "movie:collections") {
-                    items.filter { !isYearFolderName(decodeNameFromHref(it.href)) }
-                } else {
-                    items
-                }
-
-                filteredItems.forEach { item ->
+                items.forEach { item ->
                     if (results.size >= maxResults) return@forEach
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
@@ -251,21 +237,26 @@ open class DhakaFlixProvider : MainAPI() {
         return results
     }
 
-    override suspend fun load(url: String): LoadResponse {
-        val type = categoryTypeForUrl(url) ?: if (url.contains("/TV-WEB-Series/")) TvType.TvSeries else TvType.Movie
-        if (type == TvType.TvSeries && url.contains("/TV-WEB-Series/")) {
-            return loadTvSeries(url)
+    private suspend fun fetchLatestMovieFolders(): List<H5Item> {
+        val yearFolders = fetchDirectChildren(movieHost, movieRootPath)
+            .filter { it.isFolder }
+
+        val movies = ArrayList<H5Item>()
+        for (yearFolder in yearFolders) {
+            val items = fetchDirectChildren(movieHost, yearFolder.href)
+                .filter { it.isFolder }
+            movies.addAll(items)
         }
 
-        val host = hostForUrl(url)
-        val path = pathFromUrl(url)
-        val items = fetchDirectChildren(host, path)
+        return movies.distinctBy { it.href }
+    }
 
-        return when {
-            type == TvType.TvSeries && shouldTreatAsCollection(items) -> loadCollection(url, host, items)
-            type == TvType.TvSeries -> loadTvSeries(url)
-            shouldTreatAsCollection(items) -> loadCollection(url, host, items)
-            else -> loadMovie(url, host, items)
+    override suspend fun load(url: String): LoadResponse {
+        val type = categoryTypeForUrl(url) ?: if (url.contains("/TV-WEB-Series/")) TvType.TvSeries else TvType.Movie
+        return if (type == TvType.TvSeries) {
+            loadTvSeries(url)
+        } else {
+            loadMovie(url)
         }
     }
 
@@ -342,42 +333,10 @@ open class DhakaFlixProvider : MainAPI() {
         if (title.isEmpty()) throw ErrorLoadingException("Missing title")
 
         val items = fetchDirectChildren(host, moviePath)
-        return buildMovieResponse(url, host, title, items)
-    }
-
-    private suspend fun loadMovie(url: String, host: String, items: List<H5Item>): LoadResponse {
-        val title = cleanName(decodeNameFromUrl(url))
-        if (title.isEmpty()) throw ErrorLoadingException("Missing title")
-        return buildMovieResponse(url, host, title, items)
-    }
-
-    private suspend fun buildMovieResponse(url: String, host: String, title: String, items: List<H5Item>): LoadResponse {
         val posterUrl = pickPoster(host, items)
         val year = extractYear(title)
 
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
-            this.posterUrl = posterUrl
-            this.year = year
-        }
-    }
-
-    private suspend fun loadCollection(url: String, host: String, items: List<H5Item>): LoadResponse {
-        val title = cleanName(decodeNameFromUrl(url))
-        if (title.isEmpty()) throw ErrorLoadingException("Missing title")
-
-        val posterUrl = pickPoster(host, items)
-        val year = extractYear(title)
-        val episodes = items.filter { it.isFolder }
-            .sortedBy { it.href }
-            .mapIndexed { index, item ->
-                val name = cleanName(decodeNameFromHref(item.href))
-                newEpisode(absoluteUrl(host, item.href)) {
-                    this.name = name
-                    this.episode = index + 1
-                }
-            }
-
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
             this.posterUrl = posterUrl
             this.year = year
         }
@@ -512,10 +471,6 @@ open class DhakaFlixProvider : MainAPI() {
         return Regex("(19|20)\\d{2}").find(text)?.value?.toIntOrNull()
     }
 
-    private fun isYearFolderName(name: String): Boolean {
-        return Regex("\\((19|20)\\d{2}\\)").containsMatchIn(name)
-    }
-
     private fun isSeasonFolder(href: String): Boolean {
         val name = decodeNameFromHref(href)
         return name.lowercase().startsWith("season")
@@ -538,13 +493,6 @@ open class DhakaFlixProvider : MainAPI() {
                 .find(name)?.groupValues?.get(1)?.toIntOrNull()
             ?: Regex("episode\\s*(\\d{1,3})", RegexOption.IGNORE_CASE)
                 .find(name)?.groupValues?.get(1)?.toIntOrNull()
-    }
-
-    private fun shouldTreatAsCollection(items: List<H5Item>): Boolean {
-        val hasVideo = items.any { isVideoFile(it.href) }
-        val hasFolders = items.any { it.isFolder }
-        val hasSeasons = items.any { it.isFolder && isSeasonFolder(it.href) }
-        return !hasVideo && hasFolders && !hasSeasons
     }
 
     private fun pickPoster(host: String, items: List<H5Item>): String? {
