@@ -12,9 +12,11 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.addQuality
+import com.lagradost.cloudstream3.DubStatus
+import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -102,14 +104,8 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private fun buildSearchResponse(title: String, url: String, type: TvType): SearchResponse {
-        return if (type == TvType.TvSeries) {
-            newTvSeriesSearchResponse(title, url, type) {
-                addQuality("Dual Audio")
-            }
-        } else {
-            newMovieSearchResponse(title, url, type) {
-                addQuality("Dual Audio")
-            }
+        return newAnimeSearchResponse(title, url, type) {
+            addDubStatus(DubStatus.Dubbed)
         }
     }
 
