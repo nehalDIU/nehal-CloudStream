@@ -50,6 +50,7 @@ open class DhakaFlixProvider : MainAPI() {
 
     private val tvRootPath = "/DHAKA-FLIX-12/TV-WEB-Series/"
     private val movieRootPath = "/DHAKA-FLIX-14/English%20Movies%20%281080p%29/"
+    private val englishMoviesRootPath = "/DHAKA-FLIX-7/English%20Movies/"
 
     private data class Category(
         val key: String,
@@ -152,21 +153,31 @@ open class DhakaFlixProvider : MainAPI() {
                 val category = movieCategoryMap[request.data]
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
-                val isHd = isHdCategory(categoryPath)
+                val isHd = if (request.data == "movie:latest") true else isHdCategory(categoryPath)
                 val children = when (request.data) {
-                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                    "movie:latest" -> {
+                        val primary = fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                            .map { it to movieHost }
+                        val secondary = fetchYearIndexedMovieFolders(kolkataHost, englishMoviesRootPath)
+                            .map { it to kolkataHost }
+                        (primary + secondary).distinctBy { "${it.second}|${it.first.href}" }
+                    }
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
+                        .map { it to movieHost }
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
+                        .map { it to movieHost }
                     "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
+                        .map { it to kolkataHost }
                     else -> fetchDirectChildren(host, categoryPath)
+                        .map { it to host }
                 }
                 children
-                    .filter { it.isFolder }
-                    .sortedByDescending { it.time ?: 0L }
-                    .mapNotNull { item ->
+                    .filter { (item, _) -> item.isFolder }
+                    .sortedByDescending { (item, _) -> item.time ?: 0L }
+                    .mapNotNull { (item, itemHost) ->
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
-                        val url = absoluteUrl(host, item.href)
+                        val url = absoluteUrl(itemHost, item.href)
                         val type = category?.type ?: TvType.Movie
                         buildSearchResponse(title, url, type, isHd)
                     }
@@ -458,7 +469,11 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private fun hostForUrl(url: String): String {
-        return if (url.startsWith(movieHost)) movieHost else tvHost
+        return when {
+            url.startsWith(movieHost) -> movieHost
+            url.startsWith(kolkataHost) -> kolkataHost
+            else -> tvHost
+        }
     }
 
     private fun pathFromUrl(url: String): String {
