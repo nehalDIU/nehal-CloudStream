@@ -110,17 +110,18 @@ open class OldFTPBDProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url, headers = defaultHeaders()).document
-        val title = doc.selectFirst("h1")?.text()?.trim()
+        val root = articleRoot(doc)
+        val title = root.selectFirst("h1")?.text()?.trim()
             ?: throw ErrorLoadingException("Missing title")
 
-        val poster = extractPoster(doc)
-        val plot = extractPlot(doc)
-        val year = extractYear(doc)
-        val duration = extractDuration(doc)
-        val tags = extractGenres(doc)
-        val downloadLinks = extractDownloadLinks(doc)
+        val poster = extractPoster(root)
+        val plot = extractPlot(root)
+        val year = extractYear(root)
+        val duration = extractDuration(root)
+        val tags = extractGenres(root)
+        val downloadLinks = extractDownloadLinks(root)
 
-        val isTvSeries = isTvSeries(doc, title)
+        val isTvSeries = isTvSeries(root, title, downloadLinks)
 
         return if (isTvSeries && downloadLinks.isNotEmpty()) {
             val episodes = downloadLinks.mapIndexed { index, link ->
@@ -228,19 +229,23 @@ open class OldFTPBDProvider : MainAPI() {
         }
     }
 
-    private fun extractPoster(doc: Document): String? {
-        val primary = doc.selectFirst(
+    private fun articleRoot(doc: Document): Element {
+        return doc.selectFirst("article") ?: doc
+    }
+
+    private fun extractPoster(root: Element): String? {
+        val primary = root.selectFirst(
             ".post-thumbnail img, .post-image img, .entry-content img, .single-post img"
         )
         val fromPrimary = primary?.attr("data-src")?.ifBlank { primary.attr("src") }?.trim()
         if (!fromPrimary.isNullOrBlank()) return fromPrimary
 
-        val fallback = doc.select("img[src*='/wp-content/uploads/']").firstOrNull()
+        val fallback = root.select("img[src*='/wp-content/uploads/']").firstOrNull()
         return fallback?.attr("src")?.trim()
     }
 
-    private fun extractPlot(doc: Document): String? {
-        val overview = doc.select("p, li").firstOrNull { element ->
+    private fun extractPlot(root: Element): String? {
+        val overview = root.select("p, li").firstOrNull { element ->
             val text = element.text().trim()
             text.startsWith("Overview", ignoreCase = true) ||
                 element.selectFirst("strong, b")?.text()?.trim()?.equals("Overview", true) == true
@@ -252,11 +257,11 @@ open class OldFTPBDProvider : MainAPI() {
             if (cleaned.isNotBlank()) return cleaned
         }
 
-        return doc.selectFirst(".entry-content p")?.text()?.trim()
+        return root.selectFirst(".entry-content p")?.text()?.trim()
     }
 
-    private fun extractYear(doc: Document): Int? {
-        val byDateLink = doc.select("a[href*='/date/']")
+    private fun extractYear(root: Element): Int? {
+        val byDateLink = root.select("a[href*='/date/']")
             .mapNotNull { element ->
                 Regex("(19|20)\\d{2}").find(element.text())?.value?.toIntOrNull()
             }
@@ -264,39 +269,46 @@ open class OldFTPBDProvider : MainAPI() {
 
         if (byDateLink != null) return byDateLink
 
-        val textBlock = doc.select("p, li").joinToString(" ") { it.text() }
+        val textBlock = root.select("p, li").joinToString(" ") { it.text() }
         return Regex("(19|20)\\d{2}").find(textBlock)?.value?.toIntOrNull()
     }
 
-    private fun extractDuration(doc: Document): Int? {
-        val runtimeText = doc.select("p, li").firstOrNull { element ->
+    private fun extractDuration(root: Element): Int? {
+        val runtimeText = root.select("p, li").firstOrNull { element ->
             element.text().contains("Runtime", ignoreCase = true)
         }?.text()?.substringAfter("Runtime", "")?.trim()
 
         return runtimeText?.takeIf { it.isNotBlank() }?.let { getDurationFromString(it) }
     }
 
-    private fun extractGenres(doc: Document): List<String>? {
-        val genres = doc.select("a[href*='/genre/']")
+    private fun extractGenres(root: Element): List<String>? {
+        val genres = root.select("a[href*='/genre/']")
             .mapNotNull { it.text().trim().ifEmpty { null } }
             .distinct()
         return genres.takeIf { it.isNotEmpty() }
     }
 
-    private fun isTvSeries(doc: Document, title: String): Boolean {
+    private fun isTvSeries(root: Element, title: String, downloadLinks: List<DownloadLink>): Boolean {
         if (title.contains("tv series", ignoreCase = true)) return true
         if (title.contains("web series", ignoreCase = true)) return true
 
-        val categoryLinks = doc.select("a[href*='/category/']")
+        val categoryLinks = root.select("a[href*='/category/']")
             .map { it.attr("href").lowercase() }
 
-        return categoryLinks.any { href ->
+        if (categoryLinks.any { href ->
             href.contains("/tv-series") ||
                 href.contains("web-series") ||
                 href.contains("anime-cartoon-tv-series") ||
                 href.contains("bangla-web-series") ||
                 href.contains("south-indian-tv-series") ||
                 href.contains("awards-tv-shows")
+        }) {
+            return true
+        }
+
+        return downloadLinks.any { link ->
+            link.name.contains("episode", ignoreCase = true) ||
+                Regex("s\\d+e\\d+", RegexOption.IGNORE_CASE).containsMatchIn(link.name)
         }
     }
 
@@ -312,13 +324,20 @@ open class OldFTPBDProvider : MainAPI() {
         "wmv",
         "m3u8",
         "mpd",
-        "ts"
+        "ts",
+        "zip",
+        "rar",
+        "7z"
     )
 
-    private fun extractDownloadLinks(doc: Document): List<DownloadLink> {
-        val links = doc.select("a[href]").mapNotNull { element ->
+    private fun extractDownloadLinks(root: Element): List<DownloadLink> {
+        val links = root.select("a[href]").mapNotNull { element ->
             val href = element.attr("href").trim()
             if (href.isEmpty()) return@mapNotNull null
+
+            val clean = href.lowercase()
+            if (clean == "#" || clean.startsWith("javascript:")) return@mapNotNull null
+            if (isMetaLink(clean)) return@mapNotNull null
 
             val label = element.text().trim()
             val looksLikeDownload = looksLikeDownload(href) ||
@@ -326,6 +345,10 @@ open class OldFTPBDProvider : MainAPI() {
                 label.contains("dwn", ignoreCase = true)
 
             if (!looksLikeDownload) return@mapNotNull null
+
+            if (clean.contains("old.ftpbd.net") && !downloadExtensions.any { clean.contains(".$it") }) {
+                return@mapNotNull null
+            }
 
             val fixedUrl = fixUrlNull(href) ?: return@mapNotNull null
             val name = label.ifBlank { element.attr("title").trim() }
@@ -340,9 +363,14 @@ open class OldFTPBDProvider : MainAPI() {
         val clean = url.lowercase()
         if (clean.startsWith("magnet:")) return true
         if (downloadExtensions.any { clean.contains(".$it") }) return true
-        if (clean.contains("ftpbd.net") && (clean.contains("/ftp-") || clean.contains("server"))) return true
-        if (clean.contains("media.ftpbd.net")) return true
         return false
+    }
+
+    private fun isMetaLink(cleanUrl: String): Boolean {
+        return cleanUrl.contains("/category/") ||
+            cleanUrl.contains("/genre/") ||
+            cleanUrl.contains("/tag/") ||
+            cleanUrl.contains("/author/")
     }
 
     private fun guessNameFromUrl(url: String): String {
