@@ -108,38 +108,20 @@ open class DhakaFlixProvider : MainAPI() {
         title: String,
         url: String,
         type: TvType,
-        posterUrl: String? = null
+        isHd: Boolean
     ): SearchResponse {
-        val isHd = isHdTitle(title)
-        val isDubbed = isDubTitle(title)
-        return when (type) {
-            TvType.Movie -> newMovieSearchResponse(title, url, type) {
-                this.posterUrl = posterUrl
-                if (isHd) addQuality("HD")
-            }
-            TvType.TvSeries -> newTvSeriesSearchResponse(title, url, type) {
-                this.posterUrl = posterUrl
-                if (isHd) addQuality("HD")
-            }
-            else -> newAnimeSearchResponse(title, url, type) {
-                this.posterUrl = posterUrl
-                if (isDubbed) addDubStatus(DubStatus.Dubbed)
-                if (isHd) addQuality("HD")
-            }
+        return newAnimeSearchResponse(title, url, type) {
+            addDubStatus(DubStatus.Dubbed)
+            if (isHd) addQuality("HD")
         }
     }
 
-    private fun isHdTitle(title: String): Boolean {
-        return Regex("\\b1080p\\b", RegexOption.IGNORE_CASE).containsMatchIn(title)
-    }
-
-    private fun isDubTitle(title: String): Boolean {
-        return Regex("\\bdual\\s*audio\\b", RegexOption.IGNORE_CASE).containsMatchIn(title)
+    private fun isHdCategory(path: String): Boolean {
+        return path.lowercase().contains("1080p")
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageSize = 40
-        val targetCount = page * pageSize
         val items = when {
             request.data == "tv:all" -> {
                 tvGroups.values
@@ -151,8 +133,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        val posterUrl = posterFromFolder(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries, posterUrl)
+                        buildSearchResponse(title, url, TvType.TvSeries, false)
                     }
             }
             request.data.startsWith("tv:") -> {
@@ -164,41 +145,19 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        val posterUrl = posterFromFolder(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries, posterUrl)
+                        buildSearchResponse(title, url, TvType.TvSeries, false)
                     }
             }
             request.data.startsWith("movie:") -> {
                 val category = movieCategoryMap[request.data]
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
+                val isHd = isHdCategory(categoryPath)
                 val children = when (request.data) {
-                    "movie:latest" -> fetchYearIndexedMovieFoldersPaged(
-                        movieHost,
-                        movieRootPath,
-                        targetCount = targetCount
-                    )
-                    "movie:hindi" -> fetchYearIndexedMovieFoldersPaged(
-                        movieHost,
-                        categoryPath,
-                        minYear = 1995,
-                        maxYear = 2026,
-                        targetCount = targetCount
-                    )
-                    "movie:south-dubbed" -> fetchYearIndexedMovieFoldersPaged(
-                        movieHost,
-                        categoryPath,
-                        minYear = 2009,
-                        maxYear = 2026,
-                        targetCount = targetCount
-                    )
-                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFoldersPaged(
-                        kolkataHost,
-                        categoryPath,
-                        minYear = 1999,
-                        maxYear = 2024,
-                        targetCount = targetCount
-                    )
+                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -209,8 +168,7 @@ open class DhakaFlixProvider : MainAPI() {
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(host, item.href)
                         val type = category?.type ?: TvType.Movie
-                        val posterUrl = posterFromFolder(host, item.href)
-                        buildSearchResponse(title, url, type, posterUrl)
+                        buildSearchResponse(title, url, type, isHd)
                     }
             }
             else -> emptyList()
@@ -237,13 +195,12 @@ open class DhakaFlixProvider : MainAPI() {
                 if (results.size >= maxResults) return@forEach
                 val title = cleanName(decodeNameFromHref(item.href))
                 if (title.lowercase().contains(queryLower)) {
-                    val posterUrl = posterFromFolder(tvHost, item.href)
                     results.add(
                         buildSearchResponse(
                             title,
                             absoluteUrl(tvHost, item.href),
                             TvType.TvSeries,
-                            posterUrl
+                            false
                         )
                     )
                 }
@@ -253,6 +210,7 @@ open class DhakaFlixProvider : MainAPI() {
         if (results.size < maxResults) {
             for (category in movieCategories.filter { it.key != "movie:latest" }) {
                 if (results.size >= maxResults) break
+                val isHd = isHdCategory(category.path)
                 val items = when (category.key) {
                     "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, 2009, 2026)
@@ -265,9 +223,8 @@ open class DhakaFlixProvider : MainAPI() {
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
                         val url = absoluteUrl(category.host, item.href)
-                        val posterUrl = posterFromFolder(category.host, item.href)
                         results.add(
-                            buildSearchResponse(title, url, category.type, posterUrl)
+                            buildSearchResponse(title, url, category.type, isHd)
                         )
                     }
                 }
@@ -287,13 +244,12 @@ open class DhakaFlixProvider : MainAPI() {
                     if (results.size >= maxResults) return@forEach
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
-                        val posterUrl = posterFromFolder(movieHost, item.href)
                         results.add(
                             buildSearchResponse(
                                 title,
                                 absoluteUrl(movieHost, item.href),
                                 TvType.Movie,
-                                posterUrl
+                                isHdCategory(movieRootPath)
                             )
                         )
                     }
@@ -322,43 +278,6 @@ open class DhakaFlixProvider : MainAPI() {
             val items = fetchDirectChildren(host, yearFolder.href)
                 .filter { it.isFolder }
             movies.addAll(items)
-        }
-
-        return movies.distinctBy { it.href }
-    }
-
-    private suspend fun fetchYearIndexedMovieFoldersPaged(
-        host: String,
-        rootPath: String,
-        minYear: Int? = null,
-        maxYear: Int? = null,
-        targetCount: Int
-    ): List<H5Item> {
-        if (targetCount <= 0) return emptyList()
-
-        val yearFolders = fetchDirectChildren(host, rootPath)
-            .filter { it.isFolder }
-            .mapNotNull { item ->
-                val name = decodeNameFromHref(item.href)
-                val year = extractYear(name) ?: return@mapNotNull null
-                if (minYear != null && year < minYear) return@mapNotNull null
-                if (maxYear != null && year > maxYear) return@mapNotNull null
-                year to item
-            }
-            .sortedByDescending { it.first }
-            .map { it.second }
-
-        val movies = ArrayList<H5Item>(targetCount)
-        for (yearFolder in yearFolders) {
-            if (movies.size >= targetCount) break
-            val items = fetchDirectChildren(host, yearFolder.href)
-                .filter { it.isFolder }
-                .sortedByDescending { it.time ?: 0L }
-
-            for (item in items) {
-                movies.add(item)
-                if (movies.size >= targetCount) break
-            }
         }
 
         return movies.distinctBy { it.href }
@@ -578,15 +497,6 @@ open class DhakaFlixProvider : MainAPI() {
     private fun cleanFileName(name: String): String {
         val base = name.substringBeforeLast('.')
         return base.replace('.', ' ').replace('_', ' ').trim()
-    }
-
-    private fun posterFromFolder(host: String, folderHref: String): String {
-        val basePath = if (folderHref.startsWith("http://") || folderHref.startsWith("https://")) {
-            pathFromUrl(folderHref)
-        } else {
-            normalizePath(folderHref)
-        }
-        return absoluteUrl(host, basePath + "a_AL_.jpg")
     }
 
     private fun extractYear(text: String): Int? {
