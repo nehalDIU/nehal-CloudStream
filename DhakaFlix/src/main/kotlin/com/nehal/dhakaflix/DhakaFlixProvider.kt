@@ -345,13 +345,13 @@ open class DhakaFlixProvider : MainAPI() {
         return buildMovieResponse(url, host, title, items)
     }
 
-    private fun loadMovie(url: String, host: String, items: List<H5Item>): LoadResponse {
+    private suspend fun loadMovie(url: String, host: String, items: List<H5Item>): LoadResponse {
         val title = cleanName(decodeNameFromUrl(url))
         if (title.isEmpty()) throw ErrorLoadingException("Missing title")
         return buildMovieResponse(url, host, title, items)
     }
 
-    private fun buildMovieResponse(url: String, host: String, title: String, items: List<H5Item>): LoadResponse {
+    private suspend fun buildMovieResponse(url: String, host: String, title: String, items: List<H5Item>): LoadResponse {
         val posterUrl = pickPoster(host, items)
         val year = extractYear(title)
 
@@ -361,7 +361,7 @@ open class DhakaFlixProvider : MainAPI() {
         }
     }
 
-    private fun loadCollection(url: String, host: String, items: List<H5Item>): LoadResponse {
+    private suspend fun loadCollection(url: String, host: String, items: List<H5Item>): LoadResponse {
         val title = cleanName(decodeNameFromUrl(url))
         if (title.isEmpty()) throw ErrorLoadingException("Missing title")
 
