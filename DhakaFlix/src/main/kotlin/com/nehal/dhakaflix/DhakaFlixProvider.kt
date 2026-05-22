@@ -101,14 +101,19 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private fun buildSearchResponse(title: String, url: String, type: TvType): SearchResponse {
+        val taggedTitle = ensureDualAudioTag(title)
         return if (type == TvType.TvSeries) {
-            newTvSeriesSearchResponse(title, url, type) {
-                addQuality("Dual Audio")
-            }
+            newTvSeriesSearchResponse(taggedTitle, url, type)
         } else {
-            newMovieSearchResponse(title, url, type) {
-                addQuality("Dual Audio")
-            }
+            newMovieSearchResponse(taggedTitle, url, type)
+        }
+    }
+
+    private fun ensureDualAudioTag(title: String): String {
+        return if (title.contains("dual audio", ignoreCase = true)) {
+            title
+        } else {
+            "$title [Dual Audio]"
         }
     }
 
