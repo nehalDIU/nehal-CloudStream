@@ -13,7 +13,6 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.getQualityFromName
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
@@ -271,7 +270,7 @@ open class FTPBDIndexProvider : MainAPI() {
 
         links.forEach { link ->
             val fileName = link.substringAfterLast('/').substringBefore('?')
-            val quality = getQualityFromName(fileName)
+            val quality = guessQualityFromName(fileName)
 
             when {
                 link.contains(".m3u8", ignoreCase = true) -> {
@@ -299,6 +298,15 @@ open class FTPBDIndexProvider : MainAPI() {
         }
 
         return true
+    }
+
+    private fun guessQualityFromName(name: String): Int {
+        val lower = name.lowercase()
+        val match = Regex("(?<!\\d)(2160|1440|1080|720|480|360|240|144)(?!\\d)")
+            .find(lower)
+        if (match != null) return match.value.toInt()
+        if (lower.contains("4k")) return 2160
+        return 400
     }
 
     private suspend fun fetchDirectChildren(host: String, href: String): List<H5Item> {
