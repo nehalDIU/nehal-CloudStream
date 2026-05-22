@@ -79,12 +79,12 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategoryMap = movieCategories.associateBy { it.key }
 
     override val mainPage = mainPageOf(
-        "tv:all" to "TV Series 0-9 & A-Z",
-        "movie:latest" to "English Movies 1080p - Latest",
+        "tv:all" to "TV Series",
+        "movie:latest" to "English Movies - Latest",
         "movie:hindi" to "Hindi Movies",
-        "movie:south-dubbed" to "South-Movie Hindi Dubbed",
+        "movie:south-dubbed" to "South Indian Movies",
         "movie:kolkata-bangla" to "Kolkata Bangla Movies",
-        "movie:animation-1080p" to "Animation Movies - 1080p",
+        "movie:animation-1080p" to "Animation Movies",
         "movie:imdb-top250" to "IMDb Top-250 Movies",
         "movie:korean-tv" to "KOREAN TV & WEB Series"
     )
