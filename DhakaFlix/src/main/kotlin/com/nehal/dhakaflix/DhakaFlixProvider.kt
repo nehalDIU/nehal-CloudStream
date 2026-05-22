@@ -107,13 +107,27 @@ open class DhakaFlixProvider : MainAPI() {
     private fun buildSearchResponse(
         title: String,
         url: String,
-        type: TvType
+        type: TvType,
+        posterUrl: String? = null
     ): SearchResponse {
         val isHd = isHdTitle(title)
         val isDubbed = isDubTitle(title)
-        return newAnimeSearchResponse(title, url, type) {
-            if (isDubbed) addDubStatus(DubStatus.Dubbed)
-            if (isHd) addQuality("HD")
+        return when (type) {
+            TvType.Movie -> newMovieSearchResponse(title, url, type) {
+                this.posterUrl = posterUrl
+                if (isDubbed) addDubStatus(DubStatus.Dubbed)
+                if (isHd) addQuality("HD")
+            }
+            TvType.TvSeries -> newTvSeriesSearchResponse(title, url, type) {
+                this.posterUrl = posterUrl
+                if (isDubbed) addDubStatus(DubStatus.Dubbed)
+                if (isHd) addQuality("HD")
+            }
+            else -> newAnimeSearchResponse(title, url, type) {
+                this.posterUrl = posterUrl
+                if (isDubbed) addDubStatus(DubStatus.Dubbed)
+                if (isHd) addQuality("HD")
+            }
         }
     }
 
@@ -138,7 +152,8 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries)
+                        val posterUrl = posterFromFolder(tvHost, item.href)
+                        buildSearchResponse(title, url, TvType.TvSeries, posterUrl)
                     }
             }
             request.data.startsWith("tv:") -> {
@@ -150,7 +165,8 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries)
+                        val posterUrl = posterFromFolder(tvHost, item.href)
+                        buildSearchResponse(title, url, TvType.TvSeries, posterUrl)
                     }
             }
             request.data.startsWith("movie:") -> {
@@ -172,7 +188,8 @@ open class DhakaFlixProvider : MainAPI() {
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(host, item.href)
                         val type = category?.type ?: TvType.Movie
-                        buildSearchResponse(title, url, type)
+                        val posterUrl = posterFromFolder(host, item.href)
+                        buildSearchResponse(title, url, type, posterUrl)
                     }
             }
             else -> emptyList()
@@ -199,11 +216,13 @@ open class DhakaFlixProvider : MainAPI() {
                 if (results.size >= maxResults) return@forEach
                 val title = cleanName(decodeNameFromHref(item.href))
                 if (title.lowercase().contains(queryLower)) {
+                    val posterUrl = posterFromFolder(tvHost, item.href)
                     results.add(
                         buildSearchResponse(
                             title,
                             absoluteUrl(tvHost, item.href),
-                            TvType.TvSeries
+                            TvType.TvSeries,
+                            posterUrl
                         )
                     )
                 }
@@ -225,8 +244,9 @@ open class DhakaFlixProvider : MainAPI() {
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
                         val url = absoluteUrl(category.host, item.href)
+                        val posterUrl = posterFromFolder(category.host, item.href)
                         results.add(
-                            buildSearchResponse(title, url, category.type)
+                            buildSearchResponse(title, url, category.type, posterUrl)
                         )
                     }
                 }
@@ -246,11 +266,13 @@ open class DhakaFlixProvider : MainAPI() {
                     if (results.size >= maxResults) return@forEach
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
+                        val posterUrl = posterFromFolder(movieHost, item.href)
                         results.add(
                             buildSearchResponse(
                                 title,
                                 absoluteUrl(movieHost, item.href),
-                                TvType.Movie
+                                TvType.Movie,
+                                posterUrl
                             )
                         )
                     }
@@ -498,6 +520,15 @@ open class DhakaFlixProvider : MainAPI() {
     private fun cleanFileName(name: String): String {
         val base = name.substringBeforeLast('.')
         return base.replace('.', ' ').replace('_', ' ').trim()
+    }
+
+    private fun posterFromFolder(host: String, folderHref: String): String {
+        val basePath = if (folderHref.startsWith("http://") || folderHref.startsWith("https://")) {
+            pathFromUrl(folderHref)
+        } else {
+            normalizePath(folderHref)
+        }
+        return absoluteUrl(host, basePath + "a_AL_.jpg")
     }
 
     private fun extractYear(text: String): Int? {
