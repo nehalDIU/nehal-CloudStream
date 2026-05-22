@@ -36,6 +36,13 @@ open class OldFTPBDProvider : MainAPI() {
     override val hasMainPage = true
     override val hasDownloadSupport = true
 
+    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+    private fun defaultHeaders(): Map<String, String> = mapOf(
+        "User-Agent" to userAgent,
+        "Referer" to mainUrl
+    )
+
     private data class Category(val path: String, val name: String, val type: TvType)
 
     private val categories = listOf(
@@ -90,19 +97,19 @@ open class OldFTPBDProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageUrl = buildCategoryPageUrl(request.data, page)
-        val doc = app.get(pageUrl).document
+        val doc = app.get(pageUrl, headers = defaultHeaders()).document
         val categoryType = categories.firstOrNull { it.path == request.data }?.type ?: TvType.Movie
         val items = parseSearchItems(doc, categoryType)
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = app.get("$mainUrl/?s=$query").document
+        val doc = app.get("$mainUrl/?s=$query", headers = defaultHeaders()).document
         return parseSearchItems(doc, TvType.Movie)
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val doc = app.get(url).document
+        val doc = app.get(url, headers = defaultHeaders()).document
         val title = doc.selectFirst("h1")?.text()?.trim()
             ?: throw ErrorLoadingException("Missing title")
 
@@ -149,7 +156,7 @@ open class OldFTPBDProvider : MainAPI() {
         val links = if (looksLikeDownload(data)) {
             listOf(DownloadLink("Link", data))
         } else {
-            val doc = app.get(data).document
+            val doc = app.get(data, headers = defaultHeaders()).document
             extractDownloadLinks(doc)
         }
 
@@ -162,7 +169,8 @@ open class OldFTPBDProvider : MainAPI() {
                         this.name,
                         link.name,
                         url = link.url,
-                        type = ExtractorLinkType.M3U8
+                        type = ExtractorLinkType.M3U8,
+                        headers = defaultHeaders()
                     )
                 )
             } else {
@@ -170,7 +178,8 @@ open class OldFTPBDProvider : MainAPI() {
                     newExtractorLink(
                         this.name,
                         link.name,
-                        url = link.url
+                        url = link.url,
+                        headers = defaultHeaders()
                     )
                 )
             }
