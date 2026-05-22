@@ -42,6 +42,7 @@ open class DhakaFlixProvider : MainAPI() {
 
     private val tvHost = "http://172.16.50.12"
     private val movieHost = "http://172.16.50.14"
+    private val kolkataHost = "http://172.16.50.7"
 
     private val tvRootPath = "/DHAKA-FLIX-12/TV-WEB-Series/"
     private val movieRootPath = "/DHAKA-FLIX-14/English%20Movies%20%281080p%29/"
@@ -64,11 +65,9 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategories = listOf(
         Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
         Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
-        Category("movie:south-indian", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/", "South Indian Movies", TvType.Movie, movieHost),
         Category("movie:south-dubbed", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/", "South-Movie Hindi Dubbed", TvType.Movie, movieHost),
-        Category("movie:kolkata-bangla", "/DHAKA-FLIX-14/Kolkata%20Bangla%20Movies/", "Kolkata Bangla Movies", TvType.Movie, movieHost),
+        Category("movie:kolkata-bangla", "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/", "Kolkata Bangla Movies", TvType.Movie, kolkataHost),
         Category("movie:animation-1080p", "/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/", "Animation Movies - 1080p", TvType.Movie, movieHost),
-        Category("movie:foreign", "/DHAKA-FLIX-14/Foreign%20Language%20Movies/", "Foreign Language Movies", TvType.Movie, movieHost),
         Category("movie:imdb-top250", "/DHAKA-FLIX-14/IMDb%20Top-250%20Movies/", "IMDb Top-250 Movies", TvType.Movie, movieHost),
         Category("movie:korean-tv", "/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/", "KOREAN TV & WEB Series", TvType.TvSeries, movieHost)
     )
@@ -79,11 +78,9 @@ open class DhakaFlixProvider : MainAPI() {
         "tv:all" to "TV Series 0-9 & A-Z",
         "movie:latest" to "English Movies 1080p - Latest",
         "movie:hindi" to "Hindi Movies",
-        "movie:south-indian" to "South Indian Movies",
         "movie:south-dubbed" to "South-Movie Hindi Dubbed",
         "movie:kolkata-bangla" to "Kolkata Bangla Movies",
         "movie:animation-1080p" to "Animation Movies - 1080p",
-        "movie:foreign" to "Foreign Language Movies",
         "movie:imdb-top250" to "IMDb Top-250 Movies",
         "movie:korean-tv" to "KOREAN TV & WEB Series"
     )
