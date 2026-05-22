@@ -46,6 +46,14 @@ open class DhakaFlixProvider : MainAPI() {
     private val tvRootPath = "/DHAKA-FLIX-12/TV-WEB-Series/"
     private val movieRootPath = "/DHAKA-FLIX-14/English%20Movies%20%281080p%29/"
 
+    private data class Category(
+        val key: String,
+        val path: String,
+        val name: String,
+        val type: TvType,
+        val host: String
+    )
+
     private val tvGroups = mapOf(
         "tv:0-9" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%98%85%20%200%20%20%E2%80%94%20%209/",
         "tv:a-l" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A5%20%20A%20%20%E2%80%94%20%20L/",
@@ -53,12 +61,34 @@ open class DhakaFlixProvider : MainAPI() {
         "tv:s-z" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20S%20%20%E2%80%94%20%20Z/"
     )
 
+    private val movieCategories = listOf(
+        Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
+        Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
+        Category("movie:south-indian", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/", "South Indian Movies", TvType.Movie, movieHost),
+        Category("movie:south-dubbed", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/", "South-Movie Hindi Dubbed", TvType.Movie, movieHost),
+        Category("movie:kolkata-bangla", "/DHAKA-FLIX-14/Kolkata%20Bangla%20Movies/", "Kolkata Bangla Movies", TvType.Movie, movieHost),
+        Category("movie:animation-1080p", "/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/", "Animation Movies - 1080p", TvType.Movie, movieHost),
+        Category("movie:foreign", "/DHAKA-FLIX-14/Foreign%20Language%20Movies/", "Foreign Language Movies", TvType.Movie, movieHost),
+        Category("movie:imdb-top250", "/DHAKA-FLIX-14/IMDb%20Top-250%20Movies/", "IMDb Top-250 Movies", TvType.Movie, movieHost),
+        Category("movie:korean-tv", "/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/", "KOREAN TV & WEB Series", TvType.TvSeries, movieHost)
+    )
+
+    private val movieCategoryMap = movieCategories.associateBy { it.key }
+
     override val mainPage = mainPageOf(
         "tv:0-9" to "TV Series 0-9",
         "tv:a-l" to "TV Series A-L",
         "tv:m-r" to "TV Series M-R",
         "tv:s-z" to "TV Series S-Z",
-        "movie:latest" to "English Movies 1080p - Latest"
+        "movie:latest" to "English Movies 1080p - Latest",
+        "movie:hindi" to "Hindi Movies",
+        "movie:south-indian" to "South Indian Movies",
+        "movie:south-dubbed" to "South-Movie Hindi Dubbed",
+        "movie:kolkata-bangla" to "Kolkata Bangla Movies",
+        "movie:animation-1080p" to "Animation Movies - 1080p",
+        "movie:foreign" to "Foreign Language Movies",
+        "movie:imdb-top250" to "IMDb Top-250 Movies",
+        "movie:korean-tv" to "KOREAN TV & WEB Series"
     )
 
     private val mapper = jacksonObjectMapper()
@@ -91,16 +121,28 @@ open class DhakaFlixProvider : MainAPI() {
                         newTvSeriesSearchResponse(title, url, TvType.TvSeries)
                     }
             }
-            request.data == "movie:latest" -> {
-                val latestPath = findLatestMovieYearPath() ?: movieRootPath
-                fetchDirectChildren(movieHost, latestPath)
+            request.data.startsWith("movie:") -> {
+                val category = movieCategoryMap[request.data]
+                val categoryPath = category?.path ?: movieRootPath
+                val host = category?.host ?: movieHost
+                val children = if (request.data == "movie:latest") {
+                    val latestPath = findLatestMovieYearPath() ?: movieRootPath
+                    fetchDirectChildren(host, latestPath)
+                } else {
+                    fetchDirectChildren(host, categoryPath)
+                }
+                children
                     .filter { it.isFolder }
                     .sortedByDescending { it.time ?: 0L }
                     .mapNotNull { item ->
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
-                        val url = absoluteUrl(movieHost, item.href)
-                        newMovieSearchResponse(title, url, TvType.Movie)
+                        val url = absoluteUrl(host, item.href)
+                        if (category?.type == TvType.TvSeries) {
+                            newTvSeriesSearchResponse(title, url, TvType.TvSeries)
+                        } else {
+                            newMovieSearchResponse(title, url, TvType.Movie)
+                        }
                     }
             }
             else -> emptyList()
@@ -119,6 +161,7 @@ open class DhakaFlixProvider : MainAPI() {
         val results = ArrayList<SearchResponse>()
 
         for (groupPath in tvGroups.values) {
+            if (results.size >= maxResults) break
             val items = fetchDirectChildren(tvHost, groupPath)
                 .filter { it.isFolder }
 
@@ -135,8 +178,26 @@ open class DhakaFlixProvider : MainAPI() {
                     )
                 }
             }
+        }
 
-            if (results.size >= maxResults) break
+        if (results.size < maxResults) {
+            for (category in movieCategories.filter { it.key != "movie:latest" }) {
+                if (results.size >= maxResults) break
+                val items = fetchDirectChildren(category.host, category.path)
+                    .filter { it.isFolder }
+
+                items.forEach { item ->
+                    if (results.size >= maxResults) return@forEach
+                    val title = cleanName(decodeNameFromHref(item.href))
+                    if (title.lowercase().contains(queryLower)) {
+                        val url = absoluteUrl(category.host, item.href)
+                        results.add(
+                            if (category.type == TvType.TvSeries) newTvSeriesSearchResponse(title, url, category.type)
+                            else newMovieSearchResponse(title, url, category.type)
+                        )
+                    }
+                }
+            }
         }
 
         if (results.size < maxResults) {
@@ -168,11 +229,17 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        return if (url.contains("/TV-WEB-Series/")) {
+        val type = categoryTypeForUrl(url) ?: if (url.contains("/TV-WEB-Series/")) TvType.TvSeries else TvType.Movie
+        return if (type == TvType.TvSeries) {
             loadTvSeries(url)
         } else {
             loadMovie(url)
         }
+    }
+
+    private fun categoryTypeForUrl(url: String): TvType? {
+        val normalizedUrlPath = pathFromUrl(url)
+        return movieCategories.firstOrNull { normalizedUrlPath.startsWith(normalizePath(it.path)) }?.type
     }
 
     private suspend fun loadTvSeries(url: String): LoadResponse {
