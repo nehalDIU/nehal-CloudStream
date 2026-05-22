@@ -104,9 +104,9 @@ open class FTPBDIndexProvider : MainAPI() {
             fetchDirectChildren(category.host, category.path)
                 .filter { it.isFolder }
         ).mapNotNull { item ->
-                val title = cleanName(decodeNameFromHref(item.href))
-                if (title.isEmpty()) return@mapNotNull null
-                buildSearchResponse(title, absoluteUrl(category.host, item.href), category.type)
+            val title = cleanName(decodeNameFromHref(item.href))
+            if (title.isEmpty()) return@mapNotNull null
+            buildSearchResponse(title, absoluteUrl(category.host, item.href), category.type)
         }
 
         val pageSize = 60
