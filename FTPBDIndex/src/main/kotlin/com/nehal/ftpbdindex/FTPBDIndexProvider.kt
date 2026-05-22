@@ -98,19 +98,25 @@ open class FTPBDIndexProvider : MainAPI() {
             get() = size == null && href.endsWith("/")
     }
 
+    private data class CategoryEntry(
+        val title: String,
+        val url: String,
+        val type: TvType,
+        val time: Long
+    )
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val category = categoryMap[request.data] ?: return newHomePageResponse(request.name, emptyList())
         val items = fetchDirectChildren(category.host, category.path)
-            .filter { it.isFolder }
-            .sortedByDescending { it.time ?: 0L }
-            .mapNotNull { item ->
-                val title = cleanName(decodeNameFromHref(item.href))
-                if (title.isEmpty()) return@mapNotNull null
-                buildSearchResponse(title, absoluteUrl(category.host, item.href), category.type)
+        val results = buildCategoryEntries(category, items)
+            .sortedByDescending { it.time }
+            .mapNotNull { entry ->
+                if (entry.title.isEmpty()) return@mapNotNull null
+                buildSearchResponse(entry.title, entry.url, entry.type)
             }
 
         val pageSize = 60
-        val paged = items.drop((page - 1) * pageSize).take(pageSize)
+        val paged = results.drop((page - 1) * pageSize).take(pageSize)
         return newHomePageResponse(request.name, paged)
     }
 
@@ -125,17 +131,17 @@ open class FTPBDIndexProvider : MainAPI() {
         for (category in categories) {
             if (results.size >= maxResults) break
             val items = fetchDirectChildren(category.host, category.path)
-                .filter { it.isFolder }
+            val entries = buildCategoryEntries(category, items)
 
-            for (item in items) {
+            for (entry in entries) {
                 if (results.size >= maxResults) break
-                val title = cleanName(decodeNameFromHref(item.href))
+                val title = entry.title
                 if (title.lowercase().contains(queryLower)) {
                     results.add(
                         buildSearchResponse(
                             title,
-                            absoluteUrl(category.host, item.href),
-                            category.type
+                            entry.url,
+                            entry.type
                         )
                     )
                 }
@@ -153,11 +159,71 @@ open class FTPBDIndexProvider : MainAPI() {
         }
     }
 
+    private fun buildCategoryEntries(category: Category, items: List<H5Item>): List<CategoryEntry> {
+        val entries = ArrayList<CategoryEntry>()
+        val host = category.host
+
+        if (category.type == TvType.Movie) {
+            items.filter { it.isFolder }
+                .filterNot { isYearFolder(decodeNameFromHref(it.href)) }
+                .forEach { item ->
+                    val title = cleanName(decodeNameFromHref(item.href))
+                    if (title.isNotEmpty()) {
+                        entries.add(
+                            CategoryEntry(
+                                title = title,
+                                url = absoluteUrl(host, item.href),
+                                type = category.type,
+                                time = item.time ?: 0L
+                            )
+                        )
+                    }
+                }
+
+            items.filter { !it.isFolder && isVideoFile(it.href) }
+                .forEach { item ->
+                    val fileName = decodeNameFromHref(item.href)
+                    val title = cleanFileName(fileName)
+                    if (title.isNotEmpty()) {
+                        entries.add(
+                            CategoryEntry(
+                                title = title,
+                                url = absoluteUrl(host, item.href),
+                                type = category.type,
+                                time = item.time ?: 0L
+                            )
+                        )
+                    }
+                }
+        } else {
+            items.filter { it.isFolder }
+                .forEach { item ->
+                    val title = cleanName(decodeNameFromHref(item.href))
+                    if (title.isNotEmpty()) {
+                        entries.add(
+                            CategoryEntry(
+                                title = title,
+                                url = absoluteUrl(host, item.href),
+                                type = category.type,
+                                time = item.time ?: 0L
+                            )
+                        )
+                    }
+                }
+        }
+
+        return entries
+    }
+
     override suspend fun load(url: String): LoadResponse {
         val type = categoryTypeForUrl(url) ?: if (url.contains("/English%20Movies/")) {
             TvType.Movie
         } else {
             TvType.TvSeries
+        }
+
+        if (looksLikeVideoUrl(url) && type == TvType.Movie) {
+            return loadMovieFile(url)
         }
 
         return if (type == TvType.Movie) {
@@ -186,6 +252,16 @@ open class FTPBDIndexProvider : MainAPI() {
 
         return newMovieLoadResponse(title, url, TvType.Movie, dataUrl) {
             this.posterUrl = posterUrl
+            this.year = year
+        }
+    }
+
+    private fun loadMovieFile(url: String): LoadResponse {
+        val title = cleanFileName(decodeNameFromUrl(url))
+        if (title.isEmpty()) throw ErrorLoadingException("Missing title")
+        val year = extractYear(title)
+
+        return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.year = year
         }
     }
@@ -432,6 +508,11 @@ open class FTPBDIndexProvider : MainAPI() {
 
     private fun extractYear(text: String): Int? {
         return Regex("(19|20)\\d{2}").find(text)?.value?.toIntOrNull()
+    }
+
+    private fun isYearFolder(name: String): Boolean {
+        val trimmed = name.trim()
+        return Regex("^(19|20)\\d{2}$").matches(trimmed)
     }
 
     private fun isSeasonFolder(href: String): Boolean {
