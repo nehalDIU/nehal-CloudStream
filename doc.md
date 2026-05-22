@@ -1,1182 +1,892 @@
-Using the template
-The easiest way to start developing is to fork our Test Plugins.
+### Implement a Basic Content Provider Extension in Kotlin
 
-To get started:
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
 
-Fork the Test Plugins
+This example demonstrates how to create a functional content provider extension by implementing the MainAPI abstract class. It includes defining provider metadata, homepage sections, and methods for fetching content, searching, loading details, and extracting links.
 
-Check if GitHub actions are enabled, by going to: Settings > Actions > General > Allow all actions and reusable workflows
+```kotlin
+class ExampleProvider : MainAPI() {
+    override var name = "Example Provider"
+    override var mainUrl = "https://example.com"
+    override var lang = "en"
+    override val hasMainPage = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-Make sure workflows have push access in your repository, by going to: Settings > Actions > General > Read and write permissions
-
-You can now create your own plugins and after you push new code, they should automatically be built
-
-Creating your own Providers
-Providers in CloudStream consists primarily of 4 different parts:
-
-Searching
-Loading the home page
-Loading the result page
-Loading the video links
-When making a provider it is important that you are confident you can scrape the video links first! Video links are often the most protected part of the website and if you cannot scrape them then the provider is useless.
-
-#0. Scraping
-If you are unfamiliar with the concept of scraping, you should probably start by reading this guide which should hopefuly familiarize you with this technique.
-
-Looking at how some extensions work alongside reading this will likely help a lot. See what common patterns you can spot in multiple extensions.
-
-#1. Searching
-This one is probably the easiest, based on a query you should return a list of SearchResponse
-
-Scraping the search results is essentially just finding the search item elements on the site (red box) and looking in them to find name, url and poster url and put the data in a SearchResponse.
-
-image
-image
-The code for the search then ideally looks something like
-
-
-// (code for Eja.tv)
-
-override suspend fun search(query: String): List<SearchResponse> {
-    return app.post(
-        mainUrl, data = mapOf("search" to query) // Fetch the search data
-    ).document // Convert the response to a searchable document  
-        .select("div.card-body") // Only select the search items using a CSS selector
-        .mapNotNull { // Convert all html elements to SearchResponses and filter out the null search results
-            it.toSearchResponse()
-        }
-}
-
-// Converts a html element to a useable search response
-// Basically just look in the element for sub-elements with the data you want
-private fun Element.toSearchResponse(): LiveSearchResponse? {
-    // If no link element then it's no a valid search response
-    val link = this.select("div.alternative a").last() ?: return null
-    // fixUrl is a built in function to convert urls like /watch?v=..... to https://www.youtube.com/watch?v=.....
-    val href = link.attr("href")
-    val img = this.selectFirst("div.thumb img")
-    // Optional parameter, scraping languages are not required but might be nice on some sites
-    val lang = this.selectFirst(".card-title > a")?.attr("href")?.removePrefix("?country=")
-        ?.replace("int", "eu") //international -> European Union 🇪🇺
-        
-    // There are many types of searchresponses but mostly you will be using AnimeSearchResponse, MovieSearchResponse
-    // and TvSeriesSearchResponse, all with different parameters (like episode count)
-    return newLiveSearchResponse(
-        // Kinda hack way to get the title
-        img?.attr("alt")?.replaceFirst("Watch ", "") ?: return null,
-        href,
-        TvType.Live
-    ) {
-        this.posterUrl = fixUrl(img.attr("src"))
-        this.lang = lang
-    }
-}
-In this code snippet I have separated the Element to SearchResult conversion to a separate function because that function can often be used when scraping the home page later. No need to parse the same type of element twice.
-
-#2. Loading the home page
-Getting the homepage is essentially the same as getting search results but with a twist: you define the queries in a variable like this:
-
-
-
-override val mainPage = mainPageOf(
-        Pair("1", "Recent Release - Sub"),
-        Pair("2", "Recent Release - Dub"),
-        Pair("3", "Recent Release - Chinese"),
+    // Define homepage sections
+    override val mainPage = listOf(
+        MainPageData("Latest Movies", "/movies/latest"),
+        MainPageData("TV Series", "/series/latest"),
+        MainPageData("Trending", "/trending", horizontalImages = true)
     )
-This dictates what the getMainPage function will be receiving as function arguments. Basically when the recent dubbed media should be loaded the getMainPage gets called with a page number and the request you defined above.
 
-
-
-override suspend fun getMainPage(
-        page: Int,
-        request : MainPageRequest
-    ): HomePageResponse {
-
-    // page: An integer > 0, starts on 1 and counts up, Depends on how much the user has scrolled.
-    // request.data == "2"
-    // request.name == "Recent Release - Dub"
-With these variables you should fetch the appropriate list of Search Response like this:
-
-
-
-// Gogoanime
-override suspend fun getMainPage(
-        page: Int,
-        request : MainPageRequest
-    ): HomePageResponse {
-        // Use the data you defined earlier in the pair to send the request you want.
-        val params = mapOf("page" to page.toString(), "type" to request.data)
-        val html = app.get(
-            "https://ajax.gogo-load.com/ajax/page-recent-release.html",
-            headers = headers,
-            params = params
-        )
-        val isSub = listOf(1, 3).contains(request.data.toInt())
-
-        // In this case a regex is used to get all the correct variables
-        // But if you defined the Element.toSearchResponse() earlier you can often times use it on the homepage
-        val home = parseRegex.findAll(html.text).map {
-            val (link, epNum, title, poster) = it.destructured
-            newAnimeSearchResponse(title, link) {
-                this.posterUrl = poster
-                addDubStatus(!isSub, epNum.toIntOrNull())
+    // Fetch homepage content with pagination
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        val document = app.get("$mainUrl${request.data}?page=$page").document
+        val items = document.select(".media-item").map {
+            newMovieSearchResponse(
+                name = it.selectFirst("h3")?.text() ?: "",
+                url = it.selectFirst("a")?.attr("href") ?: ""
+            ) {
+                posterUrl = it.selectFirst("img")?.attr("src")
+                year = it.selectFirst(".year")?.text()?.toIntOrNull()
             }
-        }.toList()
-
-        // Return a list of search responses mapped to the request name defined earlier.
-        return newHomePageResponse(request.name, home)
+        }
+        return newHomePageResponse(request, items, hasNext = items.isNotEmpty())
     }
-This might seem needlessly convoluted, but this system is to allow "infinite" loading, e.g loading the next page of search responses when the user has scrolled to the end.
 
-TLDR: Exactly like searching but you defined your own queries.
+    // Search for content
+    override suspend fun search(query: String): List<SearchResponse>? {
+        val document = app.get("$mainUrl/search?q=$query").document
+        return document.select(".search-result").map {
+            newTvSeriesSearchResponse(
+                name = it.selectFirst("h3")?.text() ?: "",
+                url = it.selectFirst("a")?.attr("href") ?: ""
+            ) {
+                posterUrl = it.selectFirst("img")?.attr("src")
+                addQuality("HD")
+            }
+        }
+    }
 
-#3. Loading the result page
-The media result page is a bit more complex than search results, but it uses the same logic used to get search results: using CSS selectors and regex to parse html into a kotlin object. With the amount of info being parsed this function can get quite big, but the fundamentals are still pretty simple. The only difficultuy is getting the episodes, they are not always not part of the html. Check if any extra requests are sent in your browser when visiting the episodes page.
-
-NOTE: Episodes in CloudStream are not paginated, meaning that if you have a show with 21 seasons, all on different website pages you will need to parse them all.
-
-A function can look something like this:
-
-
-    // The url argument is the same as what you put in the Search Response from search() and getMainPage() 
-    override suspend fun load(url: String): LoadResponse {
+    // Load media details page
+    override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
+        val title = document.selectFirst("h1")?.text() ?: return null
+        val plot = document.selectFirst(".description")?.text()
+        val posterUrl = document.selectFirst(".poster img")?.attr("src")
 
-        // A lot of metadata is nessecary for a pretty page
-        // Usually this is simply doing a lot of selects
-        val details = document.select("div.detail_page-watch")
-        val img = details.select("img.film-poster-img")
-        val posterUrl = img.attr("src")
-        // It's safe to throw errors here, they will be shown to the user and can help debugging. 
-        val title = img.attr("title") ?: throw ErrorLoadingException("No Title")
-
-        var duration = document.selectFirst(".fs-item > .duration")?.text()?.trim()
-        var year: Int? = null
-        var tags: List<String>? = null
-        var cast: List<String>? = null
-        val youtubeTrailer = document.selectFirst("iframe#iframe-trailer")?.attr("data-src")
-        
-        // The rating system goes is in the range 0 - 10 000
-        // which allows the greatest flexibility app wise, but you will often need to
-        // multiply your values
-        val rating = document.selectFirst(".fs-item > .imdb")?.text()?.trim()
-            ?.removePrefix("IMDB:")?.toRatingInt()
-
-        // Sometimes is is not quite possible to selct specific information
-        // as it is presented as text with to specific selectors to differentiate it.
-        // In this case you can iterate over the rows til you find what you want.
-        // It is a bit dirty but it works.
-        document.select("div.elements > .row > div > .row-line").forEach { element ->
-            val type = element?.select(".type")?.text() ?: return@forEach
-            when {
-                type.contains("Released") -> {
-                    year = Regex("\\d+").find(
-                        element.ownText() ?: return@forEach
-                        // Remember to always use OrNull functions
-                        // otherwise stuff will throw exceptions on unexpected values.
-                        // We would not want a page to fail because the rating was incorrectly formatted
-                    )?.groupValues?.firstOrNull()?.toIntOrNull()
-                }
-                type.contains("Genre") -> {
-                    tags = element.select("a").mapNotNull { it.text() }
-                }
-                type.contains("Cast") -> {
-                    cast = element.select("a").mapNotNull { it.text() }
-                }
-                type.contains("Duration") -> {
-                    duration = duration ?: element.ownText().trim()
-                }
-            }
+        // For movies
+        return newMovieLoadResponse(
+            name = title,
+            url = url,
+            type = TvType.Movie,
+            dataUrl = document.selectFirst(".play-button")?.attr("data-url") ?: ""
+        ) {
+            this.plot = plot
+            this.posterUrl = posterUrl
+            addScore("8.5", maxValue = 10)
+            addDuration("2h 15min")
+            tags = listOf("Action", "Drama")
+            addTrailer("https://youtube.com/watch?v=example")
         }
-        val plot = details.select("div.description").text().replace("Overview:", "").trim()
-
-        // This is required to know which sort of LoadResponse to return.
-        // If the page is a movie it needs different metadata and will be displayed differently
-        val isMovie = url.contains("/movie/")
-
-        // This is just for fetching the episodes later
-        // https://sflix.to/movie/free-never-say-never-again-hd-18317 -> 18317
-        val idRegex = Regex(""".*-(\d+)""")
-        val dataId = details.attr("data-id")
-        val id = if (dataId.isNullOrEmpty())
-            idRegex.find(url)?.groupValues?.get(1)
-                ?: throw ErrorLoadingException("Unable to get id from '$url'")
-        else dataId
-
-        val recommendations =
-            document.select("div.film_list-wrap > div.flw-item").mapNotNull { element ->
-                val titleHeader =
-                    element.select("div.film-detail > .film-name > a") ?: return@mapNotNull null
-                val recUrl = fixUrlNull(titleHeader.attr("href")) ?: return@mapNotNull null
-                val recTitle = titleHeader.text() ?: return@mapNotNull null
-                val poster = element.select("div.film-poster > img").attr("data-src")
-                newMovieSearchResponse(
-                    recTitle,
-                    recUrl,
-                    if (recUrl.contains("/movie/")) TvType.Movie else TvType.TvSeries,
-                    false
-                ) {
-                    this.posterUrl = poster
-                }
-            }
-
-        if (isMovie) {
-            // Movies
-            val episodesUrl = "$mainUrl/ajax/movie/episodes/$id"
-            // Episodes are often retrieved using a separate request.
-            // This is usually the most tricky part, but not that hard.
-            // The episodes are seldom protected by any encryption or similar.
-            val episodes = app.get(episodesUrl).text
-
-            // Supported streams, they're identical
-            val sourceIds = Jsoup.parse(episodes).select("a").mapNotNull { element ->
-                var sourceId = element.attr("data-id")
-                if (sourceId.isNullOrEmpty())
-                    sourceId = element.attr("data-linkid")
-
-                if (element.select("span").text().trim().isValidServer()) {
-                    if (sourceId.isNullOrEmpty()) {
-                        fixUrlNull(element.attr("href"))
-                    } else {
-                        "$url.$sourceId".replace("/movie/", "/watch-movie/")
-                    }
-                } else {
-                    null
-                }
-            }
-
-            val comingSoon = sourceIds.isEmpty()
-
-            return newMovieLoadResponse(title, url, TvType.Movie, sourceIds) {
-                this.year = year
-                this.posterUrl = posterUrl
-                this.plot = plot
-                addDuration(duration)
-                addActors(cast)
-                this.tags = tags
-                this.recommendations = recommendations
-                this.comingSoon = comingSoon
-                addTrailer(youtubeTrailer)
-                this.rating = rating
-            }
-        } else {
-            val seasonsDocument = app.get("$mainUrl/ajax/v2/tv/seasons/$id").document
-            val episodes = arrayListOf<Episode>()
-            var seasonItems = seasonsDocument.select("div.dropdown-menu.dropdown-menu-model > a")
-            if (seasonItems.isNullOrEmpty())
-                seasonItems = seasonsDocument.select("div.dropdown-menu > a.dropdown-item")
-            seasonItems.apmapIndexed { season, element ->
-                val seasonId = element.attr("data-id")
-                if (seasonId.isNullOrBlank()) return@apmapIndexed
-
-                var episode = 0
-                val seasonEpisodes = app.get("$mainUrl/ajax/v2/season/episodes/$seasonId").document
-                var seasonEpisodesItems =
-                    seasonEpisodes.select("div.flw-item.film_single-item.episode-item.eps-item")
-                if (seasonEpisodesItems.isNullOrEmpty()) {
-                    seasonEpisodesItems =
-                        seasonEpisodes.select("ul > li > a")
-                }
-
-                seasonEpisodesItems.forEach {
-                    val episodeImg = it?.select("img")
-                    val episodeTitle = episodeImg?.attr("title") ?: it.ownText()
-                    val episodePosterUrl = episodeImg?.attr("src")
-                    val episodeData = it.attr("data-id") ?: return@forEach
-
-                    episode++
-
-                    val episodeNum =
-                        (it.select("div.episode-number").text()
-                            ?: episodeTitle).let { str ->
-                            Regex("""\d+""").find(str)?.groupValues?.firstOrNull()
-                                ?.toIntOrNull()
-                        } ?: episode
-
-                    // Episodes themselves can contain quite a bit of metadata, but only data to load links is required.
-                    episodes.add(
-                        newEpisode(Pair(url, episodeData)) {
-                            this.posterUrl = fixUrlNull(episodePosterUrl)
-                            this.name = episodeTitle?.removePrefix("Episode $episodeNum: ")
-                            this.season = season + 1
-                            this.episode = episodeNum
-                        }
-                    )
-                }
-            }
-#4. Loading links
-This is usually the hardest part when it comes to scraping video sites, because it costs a lot to host videos. As bandwidth is expensive video hosts need to recuperate their expenses using ads, but when scraping we bypass all ads. This means that video hosts have a big monetary incentive to make it as hard as possible to get the video links.
-
-This means that you cannot write just one piece of skeleton code to scrape all video hosts, they are all unique. You will need to customized scrapers for each video host. There are some common obfuscation techniques you should know about and how to detect them.
-
-#Obfuscation techniques to know about:
-Base64: This is one of the most common obfuscation techniques, and you need to be able to spot it inside documents. It is used to hide important text in plain view. It looks something like this: VGhpcyBpcyBiYXNlNjQgZW5jb2RlIHRleHQuIA== A dead giveaway that it is base64 or something similar is that the string ends with ==, something to watch out for, but not required. If you see any suspicious string using A-z in both uppercase and lowercase combined with some numbers then immediately check if it is base64.
-
-AES encryption: This is the more annoying variant of Base64 for our purposes, but less common. Some responses may be encrypted using AES and it is not too hard to spot. Usually encrypted content is encoded in Base64 (which decodes to garbage), which makes it easier to spot. Usually sites are not too covert in the use of AES, and you should be alerted if any site contains references to enc, iv or CryptoJS. The name of the game here is to find the decryption key, which is easiest done with a debugger. If you can find where the decryption takes place in the code, usually with some library like CryptoJS then you can place a breakpoint there to find the key.
-
-More to come later!
-
-#TODO: REST
-
-Creating your own JSON repository
-Cloudstream uses JSON files to fetch and parse lists of repositories. You can create one following this template:
-
-
-{
-  "name": "<repository name>",
-  "description": "<repository description>",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "<direct link to plugins.json>"
-  ]
-}
-name: self explanatory, will be visible in the app
-description: self explanatory, will be visible in the app
-manifestVersion: currently unused, may be used in the future for backwards compatibility
-pluginLists: List of urls, which contain plugins. All of them will be fetched.
-If you followed "Using plugin template" tutorial, the appropriate plugins.json file should be in the builds branch of your new repository.
-If not, you can still generate one by running gradlew makePluginsJson
-
-#Requests based scraping tutorial
-You want to start scraping? Well this guide will teach you, and not some baby selenium scraping. This guide only uses raw requests and has examples in both python and kotlin. Only basic programming knowlege in one of those languages is required to follow along in the guide.
-
-If you find any aspect of this guide confusing please open an issue about it and I will try to improve things.
-
-If you do not know programming at all then this guide will not help you, learn programming! first Real scraping cannot be done by copy pasting with a vauge understanding.
-
-Step 0
- Starting scraping from zero
-
-Step 1
- Properly scraping JSON apis often found on sites
-
-Step 2
- Evading developer tools detection when scraping
-
-Step 3
- Why your requests fail and how to fix them
-
-Step 4
- Finding links and scraping videos
-
-Once you've read and understood the concepts behind scraping take a look at a provider for CloudStream. I added tons of comments to make every aspect of writing CloudStream providers clear. Even if you're not planning on contributing to Cloudstream looking at the code may help
-
-Scraping is just downloading a webpage and getting the wanted information from it. As a start, you can scrape the README.md
-
-I'll use khttp for the Kotlin implementation because of the ease of use, if you want something company-tier I'd recommend OkHttp.
-
-Update: I have made an okhttp wrapper for android apps, check out NiceHttp
-
-#1. Scraping the Readme
-Python
-
-
-import requests
-url = "https://recloudstream.github.io/devs/scraping/"
-response = requests.get(url)
-print(response.text)  # Prints the readme
-Kotlin
-
-In build.gradle:
-
-
-repositories {
-    mavenCentral()
-    jcenter()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-	// Other dependencies above
-	compile group: 'khttp', name: 'khttp', version: '1.0.0'
-}
-In main.kt
-
-
-fun main() {
-    val url = "https://recloudstream.github.io/devs/scraping/"
-    val response = khttp.get(url)
-    println(response.text)
-}
-#2. Getting the GitHub project description
-Scraping is all about getting what you want in a good format you can use to automate stuff.
-
-Start by opening up the developer tools, using
-
-Ctrl + Shift + I
-
-or
-
-f12
-
-or
-
-Right-click and press Inspect
-
-Here you can look at all the network requests the browser is making and much more, but the important part currently is the HTML displayed. You need to find the HTML responsible for showing the project description, but how?
-
-Either click the small mouse in the top left of the developer tools or press
-
-Ctrl + Shift + C
-
-This makes your mouse highlight any element you hover over. Press the description to highlight the element responsible for showing it.
-
-Your HTML will now be focused on something like:
-
-
-<p class="f4 mt-3">
-      Work in progress tutorial for scraping streaming sites
-</p>
-Now there are multiple ways to get the text, but the 2 methods I always use are Regex and CSS selectors. Regex is a ctrl+f on steroids, you can search for anything. CSS selectors are a way to parse the HTML like a browser and select an element in it.
-
-#CSS Selectors
-The element is a paragraph tag, eg <p>, which can be found using the CSS selector: "p".
-
-classes help to narrow down the CSS selector search, in this case: class="f4 mt-3"
-
-This can be represented with
-
-
-p.f4.mt-3
-a dot for every class full list of CSS selectors found here
-
-You can test if this CSS selector works by opening the console tab and typing:
-
-
-document.querySelectorAll("p.f4.mt-3");
-This prints:
-
-
-NodeList [p.f4.mt-3]
-#NOTE: You may not get the same results when scraping from the command line, classes and elements are sometimes created by javascript on the site.
-Python
-
-
-import requests
-from bs4 import BeautifulSoup  # Full documentation at https://www.crummy.com/software/BeautifulSoup/bs4/doc/
-
-url = "https://github.com/Blatzar/scraping-tutorial"
-response = requests.get(url)
-soup = BeautifulSoup(response.text, 'lxml')
-element = soup.select("p.f4.mt-3")  # Using the CSS selector
-print(element[0].text.strip())  # Selects the first element, gets the text and strips it (removes starting and ending spaces)
-Kotlin
-
-In build.gradle:
-
-
-repositories {
-    mavenCentral()
-    jcenter()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-	// Other dependencies above
-	implementation "org.jsoup:jsoup:1.11.3"
-	compile group: 'khttp', name: 'khttp', version: '1.0.0'
-}
-In main.kt
-
-
-fun main() {
-    val url = "https://github.com/Blatzar/scraping-tutorial"
-    val response = khttp.get(url)
-    val soup = Jsoup.parse(response.text)
-    val element = soup.select("p.f4.mt-3") // Using the CSS selector
-    println(element.text().trim()) // Gets the text and strips it (removes starting and ending spaces)
-}
-#Regex:
-When working with Regex I highly recommend using regex101.com (using the python flavor)
-
-Press Ctrl + U
-
-to get the whole site document as text and copy everything
-
-Paste it in the test string in regex101 and try to write an expression to only capture the text you want.
-
-In this case, the elements are
-
-
-<p class="f4 mt-3">
-      Work in progress tutorial for scraping streaming sites
-    </p>
-Maybe we can search for <p class="f4 mt-3"> (backslashes for ")
-
-
-<p class=\"f4 mt-3\">
-Gives a match, so let's expand the match to all characters between the two brackets ( p>....</ ) Some important tokens for that would be:
-
-.*? to indicate everything except a newline any number of times, but take as little as possible
-\s* to indicate whitespaces except a newline any number of times
-(*expression inside*) to indicate groups
-Which gives:
-
-
-<p class=\"f4 mt-3\">\s*(.*)?\s*<
-Explained:
-
-Any text exactly matching <p class="f4 mt-3"> then any number of whitespaces then any number of any characters (which will be stored in group 1) then any number of whitespaces then the text <
-
-In code:
-
-Python
-
-
-import requests
-import re  # regex
-
-url = "https://github.com/Blatzar/scraping-tutorial"
-response = requests.get(url)
-description_regex = r"<p class=\"f4 mt-3\">\s*(.*)?\s*<"  # r"" stands for raw, which makes backslashes work better, used for regexes
-description = re.search(description_regex, response.text).groups()[0]
-print(description)
-Kotlin In main.kt
-
-
-fun main() {
-    val url = "https://github.com/Blatzar/scraping-tutorial"
-    val response = khttp.get(url)
-    val descriptionRegex = Regex("""<p class---
-label: Starting
-order: 999
-icon: rocket
----
-Scraping is just downloading a webpage and getting the wanted information from it. 
-As a start, you can scrape the README.md
-
-
-I'll use khttp for the Kotlin implementation because of the ease of use, if you want something company-tier I'd recommend OkHttp.
-
-**Update**: I have made an okhttp wrapper **for android apps**, check out [NiceHttp](https://github.com/Blatzar/NiceHttp)
-
-
-# **1. Scraping the Readme** 
-
-**Python**
-```python
-import requests
-url = "https://recloudstream.github.io/devs/scraping/"
-response = requests.get(url)
-print(response.text)  # Prints the readme
-Kotlin
-
-In build.gradle:
-
-
-repositories {
-    mavenCentral()
-    jcenter()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-	// Other dependencies above
-	compile group: 'khttp', name: 'khttp', version: '1.0.0'
-}
-In main.kt
-
-
-fun main() {
-    val url = "https://recloudstream.github.io/devs/scraping/"
-    val response = khttp.get(url)
-    println(response.text)
-}
-#2. Getting the GitHub project description
-Scraping is all about getting what you want in a good format you can use to automate stuff.
-
-Start by opening up the developer tools, using
-
-Ctrl + Shift + I
-
-or
-
-f12
-
-or
-
-Right-click and press Inspect
-
-Here you can look at all the network requests the browser is making and much more, but the important part currently is the HTML displayed. You need to find the HTML responsible for showing the project description, but how?
-
-Either click the small mouse in the top left of the developer tools or press
-
-Ctrl + Shift + C
-
-This makes your mouse highlight any element you hover over. Press the description to highlight the element responsible for showing it.
-
-Your HTML will now be focused on something like:
-
-
-<p class="f4 mt-3">
-      Work in progress tutorial for scraping streaming sites
-</p>
-Now there are multiple ways to get the text, but the 2 methods I always use are Regex and CSS selectors. Regex is a ctrl+f on steroids, you can search for anything. CSS selectors are a way to parse the HTML like a browser and select an element in it.
-
-#CSS Selectors
-The element is a paragraph tag, eg <p>, which can be found using the CSS selector: "p".
-
-classes help to narrow down the CSS selector search, in this case: class="f4 mt-3"
-
-This can be represented with
-
-
-p.f4.mt-3
-a dot for every class full list of CSS selectors found here
-
-You can test if this CSS selector works by opening the console tab and typing:
-
-
-document.querySelectorAll("p.f4.mt-3");
-This prints:
-
-
-NodeList [p.f4.mt-3]
-#NOTE: You may not get the same results when scraping from the command line, classes and elements are sometimes created by javascript on the site.
-Python
-
-
-import requests
-from bs4 import BeautifulSoup  # Full documentation at https://www.crummy.com/software/BeautifulSoup/bs4/doc/
-
-url = "https://github.com/Blatzar/scraping-tutorial"
-response = requests.get(url)
-soup = BeautifulSoup(response.text, 'lxml')
-element = soup.select("p.f4.mt-3")  # Using the CSS selector
-print(element[0].text.strip())  # Selects the first element, gets the text and strips it (removes starting and ending spaces)
-Kotlin
-
-In build.gradle:
-
-
-repositories {
-    mavenCentral()
-    jcenter()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-	// Other dependencies above
-	implementation "org.jsoup:jsoup:1.11.3"
-	compile group: 'khttp', name: 'khttp', version: '1.0.0'
-}
-In main.kt
-
-
-fun main() {
-    val url = "https://github.com/Blatzar/scraping-tutorial"
-    val response = khttp.get(url)
-    val soup = Jsoup.parse(response.text)
-    val element = soup.select("p.f4.mt-3") // Using the CSS selector
-    println(element.text().trim()) // Gets the text and strips it (removes starting and ending spaces)
-}
-#Regex:
-When working with Regex I highly recommend using regex101.com (using the python flavor)
-
-Press Ctrl + U
-
-to get the whole site document as text and copy everything
-
-Paste it in the test string in regex101 and try to write an expression to only capture the text you want.
-
-In this case, the elements are
-
-
-<p class="f4 mt-3">
-      Work in progress tutorial for scraping streaming sites
-    </p>
-Maybe we can search for <p class="f4 mt-3"> (backslashes for ")
-
-
-<p class=\"f4 mt-3\">
-Gives a match, so let's expand the match to all characters between the two brackets ( p>....</ ) Some important tokens for that would be:
-
-.*? to indicate everything except a newline any number of times, but take as little as possible
-\s* to indicate whitespaces except a newline any number of times
-(*expression inside*) to indicate groups
-Which gives:
-
-
-<p class=\"f4 mt-3\">\s*(.*)?\s*<
-Explained:
-
-Any text exactly matching <p class="f4 mt-3"> then any number of whitespaces then any number of any characters (which will be stored in group 1) then any number of whitespaces then the text <
-
-In code:
-
-Python
-
-
-import requests
-import re  # regex
-
-url = "https://github.com/Blatzar/scraping-tutorial"
-response = requests.get(url)
-description_regex = r"<p class=\"f4 mt-3\">\s*(.*)?\s*<"  # r"" stands for raw, which makes backslashes work better, used for regexes
-description = re.search(description_regex, response.text).groups()[0]
-print(description)
-Kotlin In main.kt
-
-
-fun main() {
-    val url = "https://github.com/Blatzar/scraping-tutorial"
-    val response = khttp.get(url)
-    val descriptionRegex = Regex("""<p class="f4 mt-3">\s*(.*)?\s*<""")
-    val description = descriptionRegex.find(response.text)?.groups?.get(1)?.value
-    println(description)
-}
-
-Using APIs
-#About
-Whilst scraping a site is always a nice option, using it's API is way better.
-And sometimes its the only way (eg: the site uses its API to load the content, so scraping doesn't work).
-
-Anyways, this guide won't teach the same concepts over and over again,
-so if you can't even make requests to an API then this will not tell you how to do that.
-
-Refer to starting on how to make http/https requests. And yes, this guide expects you to have basic knowledge on both Python and Kotlin.
-
-#Using an API (and parsing json)
-So, the API I will use is the SWAPI.
-
-To parse that json data in python you would do:
-
-
-import requests
-
-url = "https://swapi.dev/api/planets/1/"
-json = requests.get(url).json()
-
-""" What the variable json looks like
-{
-	"name": "Tatooine",
-	"rotation_period": "23",
-	"orbital_period": "304",
-	"diameter": "10465",
-	"climate": "arid",
-	"gravity": "1 standard",
-	"terrain": "desert",
-	"surface_water": "1",
-	"population": "200000",
-	"residents": [
-		"https://swapi.dev/api/people/1/"
-	],
-	"films": [
-		"https://swapi.dev/api/films/1/"
-	],
-	"created": "2014-12-09T13:50:49.641000Z",
-	"edited": "2014-12-20T20:58:18.411000Z",
-	"url": "https://swapi.dev/api/planets/1/"
-}
-"""
-Now, that is way too simple in python, sadly I am here to get your hopes down, and say that its not as simple in kotlin.
-
-First of all, we are going to use a library named Jackson by FasterXML.
-In build.gradle:
-
-
-repositories {
-    mavenCentral()
-    jcenter()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-	...
-	...
-	implementation "com.fasterxml.jackson.module:jackson-module-kotlin:2.11.3"
-	compile group: 'khttp', name: 'khttp', version: '1.0.0'
-}
-After we have installed the dependencies needed, we have to define a schema for the json.
-Essentially, we are going to write the structure of the json in order for jackson to parse our json.
-This is an advantage for us, since it also means that we get the nice IDE autocomplete/suggestions and typehints!
-
-
-Getting the json data:
-
-
-val jsonString = khttp.get("https://swapi.dev/api/planets/1/").text
-First step is to build a mapper that reads the json string, in order to do that we need to import some things first.
-
-
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.databind.json.JsonMapper
-import com.fasterxml.jackson.module.kotlin.readValue
-After that we initialize the mapper:
-
-
-val mapper: JsonMapper = JsonMapper.builder().addModule(KotlinModule())
-    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false).build()
-The next step is to...write down the structure of our json! This is the boring part for some, but it can be automated by using websites like json2kt or quicktype to generate the entire code for you.
-
-
-First step to declaring the structure for a json is to import the JsonProperty annotation.
-
-
-import com.fasterxml.jackson.annotation.JsonProperty
-Second step is to write down a data class that represents said json.
-
-
-// example json = {"cat": "meow", "dog": ["w", "o", "o", "f"]}
-
-data class Example (
-    @JsonProperty("cat") val cat: String,
-    @JsonProperty("dog") val dog: List<String>
-)
-This is as simple as it gets.
-
-
-Enough of the examples, this is the representation of https://swapi.dev/api/planets/1/ in kotlin:
-
-
-data class Planet (
-    @JsonProperty("name") val name: String,
-    @JsonProperty("rotation_period") val rotationPeriod: String,
-    @JsonProperty("orbital_period") val orbitalPeriod: String,
-    @JsonProperty("diameter") val diameter: String,
-    @JsonProperty("climate") val climate: String,
-    @JsonProperty("gravity") val gravity: String,
-    @JsonProperty("terrain") val terrain: String,
-    @JsonProperty("surface_water") val surfaceWater: String,
-    @JsonProperty("population") val population: String,
-    @JsonProperty("residents") val residents: List<String>,
-    @JsonProperty("films") val films: List<String>,
-    @JsonProperty("created") val created: String,
-    @JsonProperty("edited") val edited: String,
-    @JsonProperty("url") val url: String
-)
-For json that don't necessarily contain a key, or its type can be either the expected type or null, you need to write that type as nullable in the representation of that json.
-Example of the above situation:
-
-
-[
-   {
-      "cat":"meow"
-   },
-   {
-      "dog":"woof",
-      "cat":"meow"
-   },
-   {
-      "fish":"meow",
-      "cat":"f"
-   }
-]
-It's representation would be:
-
-
-data class Example (
-    @JsonProperty("cat") val cat: String,
-    @JsonProperty("dog") val dog: String?,
-    @JsonProperty("fish") val fish: String?
-)
-As you can see, dog and fish are nullable because they are properties that are missing in an item.
-Whilst cat is not nullable because it is available in all of the items.
-Basic nullable detection is implemented in json2kt so its recommended to use that.
-But it is very likely that it might fail to detect some nullable types, so it's up to us to validate the generated code.
-
-Second step to parsing json is...to just call our mapper instance.
-
-
-val json = mapper.readValue<Planet>(jsonString)
-And voila!
-We have successfully parsed our json within kotlin.
-One thing to note is that you don't need to add all of the json key/value pairs to the structure, you can just have what you need.
-
-#Note
-Even though we set DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES as false it will still error on missing properties.
-If a json may or may not include some info, make those properties as nullable in the structure you build.
-
-TL;DR: You are going to get fucked by sites detecting your devtools, the easiest bypass for this is using a web sniffer extension
-
-Many sites use some sort of debugger detection to prevent you from looking at the important requests made by the browser.
-
-You can test the devtools detector here Code for the detector found here
-
-#How are they detecting the tools?
-One or more of the following methods are used to prevent devtools in the majority of cases (if not all):
-
-1. Calling debugger in an endless loop. This is very easy to bypass. You can either right click the offending line (in chrome) and disable all debugger calls from that line or you can disable the whole debugger.
-
-2. Attaching a custom .toString() function to an expression and printing it with console.log(). When devtools are open (even while not in console) all console.log() calls will be resloved and the custom .toString() function will be called. Functions can also be triggered by how dates, regex and functions are formatted in the console.
-
-This lets the site know the millisecond you bring up devtools. Doing const console = null and other js hacks have not worked for me (the console function gets cached by the detector).
-
-If you can find the offending js responsible for the detection you can bypass it by redifining the function in violentmonkey, but I recommend against it since it's often hidden and obfuscated. The best way to bypass this issue is to re-compile firefox or chrome with a switch to disable the console.
-
-3. Running a while (true) {} loop when the debugger object is present? Looks something like this in the wild:
-
-
-function _0x39426c(e) {
-    function t(e) {
-        if ("string" == typeof e)
-            return function(e) {}
-            .constructor("while (true) {}").apply("counter");
-        1 !== ("" + e / e).length || e % 20 == 0 ? function() {
-            return !0;
-        }
-        .constructor("debugger").call("action") : function() {
-            return !1;
-        }
-        .constructor("debugger").apply("stateObject"),
-        t(++e);
     }
-    try {
-        if (e)
-            return t;
-        t(0);
-    } catch (e) {}
+
+    // Extract playable video links
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        // Add subtitle
+        subtitleCallback(
+            newSubtitleFile("English", "https://example.com/subs/en.srt")
+        )
+
+        // Add video link
+        callback(
+            newExtractorLink(
+                source = name,
+                name = "HD Server",
+                url = data,
+                type = ExtractorLinkType.M3U8
+            ) {
+                quality = Qualities.P1080.value
+                referer = mainUrl
+            }
+        )
+        return true
+    }
 }
-setInterval(function() {
-    _0x39426c();
-}, 4e3);
-This function can be tracked down to this script
+```
 
-I do not actually know how this works, but the loop seems gets triggered in the presence of a debugger. Either way this instantly freezes the webpage in firefox and makes it very unresponsive in chrome and does not rely on console.log(). You could bypass this by doing const _0x39426c = null in violentmonkey, but this bypass is not doable with heavily obfuscated js.
+--------------------------------
 
-#How to bypass the detection?
-If you just want to see the network log that is possible with extensions, see Web Sniffer
+### CloudStream Utility Functions
 
-I tracked down the functions making devtools detection possible in the firefox source code and compiled a version which is undetectable by any of these tools.
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
 
-Linux build
-Windows build
-Mac build
-about:config devtools.console.bypass disables the console which invalidates method 2.
-about:config devtools.debugger.bypass completely disables the debugger, useful to bypass method 3.
-If you want to compile firefox yourself with these bypasses you can, using the line changes below in the described files.
+Provides examples of various utility functions including getting Unix timestamps, fixing URLs, extracting IMDb IDs, Base64 encoding/decoding, string manipulation (capitalization, title fixing), and parsing duration strings.
 
-BUILD: 101.0a1 (2022-04-19)./devtools/server/actors/thread.js At line 390
+```kotlin
+// Utility functions
+fun utilityExamples() {
+    // Unix timestamps
+    val unixSeconds = APIHolder.unixTime
+    val unixMillis = APIHolder.unixTimeMS
 
+    // URL fixing
+    val api = object : MainAPI() {
+        override var name = "Test"
+        override var mainUrl = "https://example.com"
+    }
 
-  attach(options) {
-    let devtoolsBypass = Services.prefs.getBoolPref("devtools.debugger.bypass", true);
-    if (devtoolsBypass)
-        return;
-./devtools/server/actors/webconsole/listeners/console-api.js At line 92
+    val fixed = api.fixUrl("/path/to/resource") // Returns "https://example.com/path/to/resource"
+    val fixedProtocol = api.fixUrl("//cdn.example.com/image.jpg") // Returns "https://cdn.example.com/image.jpg"
 
+    // IMDb ID extraction
+    val imdbId = imdbUrlToId("https://www.imdb.com/title/tt1234567/") // Returns "tt1234567"
 
-observe(message, topic) {
-let devtoolsBypass = Services.prefs.getBoolPref("devtools.console.bypass", true);
-if (!this.handler || devtoolsBypass) {
-  return;
+    // Base64 encoding/decoding
+    val encoded = base64Encode("Hello".toByteArray())
+    val decoded = base64Decode(encoded)
+
+    // String utilities
+    val capitalized = capitalizeString("hello world") // "Hello world"
+    val titleFixed = fixTitle("THE MOVIE TITLE") // "The Movie Title"
+
+    // Duration parsing
+    val minutes = getDurationFromString("2h 30min") // Returns 150
+    val minutes2 = getDurationFromString("1 hr 45 min") // Returns 105
 }
-./browser/app/profile/firefox.js At line 23
-
-
-// Bypasses
-pref("devtools.console.bypass", true);
-pref("devtools.debugger.bypass", true);
-Edit this page
-
-Disguishing your scrapers
-If you're writing a Selenium scraper, be aware that your skill level doesn't match the minimum requirements for this page.
-
-#Why is scraping not appreciated?
-It obliterates ads and hence, blocks the site revenue.
-It is more than usually used to spam the content serving networks, hence, affecting the server performance.
-It is more than usually also used to steal content off of a site and serve in other.
-Competent scrapers usually look for exploits on site. Among these, the open source scrapers may leak site exploits to a wider audience.
-#Why do you need to disguise your scraper?
-Like the above points suggest, scraping is a good act. There are mechanisms to actively kill scrapers and only allow the humans in. You will need to make your scraper's identity as narrow as possible to a browser's identity.
-
-Some sites check the client using headers and on-site javascript challenges. This will result in invalid responses along the status code of 400-499.
-
-Keep in mind that there are sites that produce responses without giving out the appropriate status codes.
-
-#Custom Headers
-Here are some headers you need to check for:
-
-Header	What's the purpose of this?	What should I change this to?
-User-Agent	Specifies your client's name along with the versions.	Probably the user-agent used by your browser.
-Referer	Specifies which site referred the current site.	The url from which you obtained the scraping url.
-X-Requested-With	Specifies what caused the request to that site. This is prominent in site's AJAX / API.	Usually: XMLHttpRequest, it may vary based on the site's JS
-Cookie	Cookie required to access the site.	Whatever the cookie was when you accessed the site in your normal browser.
-Authorization	Authorization tokens / credentials required for site access.	Correct authorization tokens or credentials for site access.
-Usage of correct headers will give you site content access given you can access it through your web browser.
-
-Keep in mind that this is only the fraction of what the possible headers can be.
-
-#Appropriate Libraries
-In Python, requests and httpx have differences.
-
-
->>> import requests, httpx
->>> requests.get("http://www.crunchyroll.com/", headers={"User-Agent": "justfoolingaround/1", "Referer": "https://example.com/"})
-<Response [403]>
->>> httpx.get("http://www.crunchyroll.com/", headers={"User-Agent": "justfoolingaround/1", "Referer": "https://example.com/"})
-<Response [200 OK]>
-As we can see, the former response is a 403. This is a forbidden response and generally specifies that the content is not present. The latter however is a 200, OK response. In this response, content is available.
-
-This is the result of varying internal mechanisms.
-
-The only cons to httpx in this case might be the fact that it has fully encoded headers, whilst requests does not. This means header keys consisting of non-ASCII characters may not be able to bypass some sites.
-
-#Response handling algorithms
-A session class is an object available in many libraries. This thing is like a house for your outgoing requests and incoming responses. A well written library has a session class that even accounts for appropriate cookie handling. Meaning, if you ever send a request to a site you need not need to worry about the cookie of that site for the next site you visit.
-
-No matter how cool session classes may be, at the end of the day, they are mere objects. That means, you, as a user can easily change what is within it. (This may require a high understanding of the library and the language.)
-
-This is done through inheritance. You inherit a session class and modify whats within.
-
-For example:
-
-
-class QuiteANoise(httpx.Client):
-
-    def request(self, *args, **kwargs):
-        print("Ooh, I got a request with arguments: {!r}, and keyword arguments: {!r}.".format(args, kwargs))
-        response = super().request(*args, **kwargs)
-        print("That request has a {!r}!".format(response))
-        return response
-In the above inherited session, what we do is quite noisy. We announced a request that is about to be sent and a response that was just recieved.
-
-super, in Python, allows you to get the class that the current class inherits.
-
-Do not forget to return your response, else your program will be dumbfounded since nothing ever gets out of your request!
-
-So, we're going to abuse this fancy technique to effectively bypass some hinderances.
-
-Namely hCaptcha, reCaptcha and Cloudflare.
-
-
-"""
-This code is completely hypothetical, you probably 
-do not have a hCaptcha, reCaptcha and a Cloudflare
-bypass. 
-
-This code is a mere reference and may not suffice
-your need.
-"""
-from . import hcaptcha
-from . import grecaptcha
-
-import httpx
-
-class YourScraperSession(httpx.Client):
-
-    def request(self, *args, **kwargs):
-        
-        response = super().request(*args, **kwargs)
-
-        if response.status_code >= 400:
-
-            if hcaptcha.has_cloudflare(response):
-                cloudflare_cookie = hcaptcha.cloudflare_clearance_jar(self, response, *args, **kwargs)
-                self.cookies.update(cloudflare_cookie)
-                return self.request(self, *args, **kwargs)
-
-            # Further methods to bypass something else.
-            return self.request(self, *args, **kwargs) # psssssst. RECURSIVE HELL, `return response` is safer
-
-
-        hcaptcha_sk, type_of = hcaptcha.deduce_sitekey(self, response)
-        
-        if hcaptcha_sk:
-            if type_of == 'hsw':
-                token = hcaptcha.get_hsw_token(self, response, hcaptcha_sk)
-            else:
-                token = hcaptcha.get_hsl_token(self, response, hcaptcha_sk)
-            
-            setattr(response, 'hcaptcha_token', token)
-
-        recaptcha_sk, type_of = grecaptcha.sitekey_on_site(self, response)
-
-        if recaptcha_sk:
-            if isinstance(type_of, int):
-                token = grecaptcha.recaptcha_solve(self, response, recaptcha_sk, v=type_of)
-            else:
-                token = type_of
-
-            setattr(response, 'grecaptcha_token', token)
-            
-        return response
-So, let's see what happens here.
-
-Firstly, we check whether the response has a error or not. This is done by checking if the response's status code is greater than or equal to 400.
-
-After this, we check if the site has Cloudflare, if the site has Cloudflare, we let the hypothetical function do its magic and give us the bypass cookies. Then after, we update our session class' cookie. Cookie vary across sites but in this case, our hypothetical function will take the session and make it so that the cookie only applies to that site url within and with the correct headers.
-
-After a magical cloudflare bypass (people wish they have this, you will too, probably.), we call the overridden function .request again to ensure the response following this will be bypassed to. This is recursion.
-
-If anything else is required, you should add your own code to execute bypasses so that your responses will be crisp and never error-filled.
-
-Else, we just return the fresh .request.
-
-Keep in mind that if you cannot bypass the 400~ error, your responses might end up in a permanent recursive hell, at least in the code above.
-
-To not make your responses never return, you might want to return the non-bypassed response.
-
-The next part mainly focuses on CAPTCHA bypasses and what we do is quite simple. A completed CAPTCHA usually returns a token.
-
-Returning this token with the response is not a good idea as the entire return type will change. We use a sneaky little function here. Namely setattr. What this does is, it sets an attribute of an object.
-
-The algorithm in easier terms is:
-
-Task: Bypass a donkey check with your human.
-
-Yell "hee~haw". (Prove that you're a donkey, this is how the hypothetical functions work.)
-Be handed the ribbon. (In our case, this is the token.)
-Now the problem is, the ribbon is not a human but still needs to come back. How does a normal human do this? Wear the ribbon.
-
-Wearing the ribbon is setattr. We can wear the ribbon everywhere. Leg, foot, butt.. you name it. No matter where you put it, you get the ribbon, so just be a bit reasonable with it. Like a decent developer and a decent human, wear the ribbon on the left side of your chest. In the code above, this reasonable place is <captcha_name>_token.
-
-Let's get out of this donkey business.
-
-After this reasonable token placement, we get the response back.
-
-This token can now, always be accessed in reasonable places, reasonably.
-
-
-client = YourScraperSession()
-
-bypassed_response = client.get("https://kwik.cx/f/2oHQioeCvHtx")
-print(bypassed_response.hcaptcha_token)
-Keep in mind that if there is no ribbon/token, there is no way of reasonably accessing it.
-
-In any case, this is how you, as a decent developer, handle the response properly.
-
-Edit this page
-
-Finding video links
-Now you know the basics, enough to scrape most stuff from most sites, but not streaming sites. Because of the high costs of video hosting the video providers really don't want anyone scraping the video and bypassing the ads. This is why they often obfuscate, encrypt and hide their links which makes scraping really hard. Some sites even put V3 Google Captcha on their links to prevent scraping while the majority IP/time/referer lock the video links to prevent sharing. You will almost never find a plain <video> element with a mp4 link.
-
-This is why you should always scrape the video first when trying to scrape a video hosting site. Sometimes getting the video link can be too hard.
-
-I will therefore explain how to do more advanced scraping, how to get these video links.
-
-What you want to do is:
-
-Find the iFrame/Video host.*
-Open the iFrame in a separate tab to ease clutter.*
-Find the video link.
-Work backwards from the video link to find the source.
-Step 1 and 2 is not applicable to all sites.
-Let's explain further: Step 1: Most sites use an iFrame system to show their videos. This is essentially loading a separate page within the page. This is most evident in Gogoanime, link gets updated often, google the name and find their page if link isn't found. The easiest way of spotting these iframes is looking at the network tab trying to find requests not from the original site. I recommend using the HTML filter.
-
-finding
-finding
-Once you have found the iFrame, in this case a fembed-hd link open it in another tab and work from there. (Step 2) If you only have the iFrame it is much easier to find the necessary stuff to generate the link since a lot of useless stuff from the original site is filtered out.
-
-Step 3: Find the video link. This is often quite easy, either filter all media requests or simply look for a request ending in .m3u8 or .mp4 What this allows you to do is limit exclude many requests (only look at the requests before the video link) and start looking for the link origin (Step 4).
-
-video_link
-video_link
-I usually search for stuff in the video link and see if any text/headers from the preceding requests contain it. In this case fvs.io redirected to the mp4 link, now do the same steps for the fvs.io link to follow the request backwards to the origin. Like images are showing.
-
-fvs
-fvs
-fvs_redirector
-fvs_redirector
-complete
-complete
-NOTE: Some sites use encrypted JS to generate the video links. You need to use the browser debugger to step by step find how the links are generated in that case
-
-#What to do when the site uses a captcha?
-You pretty much only have 3 options when that happens:
-
-Try to use a fake / no captcha token. Some sites actually doesn't check that the captcha token is valid.
-Use Webview or some kind of browser in the background to load the site in your stead.
-Pray it's a captcha without payload, then it's possible to get the captcha key without a browser: Code example
-Edit this page
+```
+
+--------------------------------
+
+### CloudStream Plugin Entry Point
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Implement the Plugin class to create a CloudStream extension. Register content providers, extractors, and custom video click actions. Ensure a manifest.json file is present in the plugin root.
+
+```kotlin
+// Plugin entry point - manifest.json required in plugin root
+// manifest.json: { "name": "MyPlugin", "pluginClassName": "com.example.MyPlugin", "version": 1 }
+
+class MyPlugin : Plugin() {
+
+    override fun load(context: Context) {
+        // Register content providers
+        registerMainAPI(ExampleProvider())
+        registerMainAPI(AnotherProvider())
+
+        // Register custom video extractors
+        registerExtractorAPI(CustomExtractor())
+
+        // Register video click action (custom player integration)
+        registerVideoClickAction(object : VideoClickAction() {
+            override val name = "Open in External Player"
+
+            override suspend fun shouldShow(
+                videoData: VideoClickActionData
+            ): Boolean = true
+
+            override suspend fun onClick(
+                videoData: VideoClickActionData
+            ) {
+                // Handle custom action
+            }
+        })
+
+        // Access plugin resources if requiresResources = true in manifest
+        val drawable = resources?.getDrawable(R.drawable.icon)
+
+        // Add settings button
+        openSettings = { ctx ->
+            Toast.makeText(ctx, "Settings clicked", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun beforeUnload() {
+        // Cleanup when plugin is unloaded
+    }
+}
+```
+
+--------------------------------
+
+### Create TvSeriesLoadResponse with Episodes
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Constructs a TvSeriesLoadResponse including a list of episodes, show status, and next airing information. Use this for TV series content.
+
+```kotlin
+suspend fun MainAPI.loadTvSeriesExample(url: String): TvSeriesLoadResponse {
+    val episodes = listOf(
+        newEpisode("https://stream.example.com/s01e01") {
+            name = "Pilot"
+            season = 1
+            episode = 1
+            posterUrl = "https://example.com/ep1.jpg"
+            description = "The beginning of the story..."
+            addDate("2024-01-15")
+            runTime = 45 * 60 // seconds
+        },
+        newEpisode("https://stream.example.com/s01e02") {
+            name = "Episode 2"
+            season = 1
+            episode = 2
+        }
+    )
+
+    return newTvSeriesLoadResponse(
+        name = "Example Series",
+        url = url,
+        type = TvType.TvSeries,
+        episodes = episodes
+    ) {
+        showStatus = ShowStatus.Ongoing
+        nextAiring = NextAiring(
+            episode = 3,
+            unixTime = System.currentTimeMillis() / 1000 + 604800, // 1 week
+            season = 1
+        )
+        addSeasonNames(listOf(
+            SeasonData(season = 1, name = "The Beginning", displaySeason = 1)
+        ))
+    }
+}
+```
+
+--------------------------------
+
+### Integrate with AniList/MAL Trackers
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Shows how to find tracker information (like MAL ID, AniList ID, cover images) for a media title. Specify titles, types, and optionally the year for more accurate results. `lessAccurate` can be set to true to broaden the search.
+
+```kotlin
+// Tracker integration (AniList/MAL lookup)
+suspend fun trackerExample() {
+    val tracker = APIHolder.getTracker(
+        titles = listOf("Attack on Titan", "Shingeki no Kyojin"),
+        types = setOf(TrackerType.TV, TrackerType.ONA),
+        year = 2023,
+        lessAccurate = false
+    )
+
+    tracker?.let {
+        println("MAL ID: ${it.malId}")
+        println("AniList ID: ${it.aniId}")
+        println("Cover: ${it.image}")
+        println("Banner: ${it.cover}")
+    }
+}
+```
+
+--------------------------------
+
+### Create AnimeLoadResponse with Dub/Sub Episodes
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Constructs an AnimeLoadResponse, specifying English and Japanese names, and organizing episodes by dub and sub status. Includes MAL and AniList IDs for synchronization.
+
+```kotlin
+suspend fun MainAPI.loadAnimeExample(url: String): AnimeLoadResponse {
+    return newAnimeLoadResponse(
+        name = "Example Anime",
+        url = url,
+        type = TvType.Anime
+    ) {
+        engName = "Example Anime"
+        japName = "Example Anime JP"
+
+        // Add dubbed episodes
+        addEpisodes(DubStatus.Dubbed, listOf(
+            newEpisode("https://dub.example.com/ep1") { episode = 1 },
+            newEpisode("https://dub.example.com/ep2") { episode = 2 }
+        ))
+
+        // Add subbed episodes
+        addEpisodes(DubStatus.Subbed, listOf(
+            newEpisode("https://sub.example.com/ep1") { episode = 1 },
+            newEpisode("https://sub.example.com/ep2") { episode = 2 },
+            newEpisode("https://sub.example.com/ep3") { episode = 3 }
+        ))
+
+        // Add MAL/AniList sync
+        addMalId(12345)
+        addAniListId(67890)
+    }
+}
+```
+
+--------------------------------
+
+### Create MovieLoadResponse with Metadata
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Constructs a MovieLoadResponse with detailed metadata including poster URLs, year, plot, tags, score, duration, content rating, actors, trailers, sync IDs, and recommendations. Use this when loading information for a movie.
+
+```kotlin
+suspend fun MainAPI.loadMovieExample(url: String): MovieLoadResponse {
+    return newMovieLoadResponse(
+        name = "Example Movie",
+        url = url,
+        type = TvType.Movie,
+        dataUrl = "https://stream.example.com/video.m3u8"
+    ) {
+        posterUrl = "https://example.com/poster.jpg"
+        backgroundPosterUrl = "https://example.com/background.jpg"
+        year = 2024
+        plot = "An exciting movie about..."
+        tags = listOf("Action", "Thriller", "Sci-Fi")
+
+        // Add score (rating)
+        addScore(Score.from10(8.5))
+        // Or: addScore("8.5", maxValue = 10)
+
+        addDuration("2h 15min")
+        contentRating = "PG-13"
+
+        // Add actors with roles
+        addActors(listOf(
+            ActorData(
+                actor = Actor("John Doe", "https://example.com/actor.jpg"),
+                role = ActorRole.Main,
+                roleString = "Main Character"
+            )
+        ))
+
+        // Add trailers
+        addTrailer("https://youtube.com/watch?v=trailer123")
+
+        // Add sync service IDs
+        addImdbId("tt1234567")
+        addTMDbId("12345")
+
+        // Add recommendations
+        recommendations = listOf(
+            newMovieSearchResponse("Similar Movie", "/similar/1") {
+                posterUrl = "https://example.com/similar.jpg"
+            }
+        )
+    }
+}
+```
+
+--------------------------------
+
+### Custom Video Extractor Implementation
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Create a custom extractor by extending ExtractorApi to handle video extraction from specific hosting sites. Implement getUrl to parse video links and subtitles from a given URL.
+
+```kotlin
+// Custom video extractor implementation
+class CustomExtractor : ExtractorApi() {
+    override val name = "CustomHost"
+    override val mainUrl = "https://customhost.com"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val document = app.get(url, referer = referer).document
+
+        // Extract video sources
+        val videoUrl = document.selectFirst("source")?.attr("src")
+            ?: return
+
+        // Parse quality from page
+        val quality = document.selectFirst(".quality")?.text() 
+            ?.let { getQualityFromName(it) } 
+            ?: Qualities.Unknown.value
+
+        // Return extracted link
+        callback(
+            newExtractorLink(
+                source = name,
+                name = name,
+                url = videoUrl
+            ) {
+                this.quality = quality
+                this.referer = mainUrl
+                this.headers = mapOf("User-Agent" to USER_AGENT)
+            }
+        )
+
+        // Extract subtitles if available
+        document.select("track[kind=captions]").forEach { track ->
+            subtitleCallback(
+                newSubtitleFile(
+                    lang = track.attr("label"),
+                    url = fixUrl(track.attr("src"))
+                )
+            )
+        }
+    }
+}
+```
+
+--------------------------------
+
+### Manage CloudStream Providers
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Demonstrates how to retrieve providers by name or URL, access the collection of all registered providers, and initialize them. Use `synchronized` block when accessing `allProviders` for thread safety.
+
+```kotlin
+// Provider management
+fun providerManagement() {
+    // Get provider by name
+    val provider = APIHolder.getApiFromNameNull("ExampleProvider")
+
+    // Get provider by URL
+    val providerByUrl = APIHolder.getApiFromUrl("https://example.com/movie/123")
+
+    // Access all registered providers
+    synchronized(APIHolder.allProviders) {
+        APIHolder.allProviders.forEach { api ->
+            println("Provider: ${api.name} - ${api.mainUrl}")
+        }
+    }
+
+    // Initialize all providers
+    APIHolder.initAll()
+}
+```
+
+--------------------------------
+
+### Plugin List Structure
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Defines the JSON structure for a list of plugins within a repository. Each plugin entry includes metadata such as name, version, download URL, authors, and supported TV types.
+
+```json
+[
+    {
+        "name": "Example Provider",
+        "internalName": "ExampleProvider",
+        "url": "https://example.com/plugins/example.cs3",
+        "version": 1,
+        "apiVersion": 1,
+        "status": 1,
+        "authors": ["Developer Name"],
+        "description": "Example content provider",
+        "repositoryUrl": "https://github.com/user/repo",
+        "language": "en",
+        "tvTypes": ["Movie", "TvSeries"],
+        "iconUrl": "https://example.com/icon.png",
+        "fileSize": 12345,
+        "fileHash": "sha256-abc123..."
+    }
+]
+```
+
+--------------------------------
+
+### Repository Manifest Structure
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Defines the JSON structure for a repository manifest, including repository details and a list of plugin manifest URLs. This file serves as the entry point for discovering available plugins.
+
+```json
+{
+    "name": "My Extension Repository",
+    "description": "Custom extensions for CloudStream",
+    "manifestVersion": 1,
+    "iconUrl": "https://example.com/icon.png",
+    "pluginLists": [
+        "https://example.com/plugins.json"
+    ]
+}
+```
+
+--------------------------------
+
+### Create Various Search Response Types
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Use builder functions like newMovieSearchResponse, newTvSeriesSearchResponse, etc., to create specialized search response objects. These functions automatically handle URL fixing and metadata. Configure details like poster URL, year, quality, and episode information within the builder's lambda.
+
+```kotlin
+fun MainAPI.createSearchResponses(): List<SearchResponse> {
+    return listOf(
+        // Movie search result
+        newMovieSearchResponse(
+            name = "Action Movie",
+            url = "/movie/123",  // URL is automatically fixed with mainUrl
+            type = TvType.Movie
+        ) {
+            posterUrl = "https://example.com/poster.jpg"
+            year = 2024
+            addQuality("4K")
+            addPoster("https://example.com/poster.jpg", headers = mapOf("Referer" to mainUrl))
+        },
+
+        // TV Series search result
+        newTvSeriesSearchResponse(
+            name = "Drama Series",
+            url = "/series/456",
+            type = TvType.TvSeries
+        ) {
+            episodes = 24
+            year = 2023
+            quality = SearchQuality.HD
+        },
+
+        // Anime search result with dub status
+        newAnimeSearchResponse(
+            name = "Anime Title",
+            url = "/anime/789"
+        ) {
+            addDubStatus(DubStatus.Dubbed, episodes = 12)
+            addDubStatus(DubStatus.Subbed, episodes = 24)
+            // Or: addDubStatus(dubExist = true, subExist = true, dubEpisodes = 12, subEpisodes = 24)
+            year = 2024
+        },
+
+        // Live stream result
+        newLiveSearchResponse(
+            name = "Live Channel",
+            url = "/live/channel1",
+            type = TvType.Live
+        ) {
+            lang = "en"
+        },
+
+        // Torrent result
+        newTorrentSearchResponse(
+            name = "Movie Torrent",
+            url = "/torrent/abc"
+        ) {
+            quality = SearchQuality.FourK
+        }
+    )
+}
+```
+
+--------------------------------
+
+### Create Extractor Links for Various Stream Types
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Use this function to create and register extractor links for different video stream types, including standard video files, HLS, DASH, and DRM-protected content. Configure quality, referer, and headers as needed.
+
+```kotlin
+suspend fun createExtractorLinks(callback: (ExtractorLink) -> Unit) {
+
+    // Standard video link
+    callback(newExtractorLink(
+        source = "ProviderName",
+        name = "720p Server",
+        url = "https://cdn.example.com/video.mp4"
+    ) {
+        quality = Qualities.P720.value
+        referer = "https://example.com"
+        headers = mapOf("Authorization" to "Bearer token123")
+    })
+
+    // HLS/M3U8 stream
+    callback(newExtractorLink(
+        source = "ProviderName",
+        name = "HD Stream",
+        url = "https://stream.example.com/playlist.m3u8",
+        type = ExtractorLinkType.M3U8
+    ) {
+        quality = Qualities.P1080.value
+    })
+
+    // DASH stream
+    callback(newExtractorLink(
+        source = "ProviderName",
+        name = "4K DASH",
+        url = "https://stream.example.com/manifest.mpd",
+        type = ExtractorLinkType.DASH
+    ) {
+        quality = Qualities.P2160.value
+    })
+
+    // DRM protected content (Widevine)
+    callback(newDrmExtractorLink(
+        source = "ProviderName",
+        name = "DRM Stream",
+        url = "https://drm.example.com/stream.mpd",
+        type = ExtractorLinkType.DASH,
+        uuid = WIDEVINE_UUID
+    ) {
+        licenseUrl = "https://license.example.com/widevine"
+        keyRequestParameters = hashMapOf("token" to "abc123")
+    })
+
+    // ClearKey DRM
+    callback(newDrmExtractorLink(
+        source = "ProviderName",
+        name = "ClearKey Stream",
+        url = "https://example.com/encrypted.m3u8",
+        type = ExtractorLinkType.M3U8,
+        uuid = CLEARKEY_UUID
+    ) {
+        kid = "base64EncodedKid=="
+        key = "base64EncodedKey=="
+        kty = "oct"
+    })
+
+    // With separate audio tracks
+    callback(newExtractorLink(
+        source = "ProviderName",
+        name = "Multi-Audio",
+        url = "https://example.com/video.mp4"
+    ) {
+        audioTracks = listOf(
+            newAudioFile("https://example.com/audio_en.m4a") {
+                headers = mapOf("Referer" to "https://example.com")
+            },
+            newAudioFile("https://example.com/audio_jp.m4a")
+        )
+    })
+}
+```
+
+```kotlin
+val qualities = listOf(
+    Qualities.P144.value,    // 144
+    Qualities.P240.value,    // 240
+    Qualities.P360.value,    // 360
+    Qualities.P480.value,    // 480
+    Qualities.P720.value,    // 720
+    Qualities.P1080.value,   // 1080
+    Qualities.P1440.value,   // 1440
+    Qualities.P2160.value,   // 2160 (4K)
+    Qualities.Unknown.value  // 400
+)
+```
+
+```kotlin
+val parsed = getQualityFromName("1080p") // Returns 1080
+val parsed4k = getQualityFromName("4K")  // Returns 2160
+```
+
+--------------------------------
+
+### Retrieve reCAPTCHA v3 Tokens
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Demonstrates how to obtain a CAPTCHA token for reCAPTCHA v3. Requires the URL of the page, the site key, and the referer URL.
+
+```kotlin
+// CAPTCHA token retrieval (reCAPTCHA v3)
+suspend fun captchaExample() {
+    val token = APIHolder.getCaptchaToken(
+        url = "https://example.com",
+        key = "recaptcha_site_key_here",
+        referer = "https://example.com"
+    )
+    println("Captcha token: $token")
+}
+```
+
+--------------------------------
+
+### Auto-Detect Extractor Usage
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Utilize the loadExtractor helper function to automatically detect and use the appropriate extractor for a given URL. This simplifies the process of extracting video links and subtitles.
+
+```kotlin
+// Using the loadExtractor helper to auto-detect extractor
+suspend fun extractFromUnknownHost(url: String) {
+    loadExtractor(
+        url = url,
+        referer = "https://source-site.com",
+        subtitleCallback = { subtitle ->
+            println("Found subtitle: ${subtitle.lang}")
+        },
+        callback = { link ->
+            println("Found video: ${link.url} (${link.quality}p)")
+        }
+    )
+}
+```
+
+--------------------------------
+
+### MainAPI - Content Provider Base Class
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+The MainAPI abstract class is the foundation for all content provider extensions in CloudStream. It defines methods for fetching content, searching, loading details, and extracting playable links.
+
+```APIDOC
+## MainAPI - Content Provider Base Class
+
+### Description
+The `MainAPI` abstract class serves as the foundation for all content providers (extensions) in CloudStream. It defines the structure for fetching media information, searching content, loading media details, and extracting playable links. Every extension must implement this class to integrate with CloudStream.
+
+### Class Structure
+```kotlin
+abstract class MainAPI {
+    abstract var name: String
+    abstract var mainUrl: String
+    abstract var lang: String
+    abstract val hasMainPage: Boolean
+    abstract val supportedTypes: Set<TvType>
+    open val mainPage: List<MainPageData> = emptyList()
+
+    // Methods to be implemented by extensions
+    abstract suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse?
+    abstract suspend fun search(query: String): List<SearchResponse>?
+    abstract suspend fun load(url: String): LoadResponse?
+    abstract suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean
+
+    // Helper methods and properties provided by the framework
+    val app: AppUtils
+    fun newMovieSearchResponse(...): SearchResponse
+    fun newTvSeriesSearchResponse(...): SearchResponse
+    fun newHomePageResponse(...): HomePageResponse
+    fun newMovieLoadResponse(...): LoadResponse
+    fun newSubtitleFile(...): SubtitleFile
+    fun newExtractorLink(...): ExtractorLink
+}
+```
+
+### Example Provider Implementation
+This example demonstrates how to implement the `MainAPI` class to create a functional content provider.
+
+```kotlin
+// Creating a basic content provider extension
+class ExampleProvider : MainAPI() {
+    override var name = "Example Provider"
+    override var mainUrl = "https://example.com"
+    override var lang = "en"
+    override val hasMainPage = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+
+    // Define homepage sections
+    override val mainPage = listOf(
+        MainPageData("Latest Movies", "/movies/latest"),
+        MainPageData("TV Series", "/series/latest"),
+        MainPageData("Trending", "/trending", horizontalImages = true)
+    )
+
+    // Fetch homepage content with pagination
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        val document = app.get("$mainUrl${request.data}?page=$page").document
+        val items = document.select(".media-item").map {
+            newMovieSearchResponse(
+                name = it.selectFirst("h3")?.text() ?: "",
+                url = it.selectFirst("a")?.attr("href") ?: ""
+            ) {
+                posterUrl = it.selectFirst("img")?.attr("src")
+                year = it.selectFirst(".year")?.text()?.toIntOrNull()
+            }
+        }
+        return newHomePageResponse(request, items, hasNext = items.isNotEmpty())
+    }
+
+    // Search for content
+    override suspend fun search(query: String): List<SearchResponse>? {
+        val document = app.get("$mainUrl/search?q=$query").document
+        return document.select(".search-result").map {
+            newTvSeriesSearchResponse(
+                name = it.selectFirst("h3")?.text() ?: "",
+                url = it.selectFirst("a")?.attr("href") ?: ""
+            ) {
+                posterUrl = it.selectFirst("img")?.attr("src")
+                addQuality("HD")
+            }
+        }
+    }
+
+    // Load media details page
+    override suspend fun load(url: String): LoadResponse? {
+        val document = app.get(url).document
+        val title = document.selectFirst("h1")?.text() ?: return null
+        val plot = document.selectFirst(".description")?.text()
+        val posterUrl = document.selectFirst(".poster img")?.attr("src")
+
+        // For movies
+        return newMovieLoadResponse(
+            name = title,
+            url = url,
+            type = TvType.Movie,
+            dataUrl = document.selectFirst(".play-button")?.attr("data-url") ?: ""
+        ) {
+            this.plot = plot
+            this.posterUrl = posterUrl
+            addScore("8.5", maxValue = 10)
+            addDuration("2h 15min")
+            tags = listOf("Action", "Drama")
+            addTrailer("https://youtube.com/watch?v=example")
+        }
+    }
+
+    // Extract playable video links
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        // Add subtitle
+        subtitleCallback(
+            newSubtitleFile("English", "https://example.com/subs/en.srt")
+        )
+
+        // Add video link
+        callback(
+            newExtractorLink(
+                source = name,
+                name = "HD Server",
+                url = data,
+                type = ExtractorLinkType.M3U8
+            ) {
+                quality = Qualities.P1080.value
+                referer = mainUrl
+            }
+        )
+        return true
+    }
+}
+```
+```
+
+--------------------------------
+
+### Repository Manager Operations
+
+Source: https://context7.com/recloudstream/cloudstream/llms.txt
+
+Perform programmatic operations on plugin repositories using the RepositoryManager. This includes parsing repository URLs, fetching repository and plugin data, adding repositories to the user's list, and retrieving all configured repositories.
+
+```kotlin
+suspend fun repositoryOperations() {
+    // Parse and validate repository URL
+    val repoUrl = RepositoryManager.parseRepoUrl("cloudstreamrepo://example.com/repo.json")
+
+    // Fetch repository info
+    val repository = RepositoryManager.parseRepository(repoUrl!!)
+    println("Repository: ${repository?.name}")
+
+    // Get all plugins from repository
+    val plugins = RepositoryManager.getRepoPlugins(repoUrl)
+    plugins?.forEach { (repoUrl, plugin) ->
+        println("Plugin: ${plugin.name} v${plugin.version}")
+    }
+
+    // Add repository to user's list
+    RepositoryManager.addRepository(
+        RepositoryData(
+            url = repoUrl,
+            name = repository?.name ?: "Unknown"
+        )
+    )
+
+    // Get all configured repositories
+    val allRepos = RepositoryManager.getRepositories()
+}
+```
+
+=== COMPLETE CONTENT === This response contains all available snippets from this library. No additional content exists. Do not make further requests.
