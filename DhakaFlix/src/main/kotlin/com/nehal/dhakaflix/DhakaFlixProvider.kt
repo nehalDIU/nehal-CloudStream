@@ -139,6 +139,7 @@ open class DhakaFlixProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageSize = 40
+        val targetCount = page * pageSize
         val items = when {
             request.data == "tv:all" -> {
                 tvGroups.values
@@ -172,10 +173,32 @@ open class DhakaFlixProvider : MainAPI() {
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
                 val children = when (request.data) {
-                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
-                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
-                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
-                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
+                    "movie:latest" -> fetchYearIndexedMovieFoldersPaged(
+                        movieHost,
+                        movieRootPath,
+                        targetCount = targetCount
+                    )
+                    "movie:hindi" -> fetchYearIndexedMovieFoldersPaged(
+                        movieHost,
+                        categoryPath,
+                        minYear = 1995,
+                        maxYear = 2026,
+                        targetCount = targetCount
+                    )
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFoldersPaged(
+                        movieHost,
+                        categoryPath,
+                        minYear = 2009,
+                        maxYear = 2026,
+                        targetCount = targetCount
+                    )
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFoldersPaged(
+                        kolkataHost,
+                        categoryPath,
+                        minYear = 1999,
+                        maxYear = 2024,
+                        targetCount = targetCount
+                    )
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -299,6 +322,43 @@ open class DhakaFlixProvider : MainAPI() {
             val items = fetchDirectChildren(host, yearFolder.href)
                 .filter { it.isFolder }
             movies.addAll(items)
+        }
+
+        return movies.distinctBy { it.href }
+    }
+
+    private suspend fun fetchYearIndexedMovieFoldersPaged(
+        host: String,
+        rootPath: String,
+        minYear: Int? = null,
+        maxYear: Int? = null,
+        targetCount: Int
+    ): List<H5Item> {
+        if (targetCount <= 0) return emptyList()
+
+        val yearFolders = fetchDirectChildren(host, rootPath)
+            .filter { it.isFolder }
+            .mapNotNull { item ->
+                val name = decodeNameFromHref(item.href)
+                val year = extractYear(name) ?: return@mapNotNull null
+                if (minYear != null && year < minYear) return@mapNotNull null
+                if (maxYear != null && year > maxYear) return@mapNotNull null
+                year to item
+            }
+            .sortedByDescending { it.first }
+            .map { it.second }
+
+        val movies = ArrayList<H5Item>(targetCount)
+        for (yearFolder in yearFolders) {
+            if (movies.size >= targetCount) break
+            val items = fetchDirectChildren(host, yearFolder.href)
+                .filter { it.isFolder }
+                .sortedByDescending { it.time ?: 0L }
+
+            for (item in items) {
+                movies.add(item)
+                if (movies.size >= targetCount) break
+            }
         }
 
         return movies.distinctBy { it.href }
