@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.addQuality
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
@@ -101,19 +102,14 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private fun buildSearchResponse(title: String, url: String, type: TvType): SearchResponse {
-        val taggedTitle = ensureDualAudioTag(title)
         return if (type == TvType.TvSeries) {
-            newTvSeriesSearchResponse(taggedTitle, url, type)
+            newTvSeriesSearchResponse(title, url, type) {
+                addQuality("Dual Audio")
+            }
         } else {
-            newMovieSearchResponse(taggedTitle, url, type)
-        }
-    }
-
-    private fun ensureDualAudioTag(title: String): String {
-        return if (title.contains("dual audio", ignoreCase = true)) {
-            title
-        } else {
-            "$title [Dual Audio]"
+            newMovieSearchResponse(title, url, type) {
+                addQuality("Dual Audio")
+            }
         }
     }
 
