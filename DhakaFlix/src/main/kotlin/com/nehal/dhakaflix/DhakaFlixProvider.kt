@@ -41,7 +41,8 @@ open class DhakaFlixProvider : MainAPI() {
 
     override val supportedTypes = setOf(
         TvType.Movie,
-        TvType.TvSeries
+        TvType.TvSeries,
+        TvType.Anime
     )
 
     override val hasMainPage = true
@@ -50,6 +51,7 @@ open class DhakaFlixProvider : MainAPI() {
     private val tvHost = "http://172.16.50.12"
     private val movieHost = "http://172.16.50.14"
     private val kolkataHost = "http://172.16.50.7"
+    private val animeHost = "http://172.16.50.9"
 
     private val tvRootPath = "/DHAKA-FLIX-12/TV-WEB-Series/"
     private val movieRootPath = "/DHAKA-FLIX-14/English%20Movies%20%281080p%29/"
@@ -84,7 +86,8 @@ open class DhakaFlixProvider : MainAPI() {
         Category("movie:kolkata-bangla", "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/", "Kolkata Bangla Movies", TvType.Movie, kolkataHost),
         Category("movie:animation-1080p", "/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/", "Animation Movies - 1080p", TvType.Movie, movieHost),
         Category("movie:imdb-top250", "/DHAKA-FLIX-14/IMDb%20Top-250%20Movies/", "IMDb Top-250 Movies", TvType.Movie, movieHost),
-        Category("movie:korean-tv", "/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/", "KOREAN TV & WEB Series", TvType.TvSeries, movieHost)
+        Category("movie:korean-tv", "/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/", "KOREAN TV & WEB Series", TvType.TvSeries, movieHost),
+        Category("movie:anime", "/DHAKA-FLIX-9/Anime%20%26%20Cartoon%20TV%20Series/", "Anime & Cartoon TV Series", TvType.Anime, animeHost)
     )
 
     private val movieCategoryMap = movieCategories.associateBy { it.key }
@@ -97,7 +100,8 @@ open class DhakaFlixProvider : MainAPI() {
         "movie:kolkata-bangla" to "Kolkata Bangla Movies",
         "movie:animation-1080p" to "Animation Movies - 1080p",
         "movie:imdb-top250" to "IMDb Top-250 Movies",
-        "movie:korean-tv" to "KOREAN TV & WEB Series"
+        "movie:korean-tv" to "KOREAN TV & WEB Series",
+        "movie:anime" to "Anime & Cartoon TV Series"
     )
 
     private val mapper = jacksonObjectMapper()
@@ -129,7 +133,7 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private fun buildSearchResponse(title: String, url: String, type: TvType, posterUrl: String? = null): SearchResponse {
-        return if (type == TvType.TvSeries) {
+        return if (type == TvType.TvSeries || type == TvType.Anime) {
             newTvSeriesSearchResponse(title, url, type) {
                 if (!posterUrl.isNullOrBlank()) this.posterUrl = posterUrl
                 addQuality("Dual Audio")
@@ -374,8 +378,8 @@ open class DhakaFlixProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val type = categoryTypeForUrl(url) ?: if (url.contains("/TV-WEB-Series/")) TvType.TvSeries else TvType.Movie
-        return if (type == TvType.TvSeries) {
-            loadTvSeries(url)
+        return if (type == TvType.TvSeries || type == TvType.Anime) {
+            loadTvSeries(url, type)
         } else {
             loadMovie(url)
         }
@@ -386,7 +390,7 @@ open class DhakaFlixProvider : MainAPI() {
         return movieCategories.firstOrNull { normalizedUrlPath.startsWith(normalizePath(it.path)) }?.type
     }
 
-    private suspend fun loadTvSeries(url: String): LoadResponse {
+    private suspend fun loadTvSeries(url: String, type: TvType): LoadResponse {
         val host = hostForUrl(url)
         val seriesPath = pathFromUrl(url)
         val title = cleanName(decodeNameFromUrl(url))
@@ -442,7 +446,7 @@ open class DhakaFlixProvider : MainAPI() {
         }
 
         rememberPoster(host, seriesPath, posterUrl)
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+        return newTvSeriesLoadResponse(title, url, type, episodes) {
             this.posterUrl = posterUrl
             this.year = year
         }
@@ -580,6 +584,8 @@ open class DhakaFlixProvider : MainAPI() {
             movieHost
         } else if (url.startsWith(kolkataHost)) {
             kolkataHost
+        } else if (url.startsWith(animeHost)) {
+            animeHost
         } else {
             tvHost
         }
