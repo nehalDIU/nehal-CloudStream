@@ -99,6 +99,7 @@ open class DhakaFlixProvider : MainAPI() {
     private val childrenCache = LinkedHashMap<String, CacheEntry>(64, 0.75f, true)
     private val childrenCacheTtlMs = 2 * 60 * 1000L
     private val childrenCacheMaxSize = 200
+    private val posterFileName = "a_AL_.jpg"
 
     private data class CacheEntry(
         val timestampMs: Long,
@@ -195,7 +196,8 @@ open class DhakaFlixProvider : MainAPI() {
         val paged = items.drop((page - 1) * pageSize).take(pageSize)
         val responses = ArrayList<SearchResponse>(paged.size)
         for (item in paged) {
-            responses.add(buildSearchResponse(item.title, item.url, item.type))
+            val posterUrl = guessPosterUrl(item.host, item.folderHref)
+            responses.add(buildSearchResponse(item.title, item.url, item.type, posterUrl))
         }
         return newHomePageResponse(request.name, responses)
     }
@@ -618,6 +620,15 @@ open class DhakaFlixProvider : MainAPI() {
 
     private fun isImageFile(href: String): Boolean {
         return hasExtension(href, imageExtensions)
+    }
+
+    private fun guessPosterUrl(host: String, folderHref: String): String {
+        val folderPath = if (folderHref.startsWith("http://") || folderHref.startsWith("https://")) {
+            pathFromUrl(folderHref)
+        } else {
+            normalizePath(folderHref)
+        }
+        return absoluteUrl(host, folderPath + posterFileName)
     }
 
     private suspend fun resolvePoster(host: String, folderHref: String): String? {
