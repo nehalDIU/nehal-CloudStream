@@ -1,11 +1,15 @@
 package com.allwish
 
-import android.util.Base64
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.lagradost.cloudstream3.ShowStatus
+import com.lagradost.cloudstream3.base64Encode
 import java.net.URLEncoder
+
+fun base64UrlSafe(bytes: ByteArray): String {
+    return base64Encode(bytes).replace("+", "-").replace("/", "_")
+}
 
 fun generateEpisodeVrf(episodeId: String): String {
     // Secret key from JS
@@ -49,7 +53,7 @@ fun generateEpisodeVrf(episodeId: String): String {
     // 3. Base64 URL safe
     // FIX 2: Use getUrlEncoder() which correctly uses '_' and '-'
     // AND importantly, it omits padding ('='), which your manual replace version did not.
-    val base1 = Base64.encodeToString(step1, Base64.URL_SAFE or Base64.NO_WRAP)
+    val base1 = base64UrlSafe(step1)
 
     // 4. Position-based transform
     val step2Bytes = base1.toByteArray(Charsets.ISO_8859_1) // This is fine
@@ -72,7 +76,7 @@ fun generateEpisodeVrf(episodeId: String): String {
 
     // 5. Base64 URL safe again
     // FIX 2 (Applied again): Use getUrlEncoder()
-    val base2 = Base64.encodeToString(transformedBytes, Base64.URL_SAFE or Base64.NO_WRAP)
+    val base2 = base64UrlSafe(transformedBytes)
 
     // 6. ROT13 for letters
     val final = base2.map { c ->
