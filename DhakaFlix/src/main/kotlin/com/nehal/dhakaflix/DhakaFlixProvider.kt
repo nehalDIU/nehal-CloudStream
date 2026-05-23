@@ -103,6 +103,7 @@ open class DhakaFlixProvider : MainAPI() {
 
     private val mapper = jacksonObjectMapper()
     private val posterCache = mutableMapOf<String, String?>()
+    private val recentMovieYears = listOf(2026, 2025, 2024)
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private data class H5ItemsResponse(val items: List<H5Item> = emptyList())
@@ -155,10 +156,13 @@ open class DhakaFlixProvider : MainAPI() {
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
                 val children = when (request.data) {
-                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
-                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
-                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
-                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
+                    "movie:latest" -> {
+                        val latestYearPath = findLatestMovieYearPath()
+                        if (latestYearPath == null) emptyList() else fetchDirectChildren(movieHost, latestYearPath)
+                    }
+                    "movie:hindi" -> fetchRecentYearMovieFolders(movieHost, categoryPath, recentMovieYears)
+                    "movie:south-dubbed" -> fetchRecentYearMovieFolders(movieHost, categoryPath, recentMovieYears)
+                    "movie:kolkata-bangla" -> fetchRecentYearMovieFolders(kolkataHost, categoryPath, recentMovieYears)
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -288,6 +292,24 @@ open class DhakaFlixProvider : MainAPI() {
             movies.addAll(items)
         }
 
+        return movies.distinctBy { it.href }
+    }
+
+    private suspend fun fetchRecentYearMovieFolders(
+        host: String,
+        rootPath: String,
+        years: List<Int>
+    ): List<H5Item> {
+        val basePath = normalizePath(rootPath)
+        val movies = ArrayList<H5Item>()
+        for (year in years) {
+            val yearPath = normalizePath(basePath + year)
+            val items = fetchDirectChildren(host, yearPath)
+                .filter { it.isFolder }
+            if (items.isNotEmpty()) {
+                movies.addAll(items)
+            }
+        }
         return movies.distinctBy { it.href }
     }
 
