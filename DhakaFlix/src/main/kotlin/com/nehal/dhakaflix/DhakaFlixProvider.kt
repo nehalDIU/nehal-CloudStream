@@ -146,17 +146,21 @@ open class DhakaFlixProvider : MainAPI() {
         val pageSize = 40
         val items = when {
             request.data == "tv:all" -> {
-                tvGroups.values
-                    .flatMap { groupPath -> fetchDirectChildren(tvHost, groupPath) }
-                    .filter { it.isFolder }
-                    .distinctBy { it.href }
-                    .sortedByDescending { it.time ?: 0L }
-                    .mapNotNull { item ->
-                        val title = cleanName(decodeNameFromHref(item.href))
-                        if (title.isEmpty()) return@mapNotNull null
-                        val url = absoluteUrl(tvHost, item.href)
-                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
-                    }
+                coroutineScope {
+                    tvGroups.values
+                        .map { groupPath -> async { fetchDirectChildren(tvHost, groupPath) } }
+                        .awaitAll()
+                        .flatten()
+                        .filter { it.isFolder }
+                        .distinctBy { it.href }
+                        .sortedByDescending { it.time ?: 0L }
+                        .mapNotNull { item ->
+                            val title = cleanName(decodeNameFromHref(item.href))
+                            if (title.isEmpty()) return@mapNotNull null
+                            val url = absoluteUrl(tvHost, item.href)
+                            ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
+                        }
+                }
             }
             request.data.startsWith("tv:") -> {
                 val groupPath = tvGroups[request.data] ?: tvRootPath
@@ -180,12 +184,12 @@ open class DhakaFlixProvider : MainAPI() {
                         if (latestYearPath != null) {
                             fetchDirectChildren(movieHost, latestYearPath)
                         } else {
-                            fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                            fetchYearIndexedMovieFolders(movieHost, movieRootPath, 2023, 2026)
                         }
                     }
-                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
-                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
-                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
+                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 2021, 2026)
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
