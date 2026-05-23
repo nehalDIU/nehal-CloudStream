@@ -10,7 +10,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper
 
 open class MegaPlay : ExtractorApi() {
-    override val name = "MegaPlay"
+    override val name = "VidSrc"
     override val mainUrl = "https://megaplay.buzz"
     override val requiresReferer = false
 
@@ -54,8 +54,11 @@ open class MegaPlay : ExtractorApi() {
             val m3u8 = response?.sources?.file
                 ?: throw Exception("No sources found")
 
+            val isDub = url.endsWith("/dub") || url.contains("/dub")
+            val displayName = if (isDub) "$name Dub" else "$name Sub"
+
             M3u8Helper.generateM3u8(
-                name,
+                displayName,
                 m3u8,
                 mainUrl,
                 headers = mainheaders
