@@ -7,6 +7,6 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 class AniwatchPlugin : BasePlugin() {
     override fun load() {
         registerMainAPI(Aniwatch())
-        registerExtractorAPI(MegaPlay())
+        registerExtractorAPI(VidSrc())
     }
 }

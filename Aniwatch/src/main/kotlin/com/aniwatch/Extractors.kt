@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper
 
-open class MegaPlay : ExtractorApi() {
+open class VidSrc : ExtractorApi() {
     override val name = "VidSrc"
     override val mainUrl = "https://megaplay.buzz"
     override val requiresReferer = false
@@ -48,7 +48,7 @@ open class MegaPlay : ExtractorApi() {
             val apiUrl = "$mainUrl/stream/getSources?id=$id&id=$id"
 
             val response = runCatching {
-                app.get(apiUrl, headers).parsedSafe<MegaPlayResponse>()
+                app.get(apiUrl, headers).parsedSafe<VidSrcResponse>()
             }.getOrNull()
 
             val m3u8 = response?.sources?.file
@@ -79,11 +79,11 @@ open class MegaPlay : ExtractorApi() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("MegaPlay", "Primary method failed: ${e.message}")
+            Log.e("VidSrc", "Primary method failed: ${e.message}")
         }
     }
 
-    data class MegaPlayResponse(
+    data class VidSrcResponse(
         @JsonProperty("sources")
         val sources: Sources? = null,
         @JsonProperty("tracks")
