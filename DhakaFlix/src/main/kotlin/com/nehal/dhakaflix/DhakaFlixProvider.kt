@@ -56,6 +56,14 @@ open class DhakaFlixProvider : MainAPI() {
         val host: String
     )
 
+    private data class ListingItem(
+        val title: String,
+        val url: String,
+        val type: TvType,
+        val host: String,
+        val folderHref: String
+    )
+
     private val tvGroups = mapOf(
         "tv:0-9" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%98%85%20%200%20%20%E2%80%94%20%209/",
         "tv:a-l" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A5%20%20A%20%20%E2%80%94%20%20L/",
@@ -87,6 +95,7 @@ open class DhakaFlixProvider : MainAPI() {
     )
 
     private val mapper = jacksonObjectMapper()
+    private val posterCache = mutableMapOf<String, String?>()
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private data class H5ItemsResponse(val items: List<H5Item> = emptyList())
@@ -101,13 +110,15 @@ open class DhakaFlixProvider : MainAPI() {
             get() = size == null && href.endsWith("/")
     }
 
-    private fun buildSearchResponse(title: String, url: String, type: TvType): SearchResponse {
+    private fun buildSearchResponse(title: String, url: String, type: TvType, posterUrl: String? = null): SearchResponse {
         return if (type == TvType.TvSeries) {
             newTvSeriesSearchResponse(title, url, type) {
+                if (!posterUrl.isNullOrBlank()) this.posterUrl = posterUrl
                 addQuality("Dual Audio")
             }
         } else {
             newMovieSearchResponse(title, url, type) {
+                if (!posterUrl.isNullOrBlank()) this.posterUrl = posterUrl
                 addQuality("Dual Audio")
             }
         }
@@ -126,7 +137,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries)
+                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
                     }
             }
             request.data.startsWith("tv:") -> {
@@ -138,7 +149,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(tvHost, item.href)
-                        buildSearchResponse(title, url, TvType.TvSeries)
+                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
                     }
             }
             request.data.startsWith("movie:") -> {
@@ -160,14 +171,19 @@ open class DhakaFlixProvider : MainAPI() {
                         if (title.isEmpty()) return@mapNotNull null
                         val url = absoluteUrl(host, item.href)
                         val type = category?.type ?: TvType.Movie
-                        buildSearchResponse(title, url, type)
+                        ListingItem(title, url, type, host, item.href)
                     }
             }
             else -> emptyList()
         }
 
         val paged = items.drop((page - 1) * pageSize).take(pageSize)
-        return newHomePageResponse(request.name, paged)
+        val responses = ArrayList<SearchResponse>(paged.size)
+        for (item in paged) {
+            val posterUrl = resolvePoster(item.host, item.folderHref)
+            responses.add(buildSearchResponse(item.title, item.url, item.type, posterUrl))
+        }
+        return newHomePageResponse(request.name, responses)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -187,11 +203,13 @@ open class DhakaFlixProvider : MainAPI() {
                 if (results.size >= maxResults) return@forEach
                 val title = cleanName(decodeNameFromHref(item.href))
                 if (title.lowercase().contains(queryLower)) {
+                    val posterUrl = resolvePoster(tvHost, item.href)
                     results.add(
                         buildSearchResponse(
                             title,
                             absoluteUrl(tvHost, item.href),
-                            TvType.TvSeries
+                            TvType.TvSeries,
+                            posterUrl
                         )
                     )
                 }
@@ -213,8 +231,9 @@ open class DhakaFlixProvider : MainAPI() {
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
                         val url = absoluteUrl(category.host, item.href)
+                        val posterUrl = resolvePoster(category.host, item.href)
                         results.add(
-                            buildSearchResponse(title, url, category.type)
+                            buildSearchResponse(title, url, category.type, posterUrl)
                         )
                     }
                 }
@@ -234,11 +253,13 @@ open class DhakaFlixProvider : MainAPI() {
                     if (results.size >= maxResults) return@forEach
                     val title = cleanName(decodeNameFromHref(item.href))
                     if (title.lowercase().contains(queryLower)) {
+                        val posterUrl = resolvePoster(movieHost, item.href)
                         results.add(
                             buildSearchResponse(
                                 title,
                                 absoluteUrl(movieHost, item.href),
-                                TvType.Movie
+                                TvType.Movie,
+                                posterUrl
                             )
                         )
                     }
@@ -447,7 +468,18 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private fun hostForUrl(url: String): String {
-        return if (url.startsWith(movieHost)) movieHost else tvHost
+        val uri = try { URI(url) } catch (e: Exception) { null }
+        val host = uri?.host
+        val scheme = uri?.scheme ?: "http"
+        return if (!host.isNullOrBlank()) {
+            "$scheme://$host"
+        } else if (url.startsWith(movieHost)) {
+            movieHost
+        } else if (url.startsWith(kolkataHost)) {
+            kolkataHost
+        } else {
+            tvHost
+        }
     }
 
     private fun pathFromUrl(url: String): String {
@@ -522,6 +554,8 @@ open class DhakaFlixProvider : MainAPI() {
         } ?: items.firstOrNull {
             isImageFile(it.href) && it.href.contains("a_AL_", ignoreCase = true)
         } ?: items.firstOrNull {
+            isImageFile(it.href) && it.href.contains("a11", ignoreCase = true)
+        } ?: items.firstOrNull {
             isImageFile(it.href)
         }
 
@@ -553,6 +587,23 @@ open class DhakaFlixProvider : MainAPI() {
 
     private fun isImageFile(href: String): Boolean {
         return hasExtension(href, imageExtensions)
+    }
+
+    private suspend fun resolvePoster(host: String, folderHref: String): String? {
+        val folderPath = if (folderHref.startsWith("http://") || folderHref.startsWith("https://")) {
+            pathFromUrl(folderHref)
+        } else {
+            folderHref
+        }
+        val cacheKey = host.trimEnd('/') + "|" + normalizePath(folderPath)
+        if (posterCache.containsKey(cacheKey)) {
+            return posterCache[cacheKey]
+        }
+
+        val items = fetchDirectChildren(host, folderPath)
+        val posterUrl = pickPoster(host, items)
+        posterCache[cacheKey] = posterUrl
+        return posterUrl
     }
 
     private fun looksLikeVideoUrl(url: String): Boolean {
