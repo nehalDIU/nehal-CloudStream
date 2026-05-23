@@ -103,35 +103,60 @@ class Aniwatch : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         var doc = app.get(url).document
 
-        // Navigate from detail page to watch page if needed
-        if (doc.selectFirst("a.ep-item") == null) {
-            var watchUrl = doc.selectFirst("a.btn-play, a.btn-radius.btn-primary.btn-play")?.attr("href")
+        // Check if we are on a watch page by looking for the "View detail" button.
+        // If so, redirect to the detail page first to get the main series page.
+        val detailUrl = doc.selectFirst("a:contains(View detail), a.btn-light[href*=/anime/]")?.attr("href")
+            ?: doc.selectFirst(".block a[href*=/anime/]")?.attr("href")
+            ?: doc.selectFirst("h2.film-name a[href*=/anime/]")?.attr("href")
+
+        var detailsDoc = doc
+        if (!detailUrl.isNullOrEmpty() && detailUrl.contains("/anime/")) {
+            detailsDoc = app.get(detailUrl).document
+        }
+
+        // Now find the "Watch now" or "Play" button on the details page to get the watch page.
+        var watchDoc = detailsDoc
+        if (detailsDoc.selectFirst("a.ep-item") == null) {
+            var watchUrl = detailsDoc.selectFirst("a.btn-play, a.btn-radius.btn-primary.btn-play")?.attr("href")
             if (watchUrl.isNullOrEmpty()) {
-                watchUrl = doc.select("a[href*=-episode-]").firstOrNull {
+                watchUrl = detailsDoc.select("a[href*=-episode-]").firstOrNull {
                     !it.attr("title").equals("Home", ignoreCase = true) &&
                     !it.text().equals("Home", ignoreCase = true)
                 }?.attr("href")
             }
             if (!watchUrl.isNullOrEmpty() && watchUrl.startsWith("http")) {
-                doc = app.get(watchUrl).document
+                watchDoc = app.get(watchUrl).document
             }
         }
 
-        val title = doc.selectFirst("h2.film-name a")?.text()
-            ?: doc.selectFirst("h2.film-name")?.text()
-            ?: doc.selectFirst("meta[property=og:title]")?.attr("content")
+        val title = detailsDoc.selectFirst("h2.film-name")?.text()
+            ?: detailsDoc.selectFirst("h2.film-name a")?.text()
+            ?: watchDoc.selectFirst("h2.film-name a")?.text()
+            ?: watchDoc.selectFirst("h2.film-name")?.text()
+            ?: detailsDoc.selectFirst("meta[property=og:title]")?.attr("content")
+            ?: watchDoc.selectFirst("meta[property=og:title]")?.attr("content")
             ?: "Unknown"
 
-        val poster = doc.selectFirst(".anisc-poster img")?.attr("src")
-            ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
+        val poster = detailsDoc.selectFirst(".anisc-poster img")?.attr("src")
+            ?: detailsDoc.selectFirst("meta[property=og:image]")?.attr("content")
+            ?: watchDoc.selectFirst(".anisc-poster img")?.attr("src")
+            ?: watchDoc.selectFirst("meta[property=og:image]")?.attr("content")
 
-        val plot = doc.selectFirst(".film-description .text")?.text()
-            ?: doc.selectFirst("meta[property=og:description]")?.attr("content")
+        val plot = detailsDoc.selectFirst(".film-description .text")?.text()
+            ?: detailsDoc.selectFirst("meta[property=og:description]")?.attr("content")
+            ?: watchDoc.selectFirst(".film-description .text")?.text()
+            ?: watchDoc.selectFirst("meta[property=og:description]")?.attr("content")
 
-        val genres = doc.select("a[href*=/genre/]").map { it.text() }.distinct()
+        // Parse genres from detail/info containers
+        val genres = detailsDoc.select(".item-list a[href*=/genre/], .item a[href*=/genre/]")
+            .map { it.text() }.distinct()
+            .ifEmpty {
+                watchDoc.select(".item-list a[href*=/genre/], .item a[href*=/genre/]")
+                    .map { it.text() }.distinct()
+            }
 
         val episodes = mutableListOf<Episode>()
-        doc.select("a.ep-item").forEach { ep ->
+        watchDoc.select("a.ep-item").forEach { ep ->
             val epNum = ep.attr("data-number").toIntOrNull()
             val epName = ep.selectFirst(".ep-name")?.text() ?: ep.attr("title")
             val epUrl = ep.attr("href")
@@ -144,6 +169,15 @@ class Aniwatch : MainAPI() {
                     }
                 )
             }
+        }
+
+        if (episodes.isEmpty()) {
+            episodes.add(
+                newEpisode(url) {
+                    this.name = title
+                    this.episode = 1
+                }
+            )
         }
 
         return newAnimeLoadResponse(title, url, TvType.Anime) {

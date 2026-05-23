@@ -43,6 +43,7 @@ subprojects {
 
     android {
         namespace = "com.example"
+        buildToolsVersion = "35.0.0"
 
         defaultConfig {
             minSdk = 21
