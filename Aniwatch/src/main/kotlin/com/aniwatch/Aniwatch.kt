@@ -23,6 +23,7 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.toNewSearchResponseList
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 
 class Aniwatch : MainAPI() {
@@ -105,9 +106,12 @@ class Aniwatch : MainAPI() {
 
         // Check if we are on a watch page by looking for the "View detail" button.
         // If so, redirect to the detail page first to get the main series page.
-        val detailUrl = doc.selectFirst("a:contains(View detail), a.btn-light[href*=/anime/]")?.attr("href")
-            ?: doc.selectFirst(".block a[href*=/anime/]")?.attr("href")
-            ?: doc.selectFirst("h2.film-name a[href*=/anime/]")?.attr("href")
+        val isDetailsPage = url.contains("/anime/")
+        val detailUrl = if (isDetailsPage) null else {
+            doc.selectFirst("a:contains(View detail), a.btn-light[href*=/anime/]")?.attr("href")
+                ?: doc.selectFirst(".block a[href*=/anime/]")?.attr("href")
+                ?: doc.selectFirst("h2.film-name a[href*=/anime/]")?.attr("href")
+        }
 
         var detailsDoc = doc
         if (!detailUrl.isNullOrEmpty() && detailUrl.contains("/anime/")) {
@@ -116,7 +120,7 @@ class Aniwatch : MainAPI() {
 
         // Now find the "Watch now" or "Play" button on the details page to get the watch page.
         var watchDoc = detailsDoc
-        if (detailsDoc.selectFirst("a.ep-item") == null) {
+        if (isDetailsPage || detailsDoc.selectFirst("a.ep-item") == null) {
             var watchUrl = detailsDoc.selectFirst("a.btn-play, a.btn-radius.btn-primary.btn-play")?.attr("href")
             if (watchUrl.isNullOrEmpty()) {
                 watchUrl = detailsDoc.select("a[href*=-episode-]").firstOrNull {
@@ -156,7 +160,11 @@ class Aniwatch : MainAPI() {
             }
 
         val episodes = mutableListOf<Episode>()
-        watchDoc.select("a.ep-item").forEach { ep ->
+        val epElements = watchDoc.select(".ss-list .ep-item, #episodes-content .ep-item")
+            .ifEmpty { watchDoc.select(".ssl-item.ep-item") }
+            .ifEmpty { watchDoc.select("a.ep-item") }
+
+        epElements.forEach { ep ->
             val epNum = ep.attr("data-number").toIntOrNull()
             val epName = ep.selectFirst(".ep-name")?.text() ?: ep.attr("title")
             val epUrl = ep.attr("href")
@@ -199,13 +207,38 @@ class Aniwatch : MainAPI() {
 
         servers.forEach { server ->
             val hash = server.attr("data-hash")
+            val serverName = server.attr("data-server-name").ifEmpty { server.text().trim() }
+            val dataType = server.attr("data-type") // "sub" or "dub"
+            val typeLabel = if (dataType.equals("dub", ignoreCase = true)) "Dub" else "Sub"
+
             if (hash.isNotEmpty()) {
                 try {
                     val decodedUrl = base64DecodeArray(hash).toString(Charsets.UTF_8)
-                    val realUrl = decodedUrl.replace("1anime.site/megaplay", "megaplay.buzz")
-
-                    if (realUrl.startsWith("http")) {
-                        loadExtractor(realUrl, subtitleCallback, callback)
+                    
+                    if (decodedUrl.contains("my.1anime.site") || decodedUrl.contains("index.php?action=play")) {
+                        // Handle HD-1 / direct video player
+                        val responseDoc = app.get(decodedUrl).document
+                        val source = responseDoc.selectFirst("video source")?.attr("src")
+                        if (!source.isNullOrEmpty()) {
+                            val videoUrl = if (source.startsWith("http")) source else {
+                                "https://my.1anime.site/" + source.trimStart('/')
+                            }
+                            val displayName = "$serverName $typeLabel"
+                            callback(
+                                newExtractorLink(
+                                    source = displayName,
+                                    name = displayName,
+                                    url = videoUrl
+                                ) {
+                                    this.headers = mapOf("Referer" to "https://my.1anime.site/")
+                                }
+                            )
+                        }
+                    } else {
+                        val realUrl = decodedUrl.replace("1anime.site/megaplay", "megaplay.buzz")
+                        if (realUrl.startsWith("http")) {
+                            loadExtractor(realUrl, subtitleCallback, callback)
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("Aniwatch", "Failed decoding or loading extractor: ${e.message}")
