@@ -157,7 +157,14 @@ open class DhakaFlixProvider : MainAPI() {
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
                 val children = when (request.data) {
-                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                    "movie:latest" -> {
+                        val latestYearPath = findLatestMovieYearPath()
+                        if (latestYearPath != null) {
+                            fetchDirectChildren(movieHost, latestYearPath)
+                        } else {
+                            fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                        }
+                    }
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
                     "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
