@@ -109,7 +109,6 @@ open class DhakaFlixProvider : MainAPI() {
 
     // Concurrent request de-duplication variables
     private val fetchMutex = Mutex()
-    private val ongoingFetches = HashMap<String, Deferred<List<H5Item>>>()
 
     private data class CacheEntry(
         val timestampMs: Long,
@@ -512,43 +511,41 @@ open class DhakaFlixProvider : MainAPI() {
     private suspend fun fetchDirectChildren(host: String, href: String): List<H5Item> {
         val path = normalizePath(href)
         val cacheKey = host.trimEnd('/') + "|" + path
+        
+        // 1. Fast path (no lock): Check memory cache first
         val nowMs = System.currentTimeMillis()
-
-        // Check cache
         childrenCache[cacheKey]?.let { entry ->
             if (nowMs - entry.timestampMs <= childrenCacheTtlMs) {
                 return entry.items
             }
         }
-
-        // Coalesce concurrent requests using Deferred to prevent duplicate network hits
-        val deferred = fetchMutex.withLock {
-            ongoingFetches[cacheKey] ?: coroutineScope {
-                async {
-                    val response = app.post(
-                        "$host$path?",
-                        data = mapOf(
-                            "action" to "get",
-                            "items[href]" to path,
-                            "items[what]" to "1"
-                        )
-                    )
-
-                    val items = runCatching {
-                        mapper.readValue<H5ItemsResponse>(response.text).items
-                    }.getOrElse { emptyList() }
-                    val direct = directChildren(items, path)
-
-                    fetchMutex.withLock {
-                        childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
-                        ongoingFetches.remove(cacheKey)
-                    }
-                    direct
-                }.also { ongoingFetches[cacheKey] = it }
+        
+        // 2. Slow path (lock): Fetch and cache
+        return fetchMutex.withLock {
+            // Re-check cache inside lock in case another coroutine just fetched it
+            childrenCache[cacheKey]?.let { entry ->
+                if (System.currentTimeMillis() - entry.timestampMs <= childrenCacheTtlMs) {
+                    return@withLock entry.items
+                }
             }
-        }
+            
+            val response = app.post(
+                "$host$path?",
+                data = mapOf(
+                    "action" to "get",
+                    "items[href]" to path,
+                    "items[what]" to "1"
+                )
+            )
 
-        return deferred.await()
+            val items = runCatching {
+                mapper.readValue<H5ItemsResponse>(response.text).items
+            }.getOrElse { emptyList() }
+            val direct = directChildren(items, path)
+
+            childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
+            direct
+        }
     }
 
     private fun directChildren(items: List<H5Item>, parentHref: String): List<H5Item> {
