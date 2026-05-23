@@ -79,6 +79,14 @@ open class DhakaFlixProvider : MainAPI() {
         "tv:s-z" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20S%20%20%E2%80%94%20%20Z/"
     )
 
+    private val animeGroups = mapOf(
+        "anime:0-9" to "/DHAKA-FLIX-9/Anime%20%26%20Cartoon%20TV%20Series/Anime-TV%20Series%20%E2%98%85%20%200%20%20%E2%80%94%20%209/",
+        "anime:a-f" to "/DHAKA-FLIX-9/Anime%20%26%20Cartoon%20TV%20Series/Anime-TV%20Series%20%E2%99%A5%20%20A%20%20%E2%80%94%20%20F/",
+        "anime:g-m" to "/DHAKA-FLIX-9/Anime%20%26%20Cartoon%20TV%20Series/Anime-TV%20Series%20%E2%99%A5%20%20G%20%20%E2%80%94%20%20M/",
+        "anime:n-s" to "/DHAKA-FLIX-9/Anime%20%26%20Cartoon%20TV%20Series/Anime-TV%20Series%20%E2%99%A6%20%20N%20%20%E2%80%94%20%20S/",
+        "anime:t-z" to "/DHAKA-FLIX-9/Anime%20%26%20Cartoon%20TV%20Series/Anime-TV%20Series%20%E2%99%A6%20%20T%20%20%E2%80%94%20%20Z/"
+    )
+
     private val movieCategories = listOf(
         Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
         Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
@@ -194,6 +202,12 @@ open class DhakaFlixProvider : MainAPI() {
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
                     "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 2021, 2026)
+                    "movie:anime" -> coroutineScope {
+                        animeGroups.values
+                            .map { groupPath -> async { fetchDirectChildren(animeHost, groupPath) } }
+                            .awaitAll()
+                            .flatten()
+                    }
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -230,6 +244,18 @@ open class DhakaFlixProvider : MainAPI() {
         }
     }
 
+    private fun getAnimeGroupForQuery(query: String): String? {
+        val firstChar = query.trim().firstOrNull()?.lowercaseChar() ?: return null
+        return when (firstChar) {
+            in '0'..'9' -> animeGroups["anime:0-9"]
+            in 'a'..'f' -> animeGroups["anime:a-f"]
+            in 'g'..'m' -> animeGroups["anime:g-m"]
+            in 'n'..'s' -> animeGroups["anime:n-s"]
+            in 't'..'z' -> animeGroups["anime:t-z"]
+            else -> null
+        }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> = coroutineScope {
         val normalized = query.trim()
         if (normalized.isEmpty()) return@coroutineScope emptyList()
@@ -259,7 +285,7 @@ open class DhakaFlixProvider : MainAPI() {
 
         // Helper to search movie categories under specified year constraint
         suspend fun searchMovieCategories(minYear: Int?, maxYear: Int?): List<SearchResponse> {
-            val categoriesToSearch = movieCategories.filter { it.key != "movie:latest" }
+            val categoriesToSearch = movieCategories.filter { it.key != "movie:latest" && it.key != "movie:anime" }
             val movieDeferreds = categoriesToSearch.map { category ->
                 async {
                     val items = when (category.key) {
@@ -315,18 +341,42 @@ open class DhakaFlixProvider : MainAPI() {
         // ==========================================
         // PHASE 1: TARGETED & RECENT SEARCH (PARALLEL)
         // ==========================================
+        // Helper to perform Anime searching on specified groups
+        suspend fun searchAnimeGroups(groupsToSearch: Collection<String>): List<SearchResponse> {
+            val animeDeferreds = groupsToSearch.map { groupPath ->
+                async {
+                    fetchDirectChildren(animeHost, groupPath)
+                        .filter { it.isFolder }
+                        .mapNotNull { item ->
+                            val title = cleanName(decodeNameFromHref(item.href))
+                            if (title.lowercase().contains(queryLower)) {
+                                val posterUrl = guessPosterUrl(animeHost, item.href)
+                                buildSearchResponse(title, absoluteUrl(animeHost, item.href), TvType.Anime, posterUrl)
+                            } else null
+                        }
+                }
+            }
+            return animeDeferreds.awaitAll().flatten()
+        }
+
         // Determine alphabetical TV group matching the query
         val targetTvGroup = getTvGroupForQuery(normalized)
         val phase1TvGroups = if (targetTvGroup != null) listOf(targetTvGroup) else tvGroups.values
+
+        // Determine alphabetical Anime group matching the query
+        val targetAnimeGroup = getAnimeGroupForQuery(normalized)
+        val phase1AnimeGroups = if (targetAnimeGroup != null) listOf(targetAnimeGroup) else animeGroups.values
 
         // If queryYear is provided, we skip recency tier and target that year directly
         val recentMinYear = if (queryYear != null) null else 2018
 
         val phase1TvDeferred = async { searchTvGroups(phase1TvGroups) }
+        val phase1AnimeDeferred = async { searchAnimeGroups(phase1AnimeGroups) }
         val phase1MoviesDeferred = async { searchMovieCategories(recentMinYear, 2026) }
         val phase1EnglishDeferred = async { searchEnglishMovies(recentMinYear, 2026) }
 
         results.addAll(phase1TvDeferred.await())
+        results.addAll(phase1AnimeDeferred.await())
         results.addAll(phase1MoviesDeferred.await())
         results.addAll(phase1EnglishDeferred.await())
 
@@ -337,12 +387,16 @@ open class DhakaFlixProvider : MainAPI() {
         if (results.size < 5 && queryYear == null) {
             val remainingTvGroups = tvGroups.values.filter { it !in phase1TvGroups }
             val phase2TvDeferred = if (remainingTvGroups.isNotEmpty()) async { searchTvGroups(remainingTvGroups) } else null
+
+            val remainingAnimeGroups = animeGroups.values.filter { it !in phase1AnimeGroups }
+            val phase2AnimeDeferred = if (remainingAnimeGroups.isNotEmpty()) async { searchAnimeGroups(remainingAnimeGroups) } else null
             
             // Search older years (pre-2018)
             val phase2MoviesDeferred = async { searchMovieCategories(1995, 2017) }
             val phase2EnglishDeferred = async { searchEnglishMovies(1995, 2017) }
 
             phase2TvDeferred?.await()?.let { results.addAll(it) }
+            phase2AnimeDeferred?.await()?.let { results.addAll(it) }
             results.addAll(phase2MoviesDeferred.await())
             results.addAll(phase2EnglishDeferred.await())
         }
