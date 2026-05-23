@@ -71,6 +71,13 @@ open class DhakaFlixProvider : MainAPI() {
         "tv:s-z" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20S%20%20%E2%80%94%20%20Z/"
     )
 
+    private val tvGroupSections = listOf(
+        "tv:0-9" to "TV Series 0-9",
+        "tv:a-l" to "TV Series A-L",
+        "tv:m-r" to "TV Series M-R",
+        "tv:s-z" to "TV Series S-Z"
+    )
+
     private val movieCategories = listOf(
         Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
         Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
@@ -84,7 +91,7 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategoryMap = movieCategories.associateBy { it.key }
 
     override val mainPage = mainPageOf(
-        "tv:all" to "TV Series 0-9 & A-Z",
+        *tvGroupSections.toTypedArray(),
         "movie:latest" to "English Movies 1080p - Latest",
         "movie:hindi" to "Hindi Movies",
         "movie:south-dubbed" to "South-Movie Hindi Dubbed",
@@ -127,30 +134,21 @@ open class DhakaFlixProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageSize = 40
         val items = when {
-            request.data == "tv:all" -> {
-                tvGroups.values
-                    .flatMap { groupPath -> fetchDirectChildren(tvHost, groupPath) }
-                    .filter { it.isFolder }
-                    .distinctBy { it.href }
-                    .sortedByDescending { it.time ?: 0L }
-                    .mapNotNull { item ->
-                        val title = cleanName(decodeNameFromHref(item.href))
-                        if (title.isEmpty()) return@mapNotNull null
-                        val url = absoluteUrl(tvHost, item.href)
-                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
-                    }
-            }
             request.data.startsWith("tv:") -> {
-                val groupPath = tvGroups[request.data] ?: tvRootPath
-                fetchDirectChildren(tvHost, groupPath)
-                    .filter { it.isFolder }
-                    .sortedByDescending { it.time ?: 0L }
-                    .mapNotNull { item ->
-                        val title = cleanName(decodeNameFromHref(item.href))
-                        if (title.isEmpty()) return@mapNotNull null
-                        val url = absoluteUrl(tvHost, item.href)
-                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
-                    }
+                val groupPath = tvGroups[request.data]
+                if (groupPath == null) {
+                    emptyList()
+                } else {
+                    fetchDirectChildren(tvHost, groupPath)
+                        .filter { it.isFolder }
+                        .sortedByDescending { it.time ?: 0L }
+                        .mapNotNull { item ->
+                            val title = cleanName(decodeNameFromHref(item.href))
+                            if (title.isEmpty()) return@mapNotNull null
+                            val url = absoluteUrl(tvHost, item.href)
+                            ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
+                        }
+                }
             }
             request.data.startsWith("movie:") -> {
                 val category = movieCategoryMap[request.data]
