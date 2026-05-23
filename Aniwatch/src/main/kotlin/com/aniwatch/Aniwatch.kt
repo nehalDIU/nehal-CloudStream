@@ -104,11 +104,15 @@ class Aniwatch : MainAPI() {
         var doc = app.get(url).document
 
         // Navigate from detail page to watch page if needed
-        val watchNowBtn = doc.selectFirst("a.btn-play, a.btn-radius.btn-primary.btn-play")
-            ?: doc.selectFirst("a[href*=-episode-]")
-        if (watchNowBtn != null) {
-            val watchUrl = watchNowBtn.attr("href")
-            if (watchUrl.isNotEmpty() && watchUrl.startsWith("http")) {
+        if (doc.selectFirst("a.ep-item") == null) {
+            var watchUrl = doc.selectFirst("a.btn-play, a.btn-radius.btn-primary.btn-play")?.attr("href")
+            if (watchUrl.isNullOrEmpty()) {
+                watchUrl = doc.select("a[href*=-episode-]").firstOrNull {
+                    !it.attr("title").equals("Home", ignoreCase = true) &&
+                    !it.text().equals("Home", ignoreCase = true)
+                }?.attr("href")
+            }
+            if (!watchUrl.isNullOrEmpty() && watchUrl.startsWith("http")) {
                 doc = app.get(watchUrl).document
             }
         }
