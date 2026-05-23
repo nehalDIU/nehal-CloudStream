@@ -171,6 +171,7 @@ object SmartlinkHelper {
     }
 
     private fun loadSmartUrl(context: Context, url: String) {
+        if (url.isBlank()) return
         try {
             val webView = android.webkit.WebView(context.applicationContext)
             webView.settings.apply {

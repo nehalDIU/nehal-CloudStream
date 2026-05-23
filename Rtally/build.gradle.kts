@@ -11,6 +11,27 @@ android {
     namespace = "com.cncverse"
 }
 
+android {
+    defaultConfig {
+        val smartlinkUrl = (project.findProperty("SMARTLINK_URL") as String?)
+            ?: System.getenv("SMARTLINK_URL")
+            ?: ""
+        val moneTag = (project.findProperty("MONE_TAG") as String?)
+            ?: System.getenv("MONE_TAG")
+            ?: ""
+
+        val escapedSmartlinkUrl = smartlinkUrl
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        val escapedMoneTag = moneTag
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+
+        buildConfigField("String", "SMARTLINK_URL", "\"${escapedSmartlinkUrl}\"")
+        buildConfigField("String", "MONE_TAG", "\"${escapedMoneTag}\"")
+    }
+}
+
 cloudstream {
     description = "Movie and TV Series provider"
     authors = listOf("Redowan, NivinCNC")
