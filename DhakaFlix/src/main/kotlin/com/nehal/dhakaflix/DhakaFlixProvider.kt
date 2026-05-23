@@ -99,9 +99,7 @@ open class DhakaFlixProvider : MainAPI() {
     private val childrenCache = LinkedHashMap<String, CacheEntry>(64, 0.75f, true)
     private val childrenCacheTtlMs = 2 * 60 * 1000L
     private val childrenCacheMaxSize = 200
-    private val moviePosterFileName = "a_AL_.jpg"
-    private val tvPosterFileName = "a11.jpg"
-    private val kolkataMoviePosterFileName = "a11.jpg"
+    private val defaultPosterFileName = "a11.jpg"
 
     private data class CacheEntry(
         val timestampMs: Long,
@@ -198,7 +196,7 @@ open class DhakaFlixProvider : MainAPI() {
         val paged = items.drop((page - 1) * pageSize).take(pageSize)
         val responses = ArrayList<SearchResponse>(paged.size)
         for (item in paged) {
-            val posterUrl = guessPosterUrl(item.host, item.folderHref, item.type)
+            val posterUrl = guessPosterUrl(item.host, item.folderHref)
             responses.add(buildSearchResponse(item.title, item.url, item.type, posterUrl))
         }
         return newHomePageResponse(request.name, responses)
@@ -624,18 +622,18 @@ open class DhakaFlixProvider : MainAPI() {
         return hasExtension(href, imageExtensions)
     }
 
-    private fun guessPosterUrl(host: String, folderHref: String, type: TvType): String {
+    private fun guessPosterUrl(host: String, folderHref: String): String {
         val folderPath = if (folderHref.startsWith("http://") || folderHref.startsWith("https://")) {
             pathFromUrl(folderHref)
         } else {
             normalizePath(folderHref)
         }
-        val fileName = when {
-            type == TvType.TvSeries -> tvPosterFileName
-            host == kolkataHost -> kolkataMoviePosterFileName
-            else -> moviePosterFileName
+        val cacheKey = host.trimEnd('/') + "|" + normalizePath(folderPath)
+        childrenCache[cacheKey]?.let { entry ->
+            val cachedPoster = pickPoster(host, entry.items)
+            if (!cachedPoster.isNullOrBlank()) return cachedPoster
         }
-        return absoluteUrl(host, folderPath + fileName)
+        return absoluteUrl(host, folderPath + defaultPosterFileName)
     }
 
     private suspend fun resolvePoster(host: String, folderHref: String): String? {
