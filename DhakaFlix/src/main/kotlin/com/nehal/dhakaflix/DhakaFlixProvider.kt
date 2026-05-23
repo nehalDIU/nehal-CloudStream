@@ -30,6 +30,9 @@ import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.Deferred
 
 open class DhakaFlixProvider : MainAPI() {
     override var name = "DhakaFlix"
@@ -103,6 +106,10 @@ open class DhakaFlixProvider : MainAPI() {
     private val childrenCacheTtlMs = 15 * 60 * 1000L // 15 minutes TTL for stable H5ai directories
     private val childrenCacheMaxSize = 1000 // Large cache size to hold all traversed folders
     private val posterFileNames = listOf("a_AL_.jpg", "a11.jpg")
+
+    // Concurrent request de-duplication variables
+    private val fetchMutex = Mutex()
+    private val ongoingFetches = HashMap<String, Deferred<List<H5Item>>>()
 
     private data class CacheEntry(
         val timestampMs: Long,
@@ -205,44 +212,53 @@ open class DhakaFlixProvider : MainAPI() {
         return newHomePageResponse(request.name, responses)
     }
 
+    private fun getTvGroupForQuery(query: String): String? {
+        val firstChar = query.trim().firstOrNull()?.lowercaseChar() ?: return null
+        return when (firstChar) {
+            in '0'..'9' -> tvGroups["tv:0-9"]
+            in 'a'..'l' -> tvGroups["tv:a-l"]
+            in 'm'..'r' -> tvGroups["tv:m-r"]
+            in 's'..'z' -> tvGroups["tv:s-z"]
+            else -> null
+        }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> = coroutineScope {
         val normalized = query.trim()
         if (normalized.isEmpty()) return@coroutineScope emptyList()
 
         val queryLower = normalized.lowercase()
+        val queryYear = extractYear(normalized)
         val maxResults = 60
         val results = ArrayList<SearchResponse>()
 
-        // 1. Search TV series in parallel
-        val tvDeferreds = tvGroups.values.map { groupPath ->
-            async {
-                fetchDirectChildren(tvHost, groupPath)
-                    .filter { it.isFolder }
-                    .mapNotNull { item ->
-                        val title = cleanName(decodeNameFromHref(item.href))
-                        if (title.lowercase().contains(queryLower)) {
-                            val posterUrl = guessPosterUrl(tvHost, item.href)
-                            buildSearchResponse(
-                                title,
-                                absoluteUrl(tvHost, item.href),
-                                TvType.TvSeries,
-                                posterUrl
-                            )
-                        } else null
-                    }
+        // Helper to perform TV searching on specified groups
+        suspend fun searchTvGroups(groupsToSearch: Collection<String>): List<SearchResponse> {
+            val tvDeferreds = groupsToSearch.map { groupPath ->
+                async {
+                    fetchDirectChildren(tvHost, groupPath)
+                        .filter { it.isFolder }
+                        .mapNotNull { item ->
+                            val title = cleanName(decodeNameFromHref(item.href))
+                            if (title.lowercase().contains(queryLower)) {
+                                val posterUrl = guessPosterUrl(tvHost, item.href)
+                                buildSearchResponse(title, absoluteUrl(tvHost, item.href), TvType.TvSeries, posterUrl)
+                            } else null
+                        }
+                }
             }
+            return tvDeferreds.awaitAll().flatten()
         }
-        results.addAll(tvDeferreds.awaitAll().flatten())
 
-        // 2. Search movie categories in parallel if we need more results
-        if (results.size < maxResults) {
+        // Helper to search movie categories under specified year constraint
+        suspend fun searchMovieCategories(minYear: Int?, maxYear: Int?): List<SearchResponse> {
             val categoriesToSearch = movieCategories.filter { it.key != "movie:latest" }
             val movieDeferreds = categoriesToSearch.map { category ->
                 async {
                     val items = when (category.key) {
-                        "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, 1995, 2026)
-                        "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, 2009, 2026)
-                        "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(category.host, category.path, 1999, 2024)
+                        "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, minYear, maxYear, queryYear)
+                        "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, minYear, maxYear, queryYear)
+                        "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(category.host, category.path, minYear, maxYear, queryYear)
                         else -> fetchDirectChildren(category.host, category.path)
                     }.filter { it.isFolder }
 
@@ -256,13 +272,21 @@ open class DhakaFlixProvider : MainAPI() {
                     }
                 }
             }
-            results.addAll(movieDeferreds.awaitAll().flatten())
+            return movieDeferreds.awaitAll().flatten()
         }
 
-        // 3. Search general English movie year folders in parallel if we still need more results
-        if (results.size < maxResults) {
+        // Helper to search general English movies under specified year constraint
+        suspend fun searchEnglishMovies(minYear: Int?, maxYear: Int?): List<SearchResponse> {
             val yearFolders = fetchDirectChildren(movieHost, movieRootPath)
                 .filter { it.isFolder }
+                .filter { item ->
+                    val year = extractYear(decodeNameFromHref(item.href)) ?: return@filter false
+                    if (queryYear != null) {
+                        year == queryYear
+                    } else {
+                        (minYear == null || year >= minYear) && (maxYear == null || year <= maxYear)
+                    }
+                }
 
             val englishDeferreds = yearFolders.map { yearFolder ->
                 async {
@@ -273,33 +297,68 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.lowercase().contains(queryLower)) {
                             val posterUrl = guessPosterUrl(movieHost, item.href)
-                            buildSearchResponse(
-                                title,
-                                absoluteUrl(movieHost, item.href),
-                                TvType.Movie,
-                                posterUrl
-                            )
+                            buildSearchResponse(title, absoluteUrl(movieHost, item.href), TvType.Movie, posterUrl)
                         } else null
                     }
                 }
             }
-            results.addAll(englishDeferreds.awaitAll().flatten())
+            return englishDeferreds.awaitAll().flatten()
         }
 
-        results.take(maxResults)
+        // ==========================================
+        // PHASE 1: TARGETED & RECENT SEARCH (PARALLEL)
+        // ==========================================
+        // Determine alphabetical TV group matching the query
+        val targetTvGroup = getTvGroupForQuery(normalized)
+        val phase1TvGroups = if (targetTvGroup != null) listOf(targetTvGroup) else tvGroups.values
+
+        // If queryYear is provided, we skip recency tier and target that year directly
+        val recentMinYear = if (queryYear != null) null else 2018
+
+        val phase1TvDeferred = async { searchTvGroups(phase1TvGroups) }
+        val phase1MoviesDeferred = async { searchMovieCategories(recentMinYear, 2026) }
+        val phase1EnglishDeferred = async { searchEnglishMovies(recentMinYear, 2026) }
+
+        results.addAll(phase1TvDeferred.await())
+        results.addAll(phase1MoviesDeferred.await())
+        results.addAll(phase1EnglishDeferred.await())
+
+        // ==========================================
+        // PHASE 2: FALLBACK (OLDER YEARS & OTHER GROUPS)
+        // ==========================================
+        // Only run Phase 2 if we got less than 5 results and no specific year was targeted
+        if (results.size < 5 && queryYear == null) {
+            val remainingTvGroups = tvGroups.values.filter { it !in phase1TvGroups }
+            val phase2TvDeferred = if (remainingTvGroups.isNotEmpty()) async { searchTvGroups(remainingTvGroups) } else null
+            
+            // Search older years (pre-2018)
+            val phase2MoviesDeferred = async { searchMovieCategories(1995, 2017) }
+            val phase2EnglishDeferred = async { searchEnglishMovies(1995, 2017) }
+
+            phase2TvDeferred?.await()?.let { results.addAll(it) }
+            results.addAll(phase2MoviesDeferred.await())
+            results.addAll(phase2EnglishDeferred.await())
+        }
+
+        results.distinctBy { it.url }.take(maxResults)
     }
 
     private suspend fun fetchYearIndexedMovieFolders(
         host: String,
         rootPath: String,
         minYear: Int? = null,
-        maxYear: Int? = null
+        maxYear: Int? = null,
+        queryYear: Int? = null
     ): List<H5Item> = coroutineScope {
         val yearFolders = fetchDirectChildren(host, rootPath)
             .filter { it.isFolder }
             .filter { item ->
                 val year = extractYear(decodeNameFromHref(item.href)) ?: return@filter false
-                (minYear == null || year >= minYear) && (maxYear == null || year <= maxYear)
+                if (queryYear != null) {
+                    year == queryYear
+                } else {
+                    (minYear == null || year >= minYear) && (maxYear == null || year <= maxYear)
+                }
             }
 
         val deferreds = yearFolders.map { yearFolder ->
@@ -454,35 +513,42 @@ open class DhakaFlixProvider : MainAPI() {
         val path = normalizePath(href)
         val cacheKey = host.trimEnd('/') + "|" + path
         val nowMs = System.currentTimeMillis()
+
+        // Check cache
         childrenCache[cacheKey]?.let { entry ->
             if (nowMs - entry.timestampMs <= childrenCacheTtlMs) {
                 return entry.items
-            } else {
-                childrenCache.remove(cacheKey)
             }
         }
-        val response = app.post(
-            "$host$path?",
-            data = mapOf(
-                "action" to "get",
-                "items[href]" to path,
-                "items[what]" to "1"
-            )
-        )
 
-        val items = runCatching {
-            mapper.readValue<H5ItemsResponse>(response.text).items
-        }.getOrElse { emptyList() }
-        val direct = directChildren(items, path)
-        childrenCache[cacheKey] = CacheEntry(nowMs, direct)
-        if (childrenCache.size > childrenCacheMaxSize) {
-            val iterator = childrenCache.entries.iterator()
-            if (iterator.hasNext()) {
-                iterator.next()
-                iterator.remove()
+        // Coalesce concurrent requests using Deferred to prevent duplicate network hits
+        val deferred = fetchMutex.withLock {
+            ongoingFetches[cacheKey] ?: coroutineScope {
+                async {
+                    val response = app.post(
+                        "$host$path?",
+                        data = mapOf(
+                            "action" to "get",
+                            "items[href]" to path,
+                            "items[what]" to "1"
+                        )
+                    )
+
+                    val items = runCatching {
+                        mapper.readValue<H5ItemsResponse>(response.text).items
+                    }.getOrElse { emptyList() }
+                    val direct = directChildren(items, path)
+
+                    fetchMutex.withLock {
+                        childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
+                        ongoingFetches.remove(cacheKey)
+                    }
+                    direct
+                }.also { ongoingFetches[cacheKey] = it }
             }
         }
-        return direct
+
+        return deferred.await()
     }
 
     private fun directChildren(items: List<H5Item>, parentHref: String): List<H5Item> {
@@ -578,10 +644,10 @@ open class DhakaFlixProvider : MainAPI() {
     private fun extractEpisodeNumber(name: String): Int? {
         return Regex("s\\d{1,2}e(\\d{1,3})", RegexOption.IGNORE_CASE)
             .find(name)?.groupValues?.get(1)?.toIntOrNull()
-            ?: Regex("e(\\d{1,3})", RegexOption.IGNORE_CASE)
-                .find(name)?.groupValues?.get(1)?.toIntOrNull()
-            ?: Regex("episode\\s*(\\d{1,3})", RegexOption.IGNORE_CASE)
-                .find(name)?.groupValues?.get(1)?.toIntOrNull()
+        ?: Regex("e(\\d{1,3})", RegexOption.IGNORE_CASE)
+            .find(name)?.groupValues?.get(1)?.toIntOrNull()
+        ?: Regex("episode\\s*(\\d{1,3})", RegexOption.IGNORE_CASE)
+            .find(name)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     private fun pickPoster(host: String, items: List<H5Item>): String? {
@@ -599,22 +665,11 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private val videoExtensions = setOf(
-        "mkv",
-        "mp4",
-        "m4v",
-        "avi",
-        "webm",
-        "mov",
-        "ts",
-        "m3u8",
-        "mpd"
+        "mkv", "mp4", "m4v", "avi", "webm", "mov", "ts", "m3u8", "mpd"
     )
 
     private val imageExtensions = setOf(
-        "jpg",
-        "jpeg",
-        "png",
-        "webp"
+        "jpg", "jpeg", "png", "webp"
     )
 
     private fun isVideoFile(href: String): Boolean {
