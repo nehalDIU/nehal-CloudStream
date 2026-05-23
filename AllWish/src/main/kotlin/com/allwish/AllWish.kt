@@ -1,7 +1,5 @@
 package com.allwish
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.AnimeSearchResponse
@@ -79,7 +77,6 @@ class AllWish : MainAPI() {
         } else null
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override suspend fun load(url: String): LoadResponse {
         val res = app.get(url).document
         val id = res.select("main > div.container").attr("data-id")
