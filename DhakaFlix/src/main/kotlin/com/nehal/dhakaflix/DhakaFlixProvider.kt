@@ -221,7 +221,7 @@ open class DhakaFlixProvider : MainAPI() {
                     .mapNotNull { item ->
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.lowercase().contains(queryLower)) {
-                            val posterUrl = guessPosterUrl(tvHost, item.href, TvType.TvSeries)
+                            val posterUrl = guessPosterUrl(tvHost, item.href)
                             buildSearchResponse(
                                 title,
                                 absoluteUrl(tvHost, item.href),
@@ -250,7 +250,7 @@ open class DhakaFlixProvider : MainAPI() {
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.lowercase().contains(queryLower)) {
                             val url = absoluteUrl(category.host, item.href)
-                            val posterUrl = guessPosterUrl(category.host, item.href, category.type)
+                            val posterUrl = guessPosterUrl(category.host, item.href)
                             buildSearchResponse(title, url, category.type, posterUrl)
                         } else null
                     }
@@ -272,7 +272,7 @@ open class DhakaFlixProvider : MainAPI() {
                     movieItems.mapNotNull { item ->
                         val title = cleanName(decodeNameFromHref(item.href))
                         if (title.lowercase().contains(queryLower)) {
-                            val posterUrl = guessPosterUrl(movieHost, item.href, TvType.Movie)
+                            val posterUrl = guessPosterUrl(movieHost, item.href)
                             buildSearchResponse(
                                 title,
                                 absoluteUrl(movieHost, item.href),
