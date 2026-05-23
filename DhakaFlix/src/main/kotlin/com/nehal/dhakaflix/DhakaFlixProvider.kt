@@ -71,13 +71,6 @@ open class DhakaFlixProvider : MainAPI() {
         "tv:s-z" to "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20S%20%20%E2%80%94%20%20Z/"
     )
 
-    private val tvGroupSections = listOf(
-        "tv:0-9" to "TV Series 0-9",
-        "tv:a-l" to "TV Series A-L",
-        "tv:m-r" to "TV Series M-R",
-        "tv:s-z" to "TV Series S-Z"
-    )
-
     private val movieCategories = listOf(
         Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
         Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
@@ -91,7 +84,7 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategoryMap = movieCategories.associateBy { it.key }
 
     override val mainPage = mainPageOf(
-        *tvGroupSections.toTypedArray(),
+        "tv:all" to "TV Series 0-9 & A-Z",
         "movie:latest" to "English Movies 1080p - Latest",
         "movie:hindi" to "Hindi Movies",
         "movie:south-dubbed" to "South-Movie Hindi Dubbed",
@@ -103,7 +96,6 @@ open class DhakaFlixProvider : MainAPI() {
 
     private val mapper = jacksonObjectMapper()
     private val posterCache = mutableMapOf<String, String?>()
-    private val recentMovieYears = listOf(2026, 2025, 2024)
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private data class H5ItemsResponse(val items: List<H5Item> = emptyList())
@@ -135,34 +127,40 @@ open class DhakaFlixProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageSize = 40
         val items = when {
+            request.data == "tv:all" -> {
+                tvGroups.values
+                    .flatMap { groupPath -> fetchDirectChildren(tvHost, groupPath) }
+                    .filter { it.isFolder }
+                    .distinctBy { it.href }
+                    .sortedByDescending { it.time ?: 0L }
+                    .mapNotNull { item ->
+                        val title = cleanName(decodeNameFromHref(item.href))
+                        if (title.isEmpty()) return@mapNotNull null
+                        val url = absoluteUrl(tvHost, item.href)
+                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
+                    }
+            }
             request.data.startsWith("tv:") -> {
-                val groupPath = tvGroups[request.data]
-                if (groupPath == null) {
-                    emptyList()
-                } else {
-                    fetchDirectChildren(tvHost, groupPath)
-                        .filter { it.isFolder }
-                        .sortedByDescending { it.time ?: 0L }
-                        .mapNotNull { item ->
-                            val title = cleanName(decodeNameFromHref(item.href))
-                            if (title.isEmpty()) return@mapNotNull null
-                            val url = absoluteUrl(tvHost, item.href)
-                            ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
-                        }
-                }
+                val groupPath = tvGroups[request.data] ?: tvRootPath
+                fetchDirectChildren(tvHost, groupPath)
+                    .filter { it.isFolder }
+                    .sortedByDescending { it.time ?: 0L }
+                    .mapNotNull { item ->
+                        val title = cleanName(decodeNameFromHref(item.href))
+                        if (title.isEmpty()) return@mapNotNull null
+                        val url = absoluteUrl(tvHost, item.href)
+                        ListingItem(title, url, TvType.TvSeries, tvHost, item.href)
+                    }
             }
             request.data.startsWith("movie:") -> {
                 val category = movieCategoryMap[request.data]
                 val categoryPath = category?.path ?: movieRootPath
                 val host = category?.host ?: movieHost
                 val children = when (request.data) {
-                    "movie:latest" -> {
-                        val latestYearPath = findLatestMovieYearPath()
-                        if (latestYearPath == null) emptyList() else fetchDirectChildren(movieHost, latestYearPath)
-                    }
-                    "movie:hindi" -> fetchRecentYearMovieFolders(movieHost, categoryPath, recentMovieYears)
-                    "movie:south-dubbed" -> fetchRecentYearMovieFolders(movieHost, categoryPath, recentMovieYears)
-                    "movie:kolkata-bangla" -> fetchRecentYearMovieFolders(kolkataHost, categoryPath, recentMovieYears)
+                    "movie:latest" -> fetchYearIndexedMovieFolders(movieHost, movieRootPath)
+                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 1995, 2026)
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2009, 2026)
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 1999, 2024)
                     else -> fetchDirectChildren(host, categoryPath)
                 }
                 children
@@ -292,24 +290,6 @@ open class DhakaFlixProvider : MainAPI() {
             movies.addAll(items)
         }
 
-        return movies.distinctBy { it.href }
-    }
-
-    private suspend fun fetchRecentYearMovieFolders(
-        host: String,
-        rootPath: String,
-        years: List<Int>
-    ): List<H5Item> {
-        val basePath = normalizePath(rootPath)
-        val movies = ArrayList<H5Item>()
-        for (year in years) {
-            val yearPath = normalizePath(basePath + year)
-            val items = fetchDirectChildren(host, yearPath)
-                .filter { it.isFolder }
-            if (items.isNotEmpty()) {
-                movies.addAll(items)
-            }
-        }
         return movies.distinctBy { it.href }
     }
 
