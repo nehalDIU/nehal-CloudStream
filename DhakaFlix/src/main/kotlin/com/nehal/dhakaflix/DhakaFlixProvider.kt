@@ -96,6 +96,14 @@ open class DhakaFlixProvider : MainAPI() {
 
     private val mapper = jacksonObjectMapper()
     private val posterCache = mutableMapOf<String, String?>()
+    private val childrenCache = LinkedHashMap<String, CacheEntry>(64, 0.75f, true)
+    private val childrenCacheTtlMs = 2 * 60 * 1000L
+    private val childrenCacheMaxSize = 200
+
+    private data class CacheEntry(
+        val timestampMs: Long,
+        val items: List<H5Item>
+    )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private data class H5ItemsResponse(val items: List<H5Item> = emptyList())
@@ -187,8 +195,7 @@ open class DhakaFlixProvider : MainAPI() {
         val paged = items.drop((page - 1) * pageSize).take(pageSize)
         val responses = ArrayList<SearchResponse>(paged.size)
         for (item in paged) {
-            val posterUrl = resolvePoster(item.host, item.folderHref)
-            responses.add(buildSearchResponse(item.title, item.url, item.type, posterUrl))
+            responses.add(buildSearchResponse(item.title, item.url, item.type))
         }
         return newHomePageResponse(request.name, responses)
     }
@@ -440,6 +447,15 @@ open class DhakaFlixProvider : MainAPI() {
 
     private suspend fun fetchDirectChildren(host: String, href: String): List<H5Item> {
         val path = normalizePath(href)
+        val cacheKey = host.trimEnd('/') + "|" + path
+        val nowMs = System.currentTimeMillis()
+        childrenCache[cacheKey]?.let { entry ->
+            if (nowMs - entry.timestampMs <= childrenCacheTtlMs) {
+                return entry.items
+            } else {
+                childrenCache.remove(cacheKey)
+            }
+        }
         val response = app.post(
             "$host$path?",
             data = mapOf(
@@ -452,8 +468,16 @@ open class DhakaFlixProvider : MainAPI() {
         val items = runCatching {
             mapper.readValue<H5ItemsResponse>(response.text).items
         }.getOrElse { emptyList() }
-
-        return directChildren(items, path)
+        val direct = directChildren(items, path)
+        childrenCache[cacheKey] = CacheEntry(nowMs, direct)
+        if (childrenCache.size > childrenCacheMaxSize) {
+            val iterator = childrenCache.entries.iterator()
+            if (iterator.hasNext()) {
+                iterator.next()
+                iterator.remove()
+            }
+        }
+        return direct
     }
 
     private fun directChildren(items: List<H5Item>, parentHref: String): List<H5Item> {
