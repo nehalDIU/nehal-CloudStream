@@ -38,14 +38,9 @@ open class MegaPlay : ExtractorApi() {
                 "Referer" to mainUrl
             )
 
-            // Extract stream ID directly from URL path to prevent an extra network round-trip.
-            // Example: https://megaplay.buzz/stream/s-2/2142/sub -> 2142
-            val pathId = url.substringBeforeLast("/").substringAfterLast("/")
-            val id = if (pathId.all { it.isDigit() }) pathId else {
-                app.get(url, headers = headers).document.selectFirst("#megaplay-player")?.attr("data-id")
-            }
+            val id = app.get(url, headers = headers).document.selectFirst("#megaplay-player")?.attr("data-id")
 
-            val apiUrl = "$mainUrl/stream/getSources?id=$id&id=$id"
+            val apiUrl = "$mainUrl/stream/getSources?id=$id"
 
             val response = runCatching {
                 app.get(apiUrl, headers).parsedSafe<MegaPlayResponse>()
