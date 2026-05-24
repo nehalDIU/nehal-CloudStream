@@ -11,6 +11,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
@@ -110,6 +111,8 @@ open class Server2FTPBDProvider : MainAPI() {
         Category("dual-audio", "/FTP-2/English%20Movies/Dual-Audio/", "English Movies [Dual Audio]", TvType.Movie, "https://server2.ftpbd.net", hasYears = true),
         Category("4k-movies", "/FTP-2/English%20Movies/English-Movies-4K/", "English Movies 4K", TvType.Movie, "https://server2.ftpbd.net", hasYears = true),
         Category("3d-movies", "/FTP-2/3D%20Movies/", "3D Movies", TvType.Movie, "https://server2.ftpbd.net", hasYears = true),
+        Category("imdb-250", "/FTP-2/English%20Movies/IMDB-TOP-250/", "IMDb Top 250", TvType.Movie, "https://server2.ftpbd.net", hasYears = false),
+        Category("eng-series-coll", "/FTP-2/English%20Movies/Movie-Series-Collection/", "Movie Series Collection", TvType.TvSeries, "https://server2.ftpbd.net", hasYears = false),
         Category("foreign-movies", "/FTP-3/Foreign%20Language%20Movies/", "Foreign Movies", TvType.Movie, "https://server3.ftpbd.net", hasYears = true),
         Category("hindi-movies", "/FTP-3/Hindi%20Movies/", "Hindi Movies", TvType.Movie, "https://server3.ftpbd.net", hasYears = true),
         Category("south-movies", "/FTP-3/South%20Indian%20Movies/", "South Indian Movies", TvType.Movie, "https://server3.ftpbd.net", hasYears = true),
@@ -379,10 +382,12 @@ open class Server2FTPBDProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val links = if (looksLikeVideoUrl(data)) {
+        val isVideo = looksLikeVideoUrl(data)
+        val host = hostForUrl(data)
+        
+        val links = if (isVideo) {
             listOf(data)
         } else {
-            val host = hostForUrl(data)
             val path = pathFromUrl(data)
             fetchDirectChildren(host, path)
                 .filter { isVideoFile(it.href) }
@@ -390,6 +395,43 @@ open class Server2FTPBDProvider : MainAPI() {
         }
 
         if (links.isEmpty()) return false
+
+        // Fetch subtitles
+        val dirPath = if (isVideo) {
+            data.substringBeforeLast('/') + "/"
+        } else {
+            pathFromUrl(data)
+        }
+
+        runCatching {
+            val subtitleExtensions = setOf("srt", "vtt")
+            val children = fetchDirectChildren(host, dirPath)
+            
+            children.filter { 
+                val ext = it.href.substringAfterLast('.', "").lowercase()
+                ext in subtitleExtensions
+            }.forEach { subItem ->
+                val subUrl = absoluteUrl(host, subItem.href)
+                val subName = cleanFileName(decodeNameFromHref(subItem.href))
+                
+                if (isVideo) {
+                    val epName = data.substringAfterLast('/')
+                    val epNum = extractEpisodeNumber(epName)
+                    val subNum = extractEpisodeNumber(subName)
+                    if (epNum != null && subNum != null && epNum != subNum) {
+                        return@forEach
+                    }
+                }
+                
+                val lang = when {
+                    subName.contains("bangla", ignoreCase = true) || subName.contains("bn", ignoreCase = true) -> "Bengali"
+                    else -> "English"
+                }
+                subtitleCallback.invoke(
+                    newSubtitleFile(lang, subUrl)
+                )
+            }
+        }
 
         links.forEach { link ->
             val label = cleanFileName(decodeNameFromUrl(link))
