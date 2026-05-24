@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -35,7 +36,7 @@ open class MegaPlay : ExtractorApi() {
             val headers = mapOf(
                 "Accept" to "*/*",
                 "X-Requested-With" to "XMLHttpRequest",
-                "Referer" to mainUrl
+                "Referer" to (referer ?: mainUrl)
             )
 
             val id = app.get(url, headers = headers).document.selectFirst("#megaplay-player")?.attr("data-id")
@@ -74,7 +75,51 @@ open class MegaPlay : ExtractorApi() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("MegaPlay", "Primary method failed: ${e.message}")
+            Log.e("MegaPlay", "Primary method failed, trying WebView fallback: ${e.message}")
+
+            val jsToClickPlay = """
+                (() => {
+                    const btn = document.querySelector('.jw-icon-display.jw-button-color.jw-reset');
+                    if (btn) { btn.click(); return "clicked"; }
+                    return "button not found";
+                })();
+            """.trimIndent()
+
+            val m3u8Resolver = WebViewResolver(
+                interceptUrl = Regex("""\.m3u8"""),
+                additionalUrls = listOf(Regex("""\.m3u8""")),
+                script = jsToClickPlay,
+                scriptCallback = { result -> Log.d("MegaPlay", "JS Result: $result") },
+                useOkhttp = false,
+                timeout = 15_000L
+            )
+
+            val vttResolver = WebViewResolver(
+                interceptUrl = Regex("""\.vtt"""),
+                additionalUrls = listOf(Regex("""\.vtt""")),
+                script = jsToClickPlay,
+                scriptCallback = { result -> Log.d("MegaPlay", "Subtitle JS Result: $result") },
+                useOkhttp = false,
+                timeout = 15_000L
+            )
+
+            try {
+                val resolvedReferer = referer ?: "https://1anime.site/"
+                val vttResponse = app.get(url = url, referer = resolvedReferer, interceptor = vttResolver)
+                val subtitleUrls = listOf(vttResponse.url)
+                    .filter { it.endsWith(".vtt") && !it.contains("thumbnails", ignoreCase = true) }
+                subtitleUrls.forEachIndexed { _, subUrl ->
+                    subtitleCallback(newSubtitleFile("English", subUrl))
+                }
+
+                val fallbackM3u8 = app.get(url = url, referer = resolvedReferer, interceptor = m3u8Resolver).url
+                val isDub = url.endsWith("/dub") || url.contains("/dub")
+                val displayName = if (isDub) "$name Dub" else "$name Sub"
+                M3u8Helper.generateM3u8(displayName, fallbackM3u8, mainUrl, headers = mainheaders).forEach(callback)
+
+            } catch (ex: Exception) {
+                Log.e("MegaPlay", "WebView fallback also failed: ${ex.message}")
+            }
         }
     }
 

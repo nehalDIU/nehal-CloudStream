@@ -259,7 +259,7 @@ class Aniwatch : MainAPI() {
                                     )
                                 }
                             } else {
-                                loadExtractor(realUrl, subtitleCallback, callback)
+                                loadExtractor(realUrl, "https://1anime.site/", subtitleCallback, callback)
                             }
                         }
                     } catch (e: Exception) {
