@@ -469,8 +469,21 @@ open class Server2FTPBDProvider : MainAPI() {
         return match?.value?.toIntOrNull()
     }
 
+    private fun encodePath(path: String): String {
+        val decoded = decodeComponent(path)
+        return decoded.split('/').joinToString("/") { segment ->
+            if (segment.isEmpty()) "" else {
+                java.net.URLEncoder.encode(segment, java.nio.charset.StandardCharsets.UTF_8.name())
+                    .replace("+", "%20")
+                    .replace("%2A", "*")
+                    .replace("%7E", "~")
+            }
+        }
+    }
+
     private suspend fun fetchDirectChildren(host: String, href: String): List<H5Item> {
         val path = normalizePath(href)
+        val encodedPath = encodePath(path)
         val cacheKey = host.trimEnd('/') + "|" + path
         
         val nowMs = System.currentTimeMillis()
@@ -489,10 +502,10 @@ open class Server2FTPBDProvider : MainAPI() {
             
             val response = try {
                 client.post(
-                    "${host.trimEnd('/')}$path?",
+                    "${host.trimEnd('/')}$encodedPath?",
                     data = mapOf(
                         "action" to "get",
-                        "items[href]" to path,
+                        "items[href]" to encodedPath,
                         "items[what]" to "1"
                     )
                 )
@@ -515,9 +528,13 @@ open class Server2FTPBDProvider : MainAPI() {
 
     private fun directChildren(items: List<H5Item>, parentHref: String): List<H5Item> {
         val parent = normalizePath(parentHref)
+        val decodedParent = decodeComponent(parent)
+        
         return items.mapNotNull { item ->
-            if (!item.href.startsWith(parent) || item.href == parent) return@mapNotNull null
-            val relative = item.href.removePrefix(parent)
+            val decodedItemHref = decodeComponent(item.href)
+            if (!decodedItemHref.startsWith(decodedParent) || decodedItemHref == decodedParent) return@mapNotNull null
+            
+            val relative = decodedItemHref.removePrefix(decodedParent)
             val clean = relative.trim('/')
             if (clean.isEmpty() || clean.contains('/')) return@mapNotNull null
             item
@@ -532,20 +549,33 @@ open class Server2FTPBDProvider : MainAPI() {
     }
 
     private fun hostForUrl(url: String): String {
-        val uri = try { java.net.URI(url) } catch (e: Exception) { null }
-        val hostName = uri?.host
-        val scheme = uri?.scheme ?: "https"
-        return if (!hostName.isNullOrBlank()) {
-            "$scheme://$hostName"
-        } else {
-            categories.firstOrNull { url.startsWith(it.host) }?.host ?: mainUrl
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            val schemeEnd = url.indexOf("://")
+            if (schemeEnd != -1) {
+                val nextSlash = url.indexOf('/', schemeEnd + 3)
+                return if (nextSlash != -1) {
+                    url.substring(0, nextSlash)
+                } else {
+                    url
+                }
+            }
         }
+        return categories.firstOrNull { url.startsWith(it.host) }?.host ?: mainUrl
     }
 
     private fun pathFromUrl(url: String): String {
-        val uri = try { java.net.URI(url) } catch (e: Exception) { null }
-        val rawPath = uri?.rawPath ?: "/"
-        return normalizePath(rawPath)
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            val schemeEnd = url.indexOf("://")
+            if (schemeEnd != -1) {
+                val nextSlash = url.indexOf('/', schemeEnd + 3)
+                return if (nextSlash != -1) {
+                    normalizePath(url.substring(nextSlash))
+                } else {
+                    "/"
+                }
+            }
+        }
+        return normalizePath(url)
     }
 
     private fun absoluteUrl(host: String, href: String): String {
@@ -562,8 +592,8 @@ open class Server2FTPBDProvider : MainAPI() {
     }
 
     private fun decodeNameFromUrl(url: String): String {
-        val rawPath = try { java.net.URI(url).rawPath } catch (e: Exception) { null } ?: url
-        val name = rawPath.trimEnd('/').substringAfterLast('/')
+        val path = pathFromUrl(url)
+        val name = path.trimEnd('/').substringAfterLast('/')
         return decodeComponent(name)
     }
 
