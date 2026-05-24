@@ -164,12 +164,19 @@ open class ServerFTPBDProvider : MainAPI() {
         val sortedYears = yearFolders.sortedByDescending { it.first }.map { it.second }
         val orderedGroupFolders = specialtyFolders + sortedYears + otherFolders
 
-        // 3. Progressively traverse group folders until we have enough items
-        for (groupFolder in orderedGroupFolders) {
-            if (collectedItems.size >= targetCount) break
-            
-            val subMedia = traverseForMediaFolders(category.host, groupFolder.href, 2, category.maxDepth)
-            val sortedSub = subMedia.sortedByDescending { it.time ?: 0L }
+        // 3. Progressively traverse group folders in parallel until we have enough items
+        // We limit the number of folders scanned to prevent massive concurrency timeouts
+        val maxFoldersToScan = 6 + (page - 1) * 3
+        val foldersToScan = orderedGroupFolders.take(maxFoldersToScan)
+
+        val traversedResults = foldersToScan.map { groupFolder ->
+            async {
+                val subMedia = traverseForMediaFolders(category.host, groupFolder.href, 2, category.maxDepth)
+                subMedia.sortedByDescending { it.time ?: 0L }
+            }
+        }.awaitAll()
+
+        for (sortedSub in traversedResults) {
             collectedItems.addAll(sortedSub)
         }
 
@@ -234,23 +241,23 @@ open class ServerFTPBDProvider : MainAPI() {
         
         val folderChildren = children.filter { it.isFolder }
         
-        // If a query year is targeted, filter year folders
-        val filteredFolders = if (queryYear != null) {
-            folderChildren.filter { item ->
-                val folderName = decodeNameFromHref(item.href)
-                if (isGroupFolder(folderName)) {
-                    val folderYear = extractYear(folderName)
-                    if (folderYear != null) {
+        // Filter year folders based on queryYear or threshold (2023) to optimize speed
+        val filteredFolders = folderChildren.filter { item ->
+            val folderName = decodeNameFromHref(item.href)
+            if (isGroupFolder(folderName)) {
+                val folderYear = extractYear(folderName)
+                if (folderYear != null) {
+                    if (queryYear != null) {
                         folderYear == queryYear
                     } else {
-                        true
+                        folderYear >= 2023
                     }
                 } else {
                     true
                 }
+            } else {
+                true
             }
-        } else {
-            folderChildren
         }
 
         val deferreds = filteredFolders.map { item ->
