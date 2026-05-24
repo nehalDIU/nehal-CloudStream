@@ -22,7 +22,9 @@ import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.toNewSearchResponseList
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 
 class Aniwatch : MainAPI() {
@@ -185,6 +187,7 @@ class Aniwatch : MainAPI() {
             this.plot = plot
             this.tags = genres
             addEpisodes(DubStatus.Subbed, episodes)
+            addEpisodes(DubStatus.Dubbed, episodes)
         }
     }
 
@@ -199,13 +202,35 @@ class Aniwatch : MainAPI() {
 
         servers.forEach { server ->
             val hash = server.attr("data-hash")
+            val type = server.attr("data-type")
+            val serverName = server.attr("data-server-name")
+            val isDub = type.equals("dub", ignoreCase = true)
+
             if (hash.isNotEmpty()) {
                 try {
                     val decodedUrl = base64DecodeArray(hash).toString(Charsets.UTF_8)
                     val realUrl = decodedUrl.replace("1anime.site/megaplay", "megaplay.buzz")
 
                     if (realUrl.startsWith("http")) {
-                        loadExtractor(realUrl, subtitleCallback, callback)
+                        if (realUrl.contains("my.1anime.site")) {
+                            val fileName = realUrl.substringAfter("file=", "").substringBefore("&")
+                            if (fileName.isNotEmpty()) {
+                                val directUrl = "https://my.1anime.site/videos/$fileName"
+                                val displayName = if (isDub) "${if (serverName.isNotEmpty()) serverName else "HD-1"} Dub" else "${if (serverName.isNotEmpty()) serverName else "HD-1"} Sub"
+                                callback(
+                                    newExtractorLink(
+                                        source = if (serverName.isNotEmpty()) serverName else "HD-1",
+                                        name = displayName,
+                                        url = directUrl
+                                    ) {
+                                        this.referer = "https://my.1anime.site/"
+                                        this.quality = Qualities.P1080.value
+                                    }
+                                )
+                            }
+                        } else {
+                            loadExtractor(realUrl, subtitleCallback, callback)
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("Aniwatch", "Failed decoding or loading extractor: ${e.message}")
