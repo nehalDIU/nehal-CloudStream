@@ -157,37 +157,63 @@ class Aniwatch : MainAPI() {
                     .map { it.text() }.distinct()
             }
 
-        val episodes = mutableListOf<Episode>()
+        val hasSub = detailsDoc.selectFirst(".tick-item.tick-sub, .tick-sub") != null || watchDoc.selectFirst(".tick-item.tick-sub, .tick-sub") != null
+        val hasDub = detailsDoc.selectFirst(".tick-item.tick-dub, .tick-dub") != null || watchDoc.selectFirst(".tick-item.tick-dub, .tick-dub") != null
+        val defaultSub = !hasSub && !hasDub
+
+        val subEpisodes = mutableListOf<Episode>()
+        val dubEpisodes = mutableListOf<Episode>()
+
         watchDoc.select("a.ep-item").forEach { ep ->
             val epNum = ep.attr("data-number").toIntOrNull()
             val epName = ep.selectFirst(".ep-name")?.text() ?: ep.attr("title")
             val epUrl = ep.attr("href")
 
             if (epUrl.isNotEmpty()) {
-                episodes.add(
-                    newEpisode(epUrl) {
-                        this.name = epName
-                        this.episode = epNum
-                    }
-                )
+                if (hasSub || defaultSub) {
+                    subEpisodes.add(
+                        newEpisode("$epUrl#sub") {
+                            this.name = epName
+                            this.episode = epNum
+                        }
+                    )
+                }
+                if (hasDub) {
+                    dubEpisodes.add(
+                        newEpisode("$epUrl#dub") {
+                            this.name = epName
+                            this.episode = epNum
+                        }
+                    )
+                }
             }
         }
 
-        if (episodes.isEmpty()) {
-            episodes.add(
-                newEpisode(url) {
-                    this.name = title
-                    this.episode = 1
-                }
-            )
+        if (subEpisodes.isEmpty() && dubEpisodes.isEmpty()) {
+            if (hasSub || defaultSub) {
+                subEpisodes.add(
+                    newEpisode("$url#sub") {
+                        this.name = title
+                        this.episode = 1
+                    }
+                )
+            }
+            if (hasDub) {
+                dubEpisodes.add(
+                    newEpisode("$url#dub") {
+                        this.name = title
+                        this.episode = 1
+                    }
+                )
+            }
         }
 
         return newAnimeLoadResponse(title, url, TvType.Anime) {
             this.posterUrl = poster
             this.plot = plot
             this.tags = genres
-            addEpisodes(DubStatus.Subbed, episodes)
-            addEpisodes(DubStatus.Dubbed, episodes)
+            if (subEpisodes.isNotEmpty()) addEpisodes(DubStatus.Subbed, subEpisodes)
+            if (dubEpisodes.isNotEmpty()) addEpisodes(DubStatus.Dubbed, dubEpisodes)
         }
     }
 
@@ -197,7 +223,10 @@ class Aniwatch : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
+        val isDubSelection = data.endsWith("#dub")
+        val cleanUrl = data.substringBefore("#")
+
+        val doc = app.get(cleanUrl).document
         val servers = doc.select(".server-item")
 
         servers.forEach { server ->
@@ -206,34 +235,36 @@ class Aniwatch : MainAPI() {
             val serverName = server.attr("data-server-name")
             val isDub = type.equals("dub", ignoreCase = true)
 
-            if (hash.isNotEmpty()) {
-                try {
-                    val decodedUrl = base64DecodeArray(hash).toString(Charsets.UTF_8)
-                    val realUrl = decodedUrl.replace("1anime.site/megaplay", "megaplay.buzz")
+            if (isDubSelection == isDub) {
+                if (hash.isNotEmpty()) {
+                    try {
+                        val decodedUrl = base64DecodeArray(hash).toString(Charsets.UTF_8)
+                        val realUrl = decodedUrl.replace("1anime.site/megaplay", "megaplay.buzz")
 
-                    if (realUrl.startsWith("http")) {
-                        if (realUrl.contains("my.1anime.site")) {
-                            val fileName = realUrl.substringAfter("file=", "").substringBefore("&")
-                            if (fileName.isNotEmpty()) {
-                                val directUrl = "https://my.1anime.site/videos/$fileName"
-                                val displayName = if (isDub) "${if (serverName.isNotEmpty()) serverName else "HD-1"} Dub" else "${if (serverName.isNotEmpty()) serverName else "HD-1"} Sub"
-                                callback(
-                                    newExtractorLink(
-                                        source = if (serverName.isNotEmpty()) serverName else "HD-1",
-                                        name = displayName,
-                                        url = directUrl
-                                    ) {
-                                        this.referer = "https://my.1anime.site/"
-                                        this.quality = Qualities.P1080.value
-                                    }
-                                )
+                        if (realUrl.startsWith("http")) {
+                            if (realUrl.contains("my.1anime.site")) {
+                                val fileName = realUrl.substringAfter("file=", "").substringBefore("&")
+                                if (fileName.isNotEmpty()) {
+                                    val directUrl = "https://my.1anime.site/videos/$fileName"
+                                    val displayName = if (isDub) "${if (serverName.isNotEmpty()) serverName else "HD-1"} Dub" else "${if (serverName.isNotEmpty()) serverName else "HD-1"} Sub"
+                                    callback(
+                                        newExtractorLink(
+                                            source = if (serverName.isNotEmpty()) serverName else "HD-1",
+                                            name = displayName,
+                                            url = directUrl
+                                        ) {
+                                            this.referer = "https://my.1anime.site/"
+                                            this.quality = Qualities.P1080.value
+                                        }
+                                    )
+                                }
+                            } else {
+                                loadExtractor(realUrl, subtitleCallback, callback)
                             }
-                        } else {
-                            loadExtractor(realUrl, subtitleCallback, callback)
                         }
+                    } catch (e: Exception) {
+                        Log.e("Aniwatch", "Failed decoding or loading extractor: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e("Aniwatch", "Failed decoding or loading extractor: ${e.message}")
                 }
             }
         }
