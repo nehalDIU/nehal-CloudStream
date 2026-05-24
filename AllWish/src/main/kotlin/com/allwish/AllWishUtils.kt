@@ -8,12 +8,7 @@ import com.lagradost.cloudstream3.base64Encode
 import java.net.URLEncoder
 
 fun base64UrlSafe(bytes: ByteArray): String {
-    return base64Encode(bytes)
-        .replace("\r", "")
-        .replace("\n", "")
-        .replace(" ", "")
-        .replace("+", "-")
-        .replace("/", "_")
+    return base64Encode(bytes).replace("+", "-").replace("/", "_")
 }
 
 fun generateEpisodeVrf(episodeId: String): String {
