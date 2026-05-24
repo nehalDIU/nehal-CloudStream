@@ -2,7 +2,7 @@
 version = 1
 
 cloudstream {
-    description = "ServerFTPBD provider"
+    description = "Server2FTPBD provider"
     authors = listOf("Nehal")
 
     /**
@@ -21,5 +21,5 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "https://server3.ftpbd.net/favicon.ico"
+    iconUrl = "https://www.ftpbd.net/wp-content/uploads/2023/02/earch.svg"
 }

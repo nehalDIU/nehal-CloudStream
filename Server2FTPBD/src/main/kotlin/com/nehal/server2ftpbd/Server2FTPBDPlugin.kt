@@ -1,12 +1,12 @@
-package com.nehal.serverftpbd
+package com.nehal.server2ftpbd
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class ServerFTPBDPlugin : Plugin() {
+class Server2FTPBDPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(ServerFTPBDProvider())
+        registerMainAPI(Server2FTPBDProvider())
     }
 }
