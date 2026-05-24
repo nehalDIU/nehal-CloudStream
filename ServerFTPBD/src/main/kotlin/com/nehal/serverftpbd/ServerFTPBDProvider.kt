@@ -33,11 +33,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.LinkedHashMap
+import com.lagradost.nicehttp.Requests
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
 
 open class ServerFTPBDProvider : MainAPI() {
     override var name = "ServerFTPBD"
     override var mainUrl = "https://server3.ftpbd.net/"
     override var lang = "bn"
+
+    private val customApp by lazy {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(45, TimeUnit.SECONDS)
+            .build()
+        Requests(client)
+    }
 
     override val supportedTypes = setOf(
         TvType.Movie,
@@ -412,18 +424,42 @@ open class ServerFTPBDProvider : MainAPI() {
                 }
             }
             
-            val response = app.post(
-                "$host$path?",
-                data = mapOf(
-                    "action" to "get",
-                    "items[href]" to path,
-                    "items[what]" to "1"
+            val response = try {
+                customApp.post(
+                    "${host.trimEnd('/')}$path?",
+                    data = mapOf(
+                        "action" to "get",
+                        "items[href]" to path,
+                        "items[what]" to "1"
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                if (host.startsWith("https://")) {
+                    val fallbackHost = host.replace("https://", "http://")
+                    try {
+                        customApp.post(
+                            "${fallbackHost.trimEnd('/')}$path?",
+                            data = mapOf(
+                                "action" to "get",
+                                "items[href]" to path,
+                                "items[what]" to "1"
+                            )
+                        )
+                    } catch (e2: Exception) {
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
 
-            val items = runCatching {
-                mapper.readValue<H5ItemsResponse>(response.text).items
-            }.getOrElse { emptyList() }
+            val items = if (response != null) {
+                runCatching {
+                    mapper.readValue<H5ItemsResponse>(response.text).items
+                }.getOrElse { emptyList() }
+            } else {
+                emptyList()
+            }
             val direct = directChildren(items, path)
 
             childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
