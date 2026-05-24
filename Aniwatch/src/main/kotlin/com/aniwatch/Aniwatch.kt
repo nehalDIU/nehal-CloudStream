@@ -26,9 +26,6 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 
 class Aniwatch : MainAPI() {
     override var mainUrl = Aniwatch.mainUrl
@@ -105,35 +102,11 @@ class Aniwatch : MainAPI() {
         return newHomePageResponse(request.name, searchRes, true)
     }
 
-    private fun cleanTitle(title: String): String {
-        return title.lowercase()
-            .replace(Regex("""(?:season|ss)\s*\d+"""), "")
-            .replace(Regex("""\d+(?:st|nd|rd|th)\s*season"""), "")
-            .replace(Regex("""\s*\(dub\)"""), "")
-            .replace(Regex("""\s*\(sub\)"""), "")
-            .replace(Regex("""[^a-z0-9\s]"""), "")
-            .replace(Regex("""\s+"""), " ")
-            .trim()
-    }
+    override suspend fun load(url: String): LoadResponse {
+        var doc = app.get(url).document
 
-    private fun parseSeason(title: String): Int {
-        val lowercaseTitle = title.lowercase()
-        val regexes = listOf(
-            Regex("""(?:season|ss)\s*(\d+)"""),
-            Regex("""(\d+)(?:st|nd|rd|th)\s*season""")
-        )
-        for (regex in regexes) {
-            val match = regex.find(lowercaseTitle)
-            if (match != null) {
-                val num = match.groupValues[1].toIntOrNull()
-                if (num != null) return num
-            }
-        }
-        return 1
-    }
-
-    private suspend fun getWatchDoc(url: String, initialDoc: Document? = null): Document {
-        val doc = initialDoc ?: app.get(url).document
+        // Check if we are on a watch page by looking for the "View detail" button.
+        // If so, redirect to the detail page first to get the main series page.
         val detailUrl = doc.selectFirst("a:contains(View detail), a.btn-light[href*=/anime/]")?.attr("href")
             ?: doc.selectFirst(".block a[href*=/anime/]")?.attr("href")
             ?: doc.selectFirst("h2.film-name a[href*=/anime/]")?.attr("href")
@@ -143,6 +116,7 @@ class Aniwatch : MainAPI() {
             detailsDoc = app.get(detailUrl).document
         }
 
+        // Now find the "Watch now" or "Play" button on the details page to get the watch page.
         var watchDoc = detailsDoc
         if (detailsDoc.selectFirst("a.ep-item") == null) {
             var watchUrl = detailsDoc.selectFirst("a.btn-play, a.btn-radius.btn-primary.btn-play")?.attr("href")
@@ -155,42 +129,6 @@ class Aniwatch : MainAPI() {
             if (!watchUrl.isNullOrEmpty() && watchUrl.startsWith("http")) {
                 watchDoc = app.get(watchUrl).document
             }
-        }
-        return watchDoc
-    }
-
-    private fun parseEpisodesFromDoc(watchDoc: Document, seasonNum: Int): List<Episode> {
-        val episodes = mutableListOf<Episode>()
-        watchDoc.select("a.ep-item").forEach { ep ->
-            val epNum = ep.attr("data-number").toIntOrNull()
-            val epName = ep.selectFirst(".ep-name")?.text() ?: ep.attr("title")
-            val epUrl = ep.attr("href")
-
-            if (epUrl.isNotEmpty()) {
-                episodes.add(
-                    newEpisode(epUrl) {
-                        this.name = epName
-                        this.episode = epNum
-                        this.season = seasonNum
-                    }
-                )
-            }
-        }
-        return episodes
-    }
-
-    override suspend fun load(url: String): LoadResponse {
-        val initialDoc = app.get(url).document
-        val watchDoc = getWatchDoc(url, initialDoc)
-
-        val detailUrl = initialDoc.selectFirst("a:contains(View detail), a.btn-light[href*=/anime/]")?.attr("href")
-            ?: initialDoc.selectFirst(".block a[href*=/anime/]")?.attr("href")
-            ?: initialDoc.selectFirst("h2.film-name a[href*=/anime/]")?.attr("href")
-
-        val detailsDoc = if (!detailUrl.isNullOrEmpty() && detailUrl.contains("/anime/")) {
-            app.get(detailUrl).document
-        } else {
-            initialDoc
         }
 
         val title = detailsDoc.selectFirst("h2.film-name")?.text()
@@ -211,6 +149,7 @@ class Aniwatch : MainAPI() {
             ?: watchDoc.selectFirst(".film-description .text")?.text()
             ?: watchDoc.selectFirst("meta[property=og:description]")?.attr("content")
 
+        // Parse genres from detail/info containers
         val genres = detailsDoc.select(".item-list a[href*=/genre/], .item a[href*=/genre/]")
             .map { it.text() }.distinct()
             .ifEmpty {
@@ -218,82 +157,37 @@ class Aniwatch : MainAPI() {
                     .map { it.text() }.distinct()
             }
 
-        val targetClean = cleanTitle(title)
-        val currentSeason = parseSeason(title)
-        val currentEpisodes = parseEpisodesFromDoc(watchDoc, currentSeason)
+        val episodes = mutableListOf<Episode>()
+        watchDoc.select("a.ep-item").forEach { ep ->
+            val epNum = ep.attr("data-number").toIntOrNull()
+            val epName = ep.selectFirst(".ep-name")?.text() ?: ep.attr("title")
+            val epUrl = ep.attr("href")
 
-        val allEpisodes = mutableListOf<Episode>()
-
-        try {
-            val searchUrl = "$mainUrl/?s=$targetClean"
-            val searchDoc = app.get(searchUrl).document
-            val matchedSeasons = mutableListOf<Pair<Int, String>>()
-
-            searchDoc.select(".flw-item, .item, .swiper-slide").forEach { item ->
-                val name = item.selectFirst(".film-name a, a.dynamic-name")?.text()
-                    ?: item.selectFirst("a.film-poster-ahref")?.attr("title")
-                    ?: item.selectFirst("img")?.attr("alt")
-                    ?: return@forEach
-
-                val sUrl = item.selectFirst(".film-poster a, a.film-poster, a.film-poster-ahref")?.attr("href")
-                    ?: item.selectFirst(".film-name a")?.attr("href")
-                    ?: return@forEach
-
-                if (cleanTitle(name) == targetClean) {
-                    val seasonNum = parseSeason(name)
-                    matchedSeasons.add(Pair(seasonNum, sUrl))
-                }
-            }
-
-            if (matchedSeasons.isNotEmpty()) {
-                coroutineScope {
-                    val deferreds = matchedSeasons.distinctBy { it.first }.map { (seasonNum, sUrl) ->
-                        async {
-                            try {
-                                if (seasonNum == currentSeason) {
-                                    currentEpisodes
-                                } else {
-                                    val sWatchDoc = getWatchDoc(sUrl)
-                                    parseEpisodesFromDoc(sWatchDoc, seasonNum)
-                                }
-                            } catch (e: Exception) {
-                                Log.e("Aniwatch", "Failed to fetch episodes for season $seasonNum: ${e.message}")
-                                emptyList()
-                            }
-                        }
+            if (epUrl.isNotEmpty()) {
+                episodes.add(
+                    newEpisode(epUrl) {
+                        this.name = epName
+                        this.episode = epNum
                     }
-                    deferreds.awaitAll().forEach { allEpisodes.addAll(it) }
-                }
-            } else {
-                allEpisodes.addAll(currentEpisodes)
+                )
             }
-        } catch (e: Exception) {
-            Log.e("Aniwatch", "Failed to search/load other seasons: ${e.message}")
-            allEpisodes.addAll(currentEpisodes)
         }
 
-        if (allEpisodes.isEmpty()) {
-            allEpisodes.addAll(currentEpisodes)
-        }
-
-        if (allEpisodes.isEmpty()) {
-            allEpisodes.add(
+        if (episodes.isEmpty()) {
+            episodes.add(
                 newEpisode(url) {
                     this.name = title
                     this.episode = 1
-                    this.season = currentSeason
                 }
             )
         }
-
-        allEpisodes.sortWith(compareBy({ it.season }, { it.episode }))
 
         return newAnimeLoadResponse(title, url, TvType.Anime) {
             this.posterUrl = poster
             this.plot = plot
             this.tags = genres
-            addEpisodes(DubStatus.Subbed, allEpisodes)
-            addEpisodes(DubStatus.Dubbed, allEpisodes)
+            addEpisodes(DubStatus.Subbed, episodes)
+            addEpisodes(DubStatus.Dubbed, episodes)
         }
     }
 
