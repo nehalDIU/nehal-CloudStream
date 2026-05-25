@@ -1,6 +1,7 @@
 package com.nehal.jellyfinbd
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.*
@@ -16,63 +17,63 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AuthenticationResponse(
-    val AccessToken: String = "",
-    val User: UserInfo = UserInfo()
+    @JsonProperty("AccessToken") val AccessToken: String = "",
+    @JsonProperty("User") val User: UserInfo = UserInfo()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class UserInfo(
-    val Id: String = ""
+    @JsonProperty("Id") val Id: String = ""
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class JellyfinItem(
-    val Name: String = "",
-    val Id: String = "",
-    val Type: String = "",
-    val ProductionYear: Int? = null,
-    val Overview: String? = null,
-    val RunTimeTicks: Long? = null,
-    val Genres: List<String>? = null,
-    val IndexNumber: Int? = null,
-    val ParentIndexNumber: Int? = null,
-    val ImageTags: ImageTagsInfo? = null,
-    val MediaSources: List<MediaSourceInfo>? = null
+    @JsonProperty("Name") val Name: String = "",
+    @JsonProperty("Id") val Id: String = "",
+    @JsonProperty("Type") val Type: String = "",
+    @JsonProperty("ProductionYear") val ProductionYear: Int? = null,
+    @JsonProperty("Overview") val Overview: String? = null,
+    @JsonProperty("RunTimeTicks") val RunTimeTicks: Long? = null,
+    @JsonProperty("Genres") val Genres: List<String>? = null,
+    @JsonProperty("IndexNumber") val IndexNumber: Int? = null,
+    @JsonProperty("ParentIndexNumber") val ParentIndexNumber: Int? = null,
+    @JsonProperty("ImageTags") val ImageTags: ImageTagsInfo? = null,
+    @JsonProperty("MediaSources") val MediaSources: List<MediaSourceInfo>? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ImageTagsInfo(
-    val Primary: String? = null
+    @JsonProperty("Primary") val Primary: String? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class MediaSourceInfo(
-    val Id: String = "",
-    val Name: String? = null,
-    val Container: String? = null,
-    val MediaStreams: List<MediaStreamInfo>? = null
+    @JsonProperty("Id") val Id: String = "",
+    @JsonProperty("Name") val Name: String? = null,
+    @JsonProperty("Container") val Container: String? = null,
+    @JsonProperty("MediaStreams") val MediaStreams: List<MediaStreamInfo>? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class MediaStreamInfo(
-    val Index: Int = 0,
-    val Type: String = "",
-    val Codec: String? = null,
-    val Language: String? = null,
-    val DisplayTitle: String? = null,
-    val Title: String? = null,
-    val IsExternal: Boolean? = null
+    @JsonProperty("Index") val Index: Int = 0,
+    @JsonProperty("Type") val Type: String = "",
+    @JsonProperty("Codec") val Codec: String? = null,
+    @JsonProperty("Language") val Language: String? = null,
+    @JsonProperty("DisplayTitle") val DisplayTitle: String? = null,
+    @JsonProperty("Title") val Title: String? = null,
+    @JsonProperty("IsExternal") val IsExternal: Boolean? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ItemsResponse(
-    val Items: List<JellyfinItem> = emptyList(),
-    val TotalRecordCount: Int = 0
+    @JsonProperty("Items") val Items: List<JellyfinItem> = emptyList(),
+    @JsonProperty("TotalRecordCount") val TotalRecordCount: Int = 0
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackInfoResponse(
-    val MediaSources: List<MediaSourceInfo> = emptyList()
+    @JsonProperty("MediaSources") val MediaSources: List<MediaSourceInfo> = emptyList()
 )
 
 class JellyfinBDProvider : MainAPI() {
