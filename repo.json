@@ -2,6 +2,7 @@
     "name": "Nehal's Server",
     "description": "Nehal's BDIX repository",
     "manifestVersion": 1,
+    "iconUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAAM1BMVEVHcEz3WVv7Wlf7WFj8V1j9WFn/V1b+V1n5WVr8TEz3e3330M/3rKv3b23////2h4X97OzbcCwNAAAACXRSTlMANVZ0tf//2h3OlKHWAAAA8ElEQVR4AW3SUbKFIAwDUEUTKSCw/9W+FjtXhmd+zxSYkm3KHo4j7NtHwgkCIHGuvl/gL7jibAdJKIsMBI/X/ERJudxDiZ8eCqQgV01yDX4faFaMDCHGiAMvo9brkyapN2VcZgHkONEn5a41g8D+vEbMZqyFxKkIUvqLbWAXEPocKtZPjFugYyl9RpJBlwMMTNK+kI7pH4YFy4z7gjVnR9sR+KLH0ZfQV8yK59g7pK2YSMaxeFBSnzHfYtuzxFGBdtOxNyUf9M8GHIsIFIOCKy3I9lljzEvkChAQeMN8zhPnavKMa3PPh+GlXhODZh76A293FemI5Jc3AAAAAElFTkSuQmCC",
     "pluginLists": [
       "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/plugins.json"
     ]
