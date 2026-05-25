@@ -1,32 +1,9 @@
 // use an integer for version numbers
-version = 13
+version = 15
 
 android {
-    namespace = "com.cncverse"
     buildFeatures {
         buildConfig = true
-    }
-    defaultConfig {
-        val castleSuffix = (project.findProperty("CASTLE_SUFFIX") as String?)
-            ?: System.getenv("CASTLE_SUFFIX")
-            ?: "default_suffix"
-        val smartlinkUrl = (project.findProperty("SMARTLINK_URL") as String?)
-            ?: System.getenv("SMARTLINK_URL")
-            ?: ""
-        val moneTag = (project.findProperty("MONE_TAG") as String?)
-            ?: System.getenv("MONE_TAG")
-            ?: ""
-
-        val escapedSmartlinkUrl = smartlinkUrl
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        val escapedMoneTag = moneTag
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-
-        buildConfigField("String", "CASTLE_SUFFIX", "\"${castleSuffix}\"")
-        buildConfigField("String", "SMARTLINK_URL", "\"${escapedSmartlinkUrl}\"")
-        buildConfigField("String", "MONE_TAG", "\"${escapedMoneTag}\"")
     }
 }
 
