@@ -2,8 +2,15 @@
 version = 13
 
 android {
+    namespace = "com.nehal.castletvprovider"
     buildFeatures {
         buildConfig = true
+    }
+    defaultConfig {
+        val castleSuffix = (project.findProperty("CASTLE_SUFFIX") as String?)
+            ?: System.getenv("CASTLE_SUFFIX")
+            ?: "default_suffix"
+        buildConfigField("String", "CASTLE_SUFFIX", "\"${castleSuffix}\"")
     }
 }
 
@@ -12,7 +19,7 @@ cloudstream {
     // All of these properties are optional, you can safely remove them
 
     description = "Castle TV Movies and Series Provider"
-    authors = listOf("CNCVerse")
+    authors = listOf("Nehal")
 
     /**
      * Status int as the following:
@@ -27,6 +34,6 @@ cloudstream {
         "TvSeries"
     )
 
-    iconUrl = "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/CastleTvProvider/icon.png"
+    iconUrl = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/CastleTvProvider/icon.png"
 }
 
