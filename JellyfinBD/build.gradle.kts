@@ -19,4 +19,5 @@ cloudstream {
         "TvSeries"
     )
     language = "bn"
+    iconUrl = "https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/png/jellyfin-icon-transparent.png"
 }
