@@ -14,6 +14,67 @@ import kotlinx.coroutines.sync.withLock
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class AuthenticationResponse(
+    val AccessToken: String = "",
+    val User: UserInfo = UserInfo()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class UserInfo(
+    val Id: String = ""
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class JellyfinItem(
+    val Name: String = "",
+    val Id: String = "",
+    val Type: String = "",
+    val ProductionYear: Int? = null,
+    val Overview: String? = null,
+    val RunTimeTicks: Long? = null,
+    val Genres: List<String>? = null,
+    val IndexNumber: Int? = null,
+    val ParentIndexNumber: Int? = null,
+    val ImageTags: ImageTagsInfo? = null,
+    val MediaSources: List<MediaSourceInfo>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ImageTagsInfo(
+    val Primary: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MediaSourceInfo(
+    val Id: String = "",
+    val Name: String? = null,
+    val Container: String? = null,
+    val MediaStreams: List<MediaStreamInfo>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MediaStreamInfo(
+    val Index: Int = 0,
+    val Type: String = "",
+    val Codec: String? = null,
+    val Language: String? = null,
+    val DisplayTitle: String? = null,
+    val Title: String? = null,
+    val IsExternal: Boolean? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ItemsResponse(
+    val Items: List<JellyfinItem> = emptyList(),
+    val TotalRecordCount: Int = 0
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PlaybackInfoResponse(
+    val MediaSources: List<MediaSourceInfo> = emptyList()
+)
+
 class JellyfinBDProvider : MainAPI() {
     override var name = "JellyfinBD"
     override var mainUrl = "http://103.29.127.114:8096"
@@ -49,67 +110,6 @@ class JellyfinBDProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         *categories.map { it.key to it.name }.toTypedArray()
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class AuthenticationResponse(
-        val AccessToken: String,
-        val User: UserInfo
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class UserInfo(
-        val Id: String
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class JellyfinItem(
-        val Name: String,
-        val Id: String,
-        val Type: String,
-        val ProductionYear: Int? = null,
-        val Overview: String? = null,
-        val RunTimeTicks: Long? = null,
-        val Genres: List<String>? = null,
-        val IndexNumber: Int? = null,
-        val ParentIndexNumber: Int? = null,
-        val ImageTags: ImageTagsInfo? = null,
-        val MediaSources: List<MediaSourceInfo>? = null
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class ImageTagsInfo(
-        val Primary: String? = null
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class MediaSourceInfo(
-        val Id: String,
-        val Name: String? = null,
-        val Container: String? = null,
-        val MediaStreams: List<MediaStreamInfo>? = null
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class MediaStreamInfo(
-        val Index: Int,
-        val Type: String,
-        val Codec: String? = null,
-        val Language: String? = null,
-        val DisplayTitle: String? = null,
-        val Title: String? = null,
-        val IsExternal: Boolean? = null
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class ItemsResponse(
-        val Items: List<JellyfinItem> = emptyList(),
-        val TotalRecordCount: Int = 0
-    )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private data class PlaybackInfoResponse(
-        val MediaSources: List<MediaSourceInfo> = emptyList()
     )
 
     private suspend fun getSession(): Pair<String, String> {
