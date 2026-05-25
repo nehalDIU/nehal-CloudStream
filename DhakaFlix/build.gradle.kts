@@ -20,5 +20,5 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "http://172.16.50.12/favicon.ico"
+    iconUrl = "https://salamonline.com.bd/wp-content/uploads/2026/01/salamonline-Custom.png"
 }
