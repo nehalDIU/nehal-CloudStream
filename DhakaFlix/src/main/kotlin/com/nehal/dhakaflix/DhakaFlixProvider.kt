@@ -122,7 +122,8 @@ open class DhakaFlixProvider : MainAPI() {
     private val posterFileNames = listOf("a_AL_.jpg", "a11.jpg")
 
     // Concurrent request de-duplication variables
-    private val fetchMutex = Mutex()
+    private val cacheMutex = Mutex()
+    private val keyLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
 
     private data class CacheEntry(
         val timestampMs: Long,
@@ -578,20 +579,25 @@ open class DhakaFlixProvider : MainAPI() {
         val path = normalizePath(href)
         val cacheKey = host.trimEnd('/') + "|" + path
         
-        // 1. Fast path (no lock): Check memory cache first
+        // 1. Fast path: Check memory cache under cache lock
         val nowMs = System.currentTimeMillis()
-        childrenCache[cacheKey]?.let { entry ->
-            if (nowMs - entry.timestampMs <= childrenCacheTtlMs) {
-                return entry.items
+        cacheMutex.withLock {
+            childrenCache[cacheKey]?.let { entry ->
+                if (nowMs - entry.timestampMs <= childrenCacheTtlMs) {
+                    return entry.items
+                }
             }
         }
         
-        // 2. Slow path (lock): Fetch and cache
-        return fetchMutex.withLock {
-            // Re-check cache inside lock in case another coroutine just fetched it
-            childrenCache[cacheKey]?.let { entry ->
-                if (System.currentTimeMillis() - entry.timestampMs <= childrenCacheTtlMs) {
-                    return@withLock entry.items
+        // 2. Slow path (lock per key): Fetch and cache
+        val keyLock = keyLocks.computeIfAbsent(cacheKey) { Mutex() }
+        return keyLock.withLock {
+            // Re-check cache inside key lock
+            cacheMutex.withLock {
+                childrenCache[cacheKey]?.let { entry ->
+                    if (System.currentTimeMillis() - entry.timestampMs <= childrenCacheTtlMs) {
+                        return@withLock entry.items
+                    }
                 }
             }
             
@@ -609,7 +615,25 @@ open class DhakaFlixProvider : MainAPI() {
             }.getOrElse { emptyList() }
             val direct = directChildren(items, path)
 
-            childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
+            // Update cache under cache lock
+            cacheMutex.withLock {
+                childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
+                
+                // Keep LinkedHashMap size bounded
+                if (childrenCache.size > childrenCacheMaxSize) {
+                    val iterator = childrenCache.keys.iterator()
+                    if (iterator.hasNext()) {
+                        iterator.next()
+                        iterator.remove()
+                    }
+                }
+            }
+            
+            // Periodically clean up keyLocks to prevent memory leak
+            if (keyLocks.size > 500) {
+                keyLocks.clear()
+            }
+            
             direct
         }
     }
