@@ -1,0 +1,759 @@
+"episodeId": "
+"languageId": "
+"mode": "1",
+"movieId": "
+"resolution": "
+$actors
+$allEpisodes
+$audioTracksList
+$backgroundPosterUrl
+$completion
+$continuation
+$coverImg
+$details
+$episode
+$i$f$forEach
+$i$f$forEachIndexed
+$i$f$jacksonTypeRef
+$i$f$map
+$i$f$mapNotNull
+$i$f$mapNotNullTo
+$i$f$mapTo
+$i$f$readValue
+$index
+$item
+$otherTrack
+$plot
+$posterUrl
+$rating
+$recommendations
+$resolution
+$result
+$seasonNumber
+$tags
+$this
+$this$forEach$iv
+$this$forEach$iv$iv$iv
+$this$forEachIndexed$iv
+$this$map$iv
+$this$mapNotNull$iv
+$this$mapNotNullTo$iv$iv
+$this$mapTo$iv$iv
+$this$mapper_u24lambda_u240
+$this$newAudioFile
+$this$newEpisode
+$this$newExtractorLink
+$this$newMovieLoadResponse
+$this$newMovieSearchResponse
+$this$newTvSeriesLoadResponse
+$this$readValue$iv
+$year
+&packageName=com.external.castle
+&size=17
+(Ljava/lang/String;)V
+*S Kotlin
+*S KotlinDebug
++ 1 CastleTvProvider.kt
++ 1 Extensions.kt
++ 2 Extensions.kt
++ 3 _Collections.kt
++ 4 fake.kt
+, abbreviate=
+, actors=
+, audioTags=
+, avatar=
+, briefIntroduction=
+, commentTotal=
+, contents=
+, countdownHour=
+, countdownHourNew=
+, countries=
+, countryIds=
+, coverHorizontalImage=
+, coverImage=
+, coverImageHeight=
+, coverImageWidth=
+, coverVerticalImage=
+, data=
+, description=
+, directors=
+, downloadTag=
+, duration=
+, episodes=
+, excludeChannelIds=
+, existIndividualVideo=
+, expireTime=
+, heat=
+, honorTag=
+, inBlacklist=
+, index=
+, indiaResolutionLabel=
+, isAI=
+, isAuthorized=
+, isCurrent=
+, isDefault=
+, isPreview=
+, languageName=
+, languages=
+, lastEpisodeCount=
+, memberLevel=
+, mobileTrafficPlayResolution=
+, movieType=
+, movieTypeName=
+, msg=
+, name=
+, number=
+, onlineTime=
+, order=
+, originalTitle=
+, pages=
+, permissionDenied=
+, playResolution=
+, premiumProPermission=
+, previewTime=
+, publishTime=
+, redirectId=
+, redirectType=
+, resolution=
+, resolutionDescription=
+, rows=
+, score=
+, seasonDescription=
+, seasonNumber=
+, seasons=
+, serverTime=
+, size=
+, standardExpireTime=
+, standardNewExpireTime=
+, subtitles=
+, tagIds=
+, tags=
+, titbits=
+, title=
+, total=
+, totalNumber=
+, tracks=
+, type=
+, unlockPlayback=
+, updateNumber=
+, url=
+, videoCategory=
+, videos=
+, watchCount=
+, woolUser=
+--- All Strings (5 to 35 chars) ---
+0%0$X
+0/0$2
+0C0A2
+0C0AH
+1#1,129:1
+1#1,737:1
+1#4:766
+1#4:769
+1#4:785
+1#4:805
+1586#3:790
+1642#3,10:744
+1642#3,10:755
+1642#3,10:774
+1652#3:768
+1652#3:771
+1652#3:787
+1661#3,3:791
+1915#3,2:796
+1915#3,2:806
+1915#3,2:808
+1915#3:754
+1915#3:765
+1915#3:784
+1916#3:767
+1916#3:770
+1916#3:786
+1924#3,3:798
+260#1:738
+260#1:739
+312#1:740
+312#1:741
+326#1:742
+326#1:743
+329#1:744,10
+329#1:754
+329#1:769
+329#1:770
+329#1:771
+331#1:755,10
+331#1:765
+331#1:766
+331#1:767
+331#1:768
+383#1:772
+383#1:773
+386#1:774,10
+386#1:784
+386#1:785
+386#1:786
+386#1:787
+43#2:739
+43#2:741
+43#2:743
+43#2:773
+43#2:789
+43#2:795
+43#2:802
+43#2:804
+433#1:788
+433#1:789
+445#1:790
+445#1:791,3
+477#1:794
+477#1:795
+479#1:796,2
+497#1:798,3
+50#2:738
+50#2:740
+50#2:742
+50#2:772
+50#2:788
+50#2:794
+50#2:801
+50#2:803
+594#1:801
+594#1:802
+618#1:803
+618#1:804
+652#1:806,2
+715#1:808,2
+<---(
+<----
+<-----
+<------
+<-------
+<--------
+<---------
+<anonymous>
+<init>
+<set-?>
+=KK<K
+>;>;)
+AES/CBC/PKCS5Padding
+ApiEpisode
+ApiEpisode(id=
+Bollywood Star
+Castle TV
+CastleApiResponse
+CastleApiResponse(code=
+CastleTvProvider.kt
+CastleTvProviderPlugin.kt
+CastleTvProvider_debug
+Companion
+Completed
+ContentItem
+ContentItem(title=
+D8$$SyntheticClass
+DecryptedResponse
+DecryptedResponse(code=
+Episode
+Extensions.kt
+FAIL_ON_UNKNOWN_PROPERTIES
+GHIJKLMNOPQRSTUVWXYZB
+HomePageData
+HomePageData(page=
+HomePageRow
+HomePageRow(id=
+Hot Erotic Series
+INSTANCE
+Kotlin
+LLCLIL
+LLILL
+LLILLIL
+LLLIL
+LLLILLL
+LLLLILLL
+LLLLL
+LLLLLIL
+LLLLLL
+LLLLLLIL
+LLLLLLL
+LLLLLLLIL
+LLLLLLLL
+LLLLLLLLIL
+LLLLLLLLL
+LLLLLLLLLIL
+LLLLLLLLLL
+LLLLLLLLLLIL
+LLLLLLLLLLL
+LLLLLLLLLLLIL
+LLLLLLLLLLLLIL
+LLLLLLLLLLLLLLLLLL
+LLLLLLLLLLLLLLLLLLLIL
+LLLLLLLLLLLLLLLLLLLLL
+LLLLLLLLLLLLLLLLLLLLLLIL
+LLLLLLLLLLLZILJLZLLIL
+LLLLLLLZILJLZLLIL
+LLLLLZLIL
+LLLZIIL
+LLZLLL
+Loaded 159512 bytes from classes.dex
+Movie
+MovieDetails
+MovieDetails(id=
+MovieDetailsResponse
+MovieDetailsResponse(code=
+Ongoing
+Person
+Person(id=
+Referer
+SearchApiResponse
+SearchApiResponse(code=
+SearchData
+SearchData(page=
+SearchResultItem
+SearchResultItem(id=
+Season
+Season(movieId=
+SecurityKeyResponse
+SecurityKeyResponse(code=
+SubtitleData
+SubtitleData(languageId=
+Titbit
+Titbit(id=
+Total raw strings found: 1110
+Track
+Track(languageId=
+TvSeries
+US_ASCII
+UTF-8
+UTF_8
+Unknown
+Unknown Category
+Unknown Title
+VILLIL
+VLILL
+VLLLIL
+VLLLL
+VLLLLIL
+VLLLLL
+VLLLLLIL
+VLLLLLL
+VLLLLLLIL
+VLLLLLLL
+VLLLLLLLIL
+VLLLLLLLL
+VLLLLLLLLIL
+VLLLLLLLLL
+VLLLLLLLLLIL
+VLLLLLLLLLL
+VLLLLLLLLLLIL
+VLLLLLLLLLLLLLLLLL
+VLLLLLLLLLLLLLLLLLIL
+VLLLLLLLLLLLLLLLLLLLL
+VLLLLLLLLLLLLLLLLLLLLIL
+VLLZIL
+VideoData
+VideoData(videoUrl=
+VideoQuality
+VideoQuality(resolution=
+VideoResponse
+VideoResponse(code=
+Z+[*\)](^
+ZKKKKKKKKKKKKKKKK
+ZKKKKKKKKKKKKKKKKKKK
+ZLLZIL
+]V<<)A
+abbreviate
+access$fetchVideoData
+access$getSecurityKey
+accessFlags
+actors
+aesKey
+allEpisodes
+apiKeyB64
+apiKeyBytes
+apiLevel
+apiResponse
+append
+application/json; charset=utf-8
+areEqual
+atZone
+audioTags
+audioTracksList
+availableTracks
+avatar
+backgroundPosterUrl
+base64DecodeArray
+boxBoolean
+boxInt
+briefIntroduction
+callback
+checkNotNullExpressionValue
+cipher
+collectionSizeOrDefault
+commentTotal
+component1
+component10
+component11
+component12
+component13
+component14
+component15
+component16
+component17
+component18
+component19
+component2
+component20
+component21
+component22
+component23
+component24
+component25
+component26
+component27
+component28
+component29
+component3
+component30
+component31
+component32
+component33
+component34
+component35
+component36
+component37
+component4
+component5
+component6
+component7
+component8
+component9
+configure
+contains
+contains$default
+content
+content$iv
+contents
+context
+copy$default
+copyOfRange
+countdownHour
+countdownHourNew
+countries
+countryIds
+coverHorizontalImage
+coverImage
+coverImageHeight
+coverImageWidth
+coverImg
+coverVerticalImage
+create
+decryptData
+decrypted
+decryptedJson
+decryptedResponse
+default_suffix
+deriveKey
+description
+destination$iv$iv
+details
+detailsDecrypted
+detailsResponse
+detailsUrl
+directors
+doFinal
+doubleValue
+downloadTag
+duration
+element$iv
+element$iv$iv
+element$iv$iv$iv
+emptyList
+encode
+encryptedB64
+encryptedData
+episode
+episodeId
+episodes
+equals
+excludeChannelIds
+existIndividualVideo
+expireTime
+fetchVideoData
+first
+firstOrNull
+get$default
+getAbbreviate
+getActors
+getApp
+getAudioTags
+getAvatar
+getBriefIntroduction
+getBytes
+getBytes(...)
+getCOROUTINE_SUSPENDED
+getCode
+getCommentTotal
+getContents
+getCountdownHour
+getCountdownHourNew
+getCountries
+getCountryIds
+getCoverHorizontalImage
+getCoverImage
+getCoverImageHeight
+getCoverImageWidth
+getCoverVerticalImage
+getData
+getDescription
+getDirectors
+getDownloadTag
+getDuration
+getEpisodes
+getExcludeChannelIds
+getExistIndividualVideo
+getExpireTime
+getHasMainPage
+getHeat
+getHonorTag
+getId
+getInBlacklist
+getIndex
+getIndiaResolutionLabel
+getInstance
+getLang
+getLanguageId
+getLanguageName
+getLanguages
+getLastEpisodeCount
+getMainPage
+getMainPage$lambda$0$0$0
+getMainUrl
+getMemberLevel
+getMobileTrafficPlayResolution
+getMovieId
+getMovieType
+getMovieTypeName
+getMsg
+getName
+getNumber
+getOnlineTime
+getOrder
+getOriginalTitle
+getPage
+getPages
+getPermissionDenied
+getPlayResolution
+getPremiumProPermission
+getPreviewTime
+getPublishTime
+getRedirectId
+getRedirectType
+getResolution
+getResolutionDescription
+getRows
+getScore
+getSeasonDescription
+getSeasonNumber
+getSeasons
+getSecurityKey
+getServerTime
+getSize
+getStandardExpireTime
+getStandardNewExpireTime
+getSubtitles
+getSupportedTypes
+getTagIds
+getTags
+getText
+getTitbits
+getTitle
+getTotal
+getTotalNumber
+getTracks
+getType
+getUnlockPlayback
+getUpdateNumber
+getUrl
+getVideoCategory
+getVideoUrl
+getVideos
+getWatchCount
+getWoolUser
+getYear
+hasMainPage
+hasNext
+hashCode
+homePageData
+homePageLists
+honorTag
+https://api.hlowb.com
+i+j*k)l(m
+inBlacklist
+index
+index$iv
+indiaResolutionLabel
+intValue
+invoke
+invokeSuspend
+isAuthorized
+isBlank
+isCasting
+isCurrent
+isDefault
+isEmpty
+isPreview
+isSeriesLike
+it$iv$iv
+item$iv
+item$iv$iv
+iterator
+ivSpec
+jackson-module-kotlin
+jacksonObjectMapper
+keyMaterial
+keySupFixx
+label
+languageId
+languageLine
+languageName
+languages
+lastEpisodeCount
+listOf
+load$lambda$2$0
+load$lambda$3$0
+loadLinks
+longValue
+mainPage
+mainPageOf
+mainUrl
+mainVideoUrl
+mapOf
+mapper
+memberLevel
+mobileTrafficPlayResolution
+movieId
+movieType
+movieTypeName
+newAudioFile
+newEpisode
+newExtractorLink
+newHomePageResponse$default
+newMovieLoadResponse
+newMovieSearchResponse$default
+newSubtitleFile$default
+newTvSeriesLoadResponse
+nullOutSpilledVariable
+number
+ofEpochMilli
+onlineTime
+order
+originalTitle
+other
+otherTrack
+otherTracks
+otherVideoData
+otherVideoUrl
+pages
+parts
+permissionDenied
+playResolution
+post$default
+postBody
+posterUrl
+premiumProPermission
+preview
+previewTime
+primaryLangName
+primaryTrack
+primaryVideoData
+primaryVideoUrl
+printStackTrace
+publishTime
+query
+rating
+readValue
+recommendations
+redirectId
+redirectType
+registerMainAPI
+request
+resolution
+resolutionDescription
+resolutions
+response
+result
+rowName
+score
+search
+search$lambda$0$0
+searchData
+searchResponse
+searchUrl
+season
+seasonDecryptedJson
+seasonDescription
+seasonDetails
+seasonDetailsResponse
+seasonEncryptedData
+seasonId
+seasonNumber
+seasonResponse
+seasonUrl
+seasons
+secretKey
+securityKey
+securityResponse
+serverTime
+setActors
+setAudioTracks
+setBackgroundPosterUrl
+setDuration
+setEpisode
+setHeaders
+setLang
+setMainUrl
+setName
+setOf
+setPlot
+setPosterUrl
+setQuality
+setRecommendations
+setScore
+setSeason
+setShowStatus
+setTags
+setYear
+split$default
+standardExpireTime
+standardNewExpireTime
+substringAfterLast$default
+subtitle
+subtitleCallback
+subtitles
+supportedTypes
+systemDefault
+tagIds
+this$0
+throwIndexOverflow
+throwOnFailure
+timestamp
+titbits
+title
+toString
+total
+totalNumber
+tracks
+trimIndent
+unlockPlayback
+updateNumber
+value
+valueOf
+versionHash
+videoCategory
+videoData
+videoLoaded
+videoResponse
+videoUrl
+videos
+watchCount
+woolUser
+x+[*\)](^
