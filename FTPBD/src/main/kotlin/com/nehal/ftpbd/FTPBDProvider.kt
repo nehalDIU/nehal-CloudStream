@@ -23,6 +23,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 open class FTPBDProvider : MainAPI() {
     override var mainUrl = "https://ftpbd.net"
@@ -53,16 +55,20 @@ open class FTPBDProvider : MainAPI() {
         return newHomePageResponse(request.name, items)
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
-        val movies = app.get("$mainUrl/?s=$query&action=jws_ajax_search&post_type=movies").document
-            .select(".jws-post-item")
-            .mapNotNull { it.toSearchResponse() }
+    override suspend fun search(query: String): List<SearchResponse> = coroutineScope {
+        val moviesDeferred = async {
+            app.get("$mainUrl/?s=$query&action=jws_ajax_search&post_type=movies").document
+                .select(".jws-post-item")
+                .mapNotNull { it.toSearchResponse() }
+        }
 
-        val tvShows = app.get("$mainUrl/?s=$query&action=jws_ajax_search&post_type=tv_shows").document
-            .select(".jws-post-item")
-            .mapNotNull { it.toSearchResponse() }
+        val tvShowsDeferred = async {
+            app.get("$mainUrl/?s=$query&action=jws_ajax_search&post_type=tv_shows").document
+                .select(".jws-post-item")
+                .mapNotNull { it.toSearchResponse() }
+        }
 
-        return (movies + tvShows).distinctBy { it.url }
+        (moviesDeferred.await() + tvShowsDeferred.await()).distinctBy { it.url }
     }
 
     private fun parseSearchItems(doc: Document): List<SearchResponse> {
