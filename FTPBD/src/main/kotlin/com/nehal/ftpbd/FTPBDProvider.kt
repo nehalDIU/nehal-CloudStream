@@ -54,8 +54,15 @@ open class FTPBDProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = app.get("$mainUrl/?s=$query").document
-        return parseSearchItems(doc)
+        val movies = app.get("$mainUrl/?s=$query&action=jws_ajax_search&post_type=movies").document
+            .select(".jws-post-item")
+            .mapNotNull { it.toSearchResponse() }
+
+        val tvShows = app.get("$mainUrl/?s=$query&action=jws_ajax_search&post_type=tv_shows").document
+            .select(".jws-post-item")
+            .mapNotNull { it.toSearchResponse() }
+
+        return (movies + tvShows).distinctBy { it.url }
     }
 
     private fun parseSearchItems(doc: Document): List<SearchResponse> {
