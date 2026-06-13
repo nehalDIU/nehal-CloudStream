@@ -40,25 +40,47 @@ open class DiscoveryFTPProvider : MainAPI() {
     override var lang = "bn"
 
     override val mainPage = mainPageOf(
-        "m/category/English" to "Movies: English",
+        "m" to "Movies: Latest",
+        "s" to "Series: Latest",
         "m/category/Bangla" to "Movies: Bangla",
+        "m/category/English" to "Movies: English",
         "m/category/Hindi" to "Movies: Hindi",
-        "m/category/Tamil" to "Movies: Tamil",
-        "m/category/Animation" to "Movies: Animation",
-        "m/category/Others" to "Movies: Others",
-        "s/category/Foreign" to "Series: Foreign / English",
-        "s/category/Dubbed" to "Series: Dubbed",
-        "s/category/Hindi" to "Series: Hindi",
-        "s/category/South" to "Series: South Indian",
         "s/category/Bangla" to "Series: Bangla",
-        "s/category/Animation" to "Series: Animation"
+        "s/category/Foreign" to "Series: Foreign / English",
+        "s/category/Hindi" to "Series: Hindi"
     )
 
+    private data class HomePageCacheEntry(
+        val timestamp: Long,
+        val items: List<SearchResponse>
+    )
+
+    private val homePageCache = java.util.concurrent.ConcurrentHashMap<String, HomePageCacheEntry>()
+    private val cacheTtl = 5 * 60 * 1000L // 5 minutes cache TTL
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "$mainUrl/${request.data}/$page"
+        val cacheKey = "${request.data}|$page"
+        homePageCache[cacheKey]?.let { cached ->
+            if (System.currentTimeMillis() - cached.timestamp < cacheTtl) {
+                return newHomePageResponse(request.name, cached.items, hasNext = cached.items.isNotEmpty())
+            }
+        }
+
+        val url = when {
+            request.data == "m" -> {
+                if (page <= 1) "$mainUrl/m" else "$mainUrl/m/recent/${page - 1}"
+            }
+            request.data == "s" -> {
+                if (page <= 1) "$mainUrl/s" else return newHomePageResponse(request.name, emptyList(), hasNext = false)
+            }
+            else -> {
+                "$mainUrl/${request.data}/$page"
+            }
+        }
+
         val doc = app.get(url).document
 
-        val items = if (request.data.startsWith("m/")) {
+        val items = if (request.data.startsWith("m/") || request.data == "m") {
             doc.select("div.card, div.moviegrid div.card").mapNotNull { card ->
                 val linkEl = card.selectFirst("a") ?: return@mapNotNull null
                 val href = linkEl.attr("href").trim()
@@ -95,6 +117,7 @@ open class DiscoveryFTPProvider : MainAPI() {
             }
         }
 
+        homePageCache[cacheKey] = HomePageCacheEntry(System.currentTimeMillis(), items)
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
 
