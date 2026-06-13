@@ -1,0 +1,958 @@
+
+<meta name="robots" content="noindex,nofollow" />
+<meta name="author" content="Discovery" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="shortcut icon" href="/assets/images/icon.png" type="image/x-icon" />
+<meta name="theme-color" content="#000" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<title>DFLIX - Less is more</title>
+<link href="/assets/css/bootstrap.css?v=2.119" rel="stylesheet">
+<link href="/assets/css/custom.css?v=2.119" rel="stylesheet">
+<link href="/assets/plugins/flexslider/flexslider.css?v=2.119" rel="stylesheet">
+<link rel="stylesheet" href="/assets/plugins/montserrat-webfont/style.css?v=2.119">
+<link rel="stylesheet" href="/assets/plugins/fontawesome-free/css/all.min.css?v=2.119">
+<link rel="stylesheet" href="/assets/plugins/sweetalert2/sweetalert2.css?v=2.119">
+<!---<link href='https://fonts.googleapis.com/css?family=Lato:300,400,700,400italic,300italic' rel='stylesheet' type='text/css'>-->
+<link rel="stylesheet" href="/assets/owlcarousel/assets/owl.carousel.min.css">
+<link rel="stylesheet" href="/assets/owlcarousel/assets/owl.theme.default.min.css">
+
+<script src="/assets/js/jquery.min.js?v=3"></script>
+<!---<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>-->
+
+<style>
+    @media all and (min-width: 992px) {
+        body {
+            background: url(https://t-images.discoveryftp.net/media/1080/uimg/defaultbg.jpg?v=2.119) !important;
+            background-repeat: no-repeat;
+            background-size: cover !important;
+            background-attachment: fixed !important;
+        }
+    }
+    @media all and (max-width: 992px) {
+        body {
+        background: url(https://t-images.discoveryftp.net/media/1080/uimg/defaultbg4.jpg?v=2.119) !important;
+        background-repeat: repeat;
+    }}
+</style>
+
+<body><div style="position: relative;z-index: 200;backdrop-filter: blur(5px);-webkit-backdrop-filter: blur(5px);
+    padding: 10px;
+    border-radius: 0px 0 15px 15px;
+    background-color: #8181812b;" class="container-lg">
+    <nav class="navbar navbar-expand-lg navbar-dark shadow-5-strong ">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="tubelight">
+                <a style="font-size: 6px"
+                   href="/m"><span>D</span><span>F</span><span>L</span><span>I</span><span>X</span><span> MOVIES</span>
+                </a>
+            </div>
+        </div>
+        <br><div  class="search-container mx-auto d-flex align-items-center justify-content-center mt-5  mt-md-0"><span class="search-block"></span><div class="b">
+				<div class="boxs"><select class="searchselect" name="category" id="category"><option value="m">Movies</option><option value="s">Series</option></select><input class="search-input" type="text" placeholder="Search Here" id="searchbox" name="searchbox" autocomplete="off" required></input><div class="result" style="position: absolute;"></div></div></div>    </nav>
+    <nav class="navbar navbar-expand-lg navbar-dark shadow-5-strong">
+        <div class="container-fluid containercustom">
+            <div class="collapse navbar-collapse " id="navbarSupportedContent">
+                <ul class="navbar-nav  mb-2 mb-lg-0">
+                    <li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' style="color: rgb(103 245 0);" href="/s">Series</a></li>
+                    <li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link'>CDS</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'>
+                                                            <li><a class='dropdown-item' href='http://cdn1.discoveryftp.net'>CDS-1</a></li>
+                                <li><a class='dropdown-item' href='http://cdn2.discoveryftp.net'>CDS-2</a></li>
+                                <li><a class='dropdown-item' href='http://cdn3.discoveryftp.net'>CDS-3</a></li>
+                                <li><a class='dropdown-item' href='http://cdn4.discoveryftp.net'>CDS-4</a></li>
+                                <li><a class='dropdown-item' href='http://cdn5.discoveryftp.net'>CDS-5</a></li>
+                                                    </ul></li>
+                    <li class="nav-item dropdown"><button id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" class="fa-solid fa-angles-down float-end mobiletoggle  align-middle"></button><a class="nav-link">4K</a><ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <li> <a class="dropdown-item" href="/m/uhd/Animation"> Animation</a></li>
+                            <li> <a class="dropdown-item" href="/m/uhd/Bangla"> Bangla</a></li>
+                            <li> <a class="dropdown-item" href="/m/uhd/English"> English</a></li>
+                            <li> <a class="dropdown-item" href="/m/uhd/Hindi"> Hindi</a></li>
+                            <li> <a class="dropdown-item" href="/m/uhd/Others"> Others</a></li>
+                            <li> <a class="dropdown-item" href="/m/uhd/Tamil"> Tamil</a></li>
+                        </ul></li>
+                    <li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link'>GENRES</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'>
+                            <li> <a class='dropdown-item' href="/m/genre/Action"> Action</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Adventure"> Adventure</a></li>
+
+                            <li> <a class='dropdown-item' href="/m/genre/Comedy"> Comedy</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Crime"> Crime</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Documentary"> Documentary</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Drama"> Drama</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Family"> Family</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Fantasy"> Fantasy</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/History"> History</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Horror"> Horror</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Music"> Musical</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Mystery"> Mystery</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Romance"> Romance</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Science"> Sci-Fi</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Thriller"> Thriller</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Movie">Tv Movie</a> </li>
+                            <li> <a class='dropdown-item' href="/m/genre/War"> War</a></li>
+                            <li> <a class='dropdown-item' href="/m/genre/Western"> Western</a></li>
+                        </ul></li>
+
+                    <li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' href='/m/category/Animation' >Animation</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'><li><a class='dropdown-item' href='/m/type/Animation/2026'>2026</a></li><li><a class='dropdown-item' href='/m/type/Animation/2025'>2025</a></li><li><a class='dropdown-item' href='/m/type/Animation/2024'>2024</a></li><li><a class='dropdown-item' href='/m/type/Animation/2023'>2023</a></li><li><a class='dropdown-item' href='/m/type/Animation/2022'>2022</a></li><li><a class='dropdown-item' href='/m/type/Animation/2021'>2021</a></li><li><a class='dropdown-item' href='/m/type/Animation/2020'>2020</a></li><li><a class='dropdown-item' href='/m/type/Animation/2019'>2019</a></li><li><a class='dropdown-item' href='/m/type/Animation/2018'>2018</a></li><li><a class='dropdown-item' href='/m/type/Animation/2017'>2017</a></li><li><a class='dropdown-item' href='/m/type/Animation/2016'>2016</a></li><li><a class='dropdown-item' href='/m/type/Animation/2015'>2015</a></li><li><a class='dropdown-item' href='/m/type/Animation/2014'>2014</a></li><li><a class='dropdown-item' href='/m/type/Animation/2013'>2013</a></li><li><a class='dropdown-item' href='/m/type/Animation/2012'>2012</a></li><li><a class='dropdown-item' href='/m/type/Animation/2011'>2011</a></li><li><a class='dropdown-item' href='/m/type/Animation/2010'>2010</a></li><li><a class='dropdown-item' href='/m/type/Animation/2009'>2009</a></li><li><a class='dropdown-item' href='/m/type/Animation/2008'>2008</a></li><li><a class='dropdown-item' href='/m/type/Animation/2007'>2007</a></li><li><a class='dropdown-item' href='/m/type/Animation/2006'>2006</a></li><li><a class='dropdown-item' href='/m/type/Animation/2005'>2005</a></li><li><a class='dropdown-item' href='/m/type/Animation/2004'>2004</a></li><li><a class='dropdown-item' href='/m/type/Animation/2003'>2003</a></li><li><a class='dropdown-item' href='/m/type/Animation/2002'>2002</a></li><li><a class='dropdown-item' href='/m/type/Animation/2001'>2001</a></li><li><a class='dropdown-item' href='/m/type/Animation/2000'>2000</a></li></ul></li><li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' href='/m/category/Bangla' >Bangla</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'><li><a class='dropdown-item' href='/m/type/Bangla/2026'>2026</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2025'>2025</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2024'>2024</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2023'>2023</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2022'>2022</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2021'>2021</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2020'>2020</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2019'>2019</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2018'>2018</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2017'>2017</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2016'>2016</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2015'>2015</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2014'>2014</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2013'>2013</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2012'>2012</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2011'>2011</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2010'>2010</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2009'>2009</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2008'>2008</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2007'>2007</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2006'>2006</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2005'>2005</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2004'>2004</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2003'>2003</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2002'>2002</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2001'>2001</a></li><li><a class='dropdown-item' href='/m/type/Bangla/2000'>2000</a></li></ul></li><li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' href='/m/category/English' >English</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'><li><a class='dropdown-item' href='/m/type/English/2026'>2026</a></li><li><a class='dropdown-item' href='/m/type/English/2025'>2025</a></li><li><a class='dropdown-item' href='/m/type/English/2024'>2024</a></li><li><a class='dropdown-item' href='/m/type/English/2023'>2023</a></li><li><a class='dropdown-item' href='/m/type/English/2022'>2022</a></li><li><a class='dropdown-item' href='/m/type/English/2021'>2021</a></li><li><a class='dropdown-item' href='/m/type/English/2020'>2020</a></li><li><a class='dropdown-item' href='/m/type/English/2019'>2019</a></li><li><a class='dropdown-item' href='/m/type/English/2018'>2018</a></li><li><a class='dropdown-item' href='/m/type/English/2017'>2017</a></li><li><a class='dropdown-item' href='/m/type/English/2016'>2016</a></li><li><a class='dropdown-item' href='/m/type/English/2015'>2015</a></li><li><a class='dropdown-item' href='/m/type/English/2014'>2014</a></li><li><a class='dropdown-item' href='/m/type/English/2013'>2013</a></li><li><a class='dropdown-item' href='/m/type/English/2012'>2012</a></li><li><a class='dropdown-item' href='/m/type/English/2011'>2011</a></li><li><a class='dropdown-item' href='/m/type/English/2010'>2010</a></li><li><a class='dropdown-item' href='/m/type/English/2009'>2009</a></li><li><a class='dropdown-item' href='/m/type/English/2008'>2008</a></li><li><a class='dropdown-item' href='/m/type/English/2007'>2007</a></li><li><a class='dropdown-item' href='/m/type/English/2006'>2006</a></li><li><a class='dropdown-item' href='/m/type/English/2005'>2005</a></li><li><a class='dropdown-item' href='/m/type/English/2004'>2004</a></li><li><a class='dropdown-item' href='/m/type/English/2003'>2003</a></li><li><a class='dropdown-item' href='/m/type/English/2002'>2002</a></li><li><a class='dropdown-item' href='/m/type/English/2001'>2001</a></li><li><a class='dropdown-item' href='/m/type/English/2000'>2000</a></li></ul></li><li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' href='/m/category/Hindi' >Hindi</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'><li><a class='dropdown-item' href='/m/type/Hindi/2026'>2026</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2025'>2025</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2024'>2024</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2023'>2023</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2022'>2022</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2021'>2021</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2020'>2020</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2019'>2019</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2018'>2018</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2017'>2017</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2016'>2016</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2015'>2015</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2014'>2014</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2013'>2013</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2012'>2012</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2011'>2011</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2010'>2010</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2009'>2009</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2008'>2008</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2007'>2007</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2006'>2006</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2005'>2005</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2004'>2004</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2003'>2003</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2002'>2002</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2001'>2001</a></li><li><a class='dropdown-item' href='/m/type/Hindi/2000'>2000</a></li><li><a class='dropdown-item' href='/m/type/Hindi/1900'>1900</a></li></ul></li><li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' href='/m/category/Others' >Others</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'><li><a class='dropdown-item' href='/m/type/Others/2026'>2026</a></li><li><a class='dropdown-item' href='/m/type/Others/2025'>2025</a></li><li><a class='dropdown-item' href='/m/type/Others/2024'>2024</a></li><li><a class='dropdown-item' href='/m/type/Others/2023'>2023</a></li><li><a class='dropdown-item' href='/m/type/Others/2022'>2022</a></li><li><a class='dropdown-item' href='/m/type/Others/2021'>2021</a></li><li><a class='dropdown-item' href='/m/type/Others/2020'>2020</a></li><li><a class='dropdown-item' href='/m/type/Others/2019'>2019</a></li><li><a class='dropdown-item' href='/m/type/Others/2018'>2018</a></li><li><a class='dropdown-item' href='/m/type/Others/2017'>2017</a></li><li><a class='dropdown-item' href='/m/type/Others/2016'>2016</a></li><li><a class='dropdown-item' href='/m/type/Others/2015'>2015</a></li><li><a class='dropdown-item' href='/m/type/Others/2014'>2014</a></li><li><a class='dropdown-item' href='/m/type/Others/2013'>2013</a></li><li><a class='dropdown-item' href='/m/type/Others/2012'>2012</a></li><li><a class='dropdown-item' href='/m/type/Others/2011'>2011</a></li><li><a class='dropdown-item' href='/m/type/Others/2010'>2010</a></li><li><a class='dropdown-item' href='/m/type/Others/2009'>2009</a></li><li><a class='dropdown-item' href='/m/type/Others/2008'>2008</a></li><li><a class='dropdown-item' href='/m/type/Others/2007'>2007</a></li><li><a class='dropdown-item' href='/m/type/Others/2006'>2006</a></li><li><a class='dropdown-item' href='/m/type/Others/2005'>2005</a></li><li><a class='dropdown-item' href='/m/type/Others/2004'>2004</a></li><li><a class='dropdown-item' href='/m/type/Others/2003'>2003</a></li><li><a class='dropdown-item' href='/m/type/Others/2002'>2002</a></li><li><a class='dropdown-item' href='/m/type/Others/2001'>2001</a></li><li><a class='dropdown-item' href='/m/type/Others/2000'>2000</a></li></ul></li><li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link' href='/m/category/Tamil' >Tamil</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'><li><a class='dropdown-item' href='/m/type/Tamil/2026'>2026</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2025'>2025</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2024'>2024</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2023'>2023</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2022'>2022</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2021'>2021</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2020'>2020</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2019'>2019</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2018'>2018</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2017'>2017</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2016'>2016</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2015'>2015</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2014'>2014</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2013'>2013</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2012'>2012</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2011'>2011</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2010'>2010</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2009'>2009</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2008'>2008</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2007'>2007</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2006'>2006</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2005'>2005</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2004'>2004</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2003'>2003</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2002'>2002</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2001'>2001</a></li><li><a class='dropdown-item' href='/m/type/Tamil/2000'>2000</a></li></ul></li>                    <li class="nav-item dropdown"><button id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" class="fa-solid fa-angles-down float-end mobiletoggle  align-middle"></button><a class="nav-link">DUAL</a><ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <li> <a class="dropdown-item" href="/m/dual/Animation"> Animation</a></li>
+                            <li> <a class="dropdown-item" href="/m/dual/Bangla"> Bangla</a></li>
+                            <li> <a class="dropdown-item" href="/m/dual/English"> English</a></li>
+                            <li> <a class="dropdown-item" href="/m/dual/Hindi"> Hindi</a></li>
+                            <li> <a class="dropdown-item" href="/m/dual/Others"> Others</a></li>
+                            <li> <a class="dropdown-item" href="/m/dual/Tamil"> Tamil</a></li>
+                        </ul></li>
+                    <li class='nav-item dropdown'><button id='navbarDropdown' role='button' data-bs-toggle='dropdown' aria-expanded='false'  class='fa-solid fa-angles-down float-end mobiletoggle  align-middle'></button><a class='nav-link'  >Language</a><ul class='dropdown-menu' aria-labelledby='navbarDropdown'>
+                            <li> <a class='dropdown-item' href="/m/lan/Afrikaans">Afrikaans</a></li><li> <a class='dropdown-item' href="/m/lan/Akan">Akan</a></li><li> <a class='dropdown-item' href="/m/lan/Amharic">Amharic</a></li><li> <a class='dropdown-item' href="/m/lan/Arabic">Arabic</a></li><li> <a class='dropdown-item' href="/m/lan/Assamese">Assamese</a></li><li> <a class='dropdown-item' href="/m/lan/Basque">Basque</a></li><li> <a class='dropdown-item' href="/m/lan/Bengali">Bengali</a></li><li> <a class='dropdown-item' href="/m/lan/Bulgarian">Bulgarian</a></li><li> <a class='dropdown-item' href="/m/lan/Burmese">Burmese</a></li><li> <a class='dropdown-item' href="/m/lan/Cantonese">Cantonese</a></li><li> <a class='dropdown-item' href="/m/lan/Catalan">Catalan</a></li><li> <a class='dropdown-item' href="/m/lan/Croatian">Croatian</a></li><li> <a class='dropdown-item' href="/m/lan/Czech">Czech</a></li><li> <a class='dropdown-item' href="/m/lan/Danish">Danish</a></li><li> <a class='dropdown-item' href="/m/lan/Dutch">Dutch</a></li><li> <a class='dropdown-item' href="/m/lan/Dzongkha">Dzongkha</a></li><li> <a class='dropdown-item' href="/m/lan/English">English</a></li><li> <a class='dropdown-item' href="/m/lan/Estonian">Estonian</a></li><li> <a class='dropdown-item' href="/m/lan/Finnish">Finnish</a></li><li> <a class='dropdown-item' href="/m/lan/French">French</a></li><li> <a class='dropdown-item' href="/m/lan/Galician">Galician</a></li><li> <a class='dropdown-item' href="/m/lan/Ganda">Ganda</a></li><li> <a class='dropdown-item' href="/m/lan/Georgian">Georgian</a></li><li> <a class='dropdown-item' href="/m/lan/German">German</a></li><li> <a class='dropdown-item' href="/m/lan/Greek">Greek</a></li><li> <a class='dropdown-item' href="/m/lan/Gujarati">Gujarati</a></li><li> <a class='dropdown-item' href="/m/lan/Hebrew">Hebrew</a></li><li> <a class='dropdown-item' href="/m/lan/Hindi">Hindi</a></li><li> <a class='dropdown-item' href="/m/lan/Hungarian">Hungarian</a></li><li> <a class='dropdown-item' href="/m/lan/Icelandic">Icelandic</a></li><li> <a class='dropdown-item' href="/m/lan/Indonesian">Indonesian</a></li><li> <a class='dropdown-item' href="/m/lan/Irish">Irish</a></li><li> <a class='dropdown-item' href="/m/lan/Italian">Italian</a></li><li> <a class='dropdown-item' href="/m/lan/Japanese">Japanese</a></li><li> <a class='dropdown-item' href="/m/lan/Kannada">Kannada</a></li><li> <a class='dropdown-item' href="/m/lan/Kashmiri">Kashmiri</a></li><li> <a class='dropdown-item' href="/m/lan/Khmer">Khmer</a></li><li> <a class='dropdown-item' href="/m/lan/Korean">Korean</a></li><li> <a class='dropdown-item' href="/m/lan/Kurdish">Kurdish</a></li><li> <a class='dropdown-item' href="/m/lan/Latin">Latin</a></li><li> <a class='dropdown-item' href="/m/lan/Latvian">Latvian</a></li><li> <a class='dropdown-item' href="/m/lan/Lithuanian">Lithuanian</a></li><li> <a class='dropdown-item' href="/m/lan/Macedonian">Macedonian</a></li><li> <a class='dropdown-item' href="/m/lan/Malay">Malay</a></li><li> <a class='dropdown-item' href="/m/lan/Malayalam">Malayalam</a></li><li> <a class='dropdown-item' href="/m/lan/Maltese">Maltese</a></li><li> <a class='dropdown-item' href="/m/lan/Mandarin">Mandarin</a></li><li> <a class='dropdown-item' href="/m/lan/Marathi">Marathi</a></li><li> <a class='dropdown-item' href="/m/lan/Mongolian">Mongolian</a></li><li> <a class='dropdown-item' href="/m/lan/Nepali">Nepali</a></li><li> <a class='dropdown-item' href="/m/lan/No Language">No Language</a></li><li> <a class='dropdown-item' href="/m/lan/Norwegian">Norwegian</a></li><li> <a class='dropdown-item' href="/m/lan/Norwegian Bokmål">Norwegian Bokmål</a></li><li> <a class='dropdown-item' href="/m/lan/Oriya">Oriya</a></li><li> <a class='dropdown-item' href="/m/lan/Ossetian">Ossetian</a></li><li> <a class='dropdown-item' href="/m/lan/Persian">Persian</a></li><li> <a class='dropdown-item' href="/m/lan/Polish">Polish</a></li><li> <a class='dropdown-item' href="/m/lan/Portuguese">Portuguese</a></li><li> <a class='dropdown-item' href="/m/lan/Punjabi">Punjabi</a></li><li> <a class='dropdown-item' href="/m/lan/Pushto">Pushto</a></li><li> <a class='dropdown-item' href="/m/lan/Romanian">Romanian</a></li><li> <a class='dropdown-item' href="/m/lan/Russian">Russian</a></li><li> <a class='dropdown-item' href="/m/lan/Serbian">Serbian</a></li><li> <a class='dropdown-item' href="/m/lan/Serbo-Croatian">Serbo-Croatian</a></li><li> <a class='dropdown-item' href="/m/lan/Sinhalese">Sinhalese</a></li><li> <a class='dropdown-item' href="/m/lan/Slovak">Slovak</a></li><li> <a class='dropdown-item' href="/m/lan/Slovenian">Slovenian</a></li><li> <a class='dropdown-item' href="/m/lan/Sotho">Sotho</a></li><li> <a class='dropdown-item' href="/m/lan/Spanish">Spanish</a></li><li> <a class='dropdown-item' href="/m/lan/Swahili">Swahili</a></li><li> <a class='dropdown-item' href="/m/lan/Swedish">Swedish</a></li><li> <a class='dropdown-item' href="/m/lan/Tagalog">Tagalog</a></li><li> <a class='dropdown-item' href="/m/lan/Tamil">Tamil</a></li><li> <a class='dropdown-item' href="/m/lan/Telugu">Telugu</a></li><li> <a class='dropdown-item' href="/m/lan/Thai">Thai</a></li><li> <a class='dropdown-item' href="/m/lan/Tibetan">Tibetan</a></li><li> <a class='dropdown-item' href="/m/lan/Turkish">Turkish</a></li><li> <a class='dropdown-item' href="/m/lan/Ukrainian">Ukrainian</a></li><li> <a class='dropdown-item' href="/m/lan/Urdu">Urdu</a></li><li> <a class='dropdown-item' href="/m/lan/Vietnamese">Vietnamese</a></li><li> <a class='dropdown-item' href="/m/lan/Wolof">Wolof</a></li><li> <a class='dropdown-item' href="/m/lan/Yiddish">Yiddish</a></li><li> <a class='dropdown-item' href="/m/lan/Yoruba">Yoruba</a></li><li> <a class='dropdown-item' href="/m/lan/Zulu">Zulu</a></li>                        </ul></li>
+                </ul>
+
+            </div>
+        </div>
+    </nav>
+</div>
+<br>
+<script src="/assets/owlcarousel/owl.carousel.js"></script>
+<style>
+    .main-content {
+        position: relative;
+    }
+    .main-content .owl-theme .custom-nav {
+        position: absolute;
+        top: 20%;
+        left: 0;
+        right: 0;
+    }
+    .main-content .owl-theme .custom-nav .owl-prev, .main-content .owl-theme .custom-nav .owl-next {
+        position: absolute;
+        height: 180px;
+        color: inherit;
+        background: none;
+        border: none;
+        z-index: 100;
+    }
+    .main-content .owl-theme .custom-nav .owl-prev i, .main-content .owl-theme .custom-nav .owl-next i {
+        font-size: 2.5rem;
+        color: #cecece;
+    }
+    .main-content .owl-theme .custom-nav .owl-prev {
+        left: 0;
+    }
+    .main-content .owl-theme .custom-nav .owl-next {
+        right: 0;
+    }
+    .owl-theme .owl-dots, .owl-theme .owl-nav {
+        margin-top: 15px;
+    }
+    .description{
+        padding: 1px;
+        padding-top: 10px;
+        background-color: #00000087;
+        max-width: 160px;
+        border-radius: 33px;
+        text-align: center;
+    }
+    .description2{
+        padding: 1px;
+        padding-top: 10px;
+        max-width: 160px;
+        border-radius: 5px;
+        text-align: center;
+    }
+    @media only screen and (min-width: 600px) {
+        .section_hide{
+            display: none;
+        }
+    }
+    .quality_stack {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        z-index: 5;
+    }
+    .quality_stack .movie_details_span_end {
+        position: relative;
+        float: none;
+    }
+</style>
+
+<div class="container-lg mb-5 mt-4 pb-4" style="background-color: #f3f3f32b;border-radius: 20px;">
+
+<br>
+
+
+    <div class='main-content'>
+
+                <div class='owl-carousel owl-theme moviegrid ow1'><div class="card"><a class="cfocus" href="/m/view/36264"><span class="movie_details_span_end">1080P WEB-DL </span><div class="poster" title="1080P WEB-DL ">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Dhurandhar The Revenge/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Dhurandhar The Revenge</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>64.4K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36357"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Bhooth Bangla/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Bhooth Bangla</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>30.7K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36339"><span class="movie_details_span_end">HD  DUAL</span><div class="poster" title="HD  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Peddi/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Peddi</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>7.7K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36342"><span class="movie_details_span_end">1080P  DUAL</span><div class="poster" title="1080P  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Hai Jawani Toh Ishq Hona Hai/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Hai Jawani Toh Ishq Hona Hai</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>5.5K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36353"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/KD – The Devil/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">KD – The Devil</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>3.8K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36359"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Karuppu/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Karuppu</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>2.2K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36338"><span class="movie_details_span_end">HD  DUAL</span><div class="poster" title="HD  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Patriot/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Patriot</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>3.3K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36351"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Kara/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Kara</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>3.1K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36363"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/Dridam/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Dridam</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>806</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36259"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Dacoit/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Dacoit</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>2.9K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36341"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Ugly Story/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Ugly Story</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>2.8K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36361"><span class="movie_details_span_end">1080P WEB-DL </span><div class="poster" title="1080P WEB-DL ">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/DSP Dev 2/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">DSP Dev 2</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>502</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36337"><span class="movie_details_span_end">HD  DUAL</span><div class="poster" title="HD  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/29/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">29</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>2.6K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36331"><span class="movie_details_span_end">1080P  DUAL</span><div class="poster" title="1080P  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/Drishyam 3/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Drishyam 3</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>2.5K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36344"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2025/Revolver Rita/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Revolver Rita</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2025</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>1.4K</a></span>
+						</div><br></div></div><div class="card"><a class="cfocus" href="/m/view/36248"><span class="movie_details_span_end">1080P WEB-DL  DUAL</span><div class="poster" title="1080P WEB-DL  DUAL">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Ustaad Bhagat Singh/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';" ></div></a><div class="details"><h3 class="">Ustaad Bhagat Singh</h3><div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;"><a>380</a></span>
+						</div><br></div></div></div>
+            <div class='owl-theme'>
+                <div class='owl-controls'>
+                    <div class='custom-nav owl-nav cn1'></div>
+                </div>
+            </div>
+        </div>
+</div>
+<div class="container-lg mt-5" style="background-color: #f3f3f32b;border-radius: 20px;">
+    <br>
+                 <div class="row justify-content-center moviegrid" id="moviegrid">
+        <div class="card">
+				<a class="cfocus" href="/m/view/36361">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/DSP Dev 2/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36361" class="movie_details_span_end">1080P WEB-DL </a><a href="/m/view/36362" class="movie_details_span_end">4K WEB-DL </a></div>
+				<div class="details">
+					<h3 class="">DSP Dev 2</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">502</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36363">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/Dridam/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36363" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36364" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Dridam</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">806</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36359">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Karuppu/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36359" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36360" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Karuppu</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">2.2K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36357">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Bhooth Bangla/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36357" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36358" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Bhooth Bangla</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">30.7K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36353">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/KD – The Devil/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36353" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36354" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">KD – The Devil</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">3.8K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36355">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Valavaara/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36355" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36356" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Valavaara</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">737</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36352">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Kara/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36352" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36351" class="movie_details_span_end">4K WEB-DL </a></div>
+				<div class="details">
+					<h3 class="">Kara</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">3.1K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36346">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Summer House AKA Yaz Evi/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36346" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36347" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Summer House AKA Yaz Evi</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">544</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36344">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2025/Revolver Rita/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36344" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36345" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Revolver Rita</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2025</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">1.4K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36343">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Bandar/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36343" class="movie_details_span_end">HD  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Bandar</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">1.5K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36348">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/The Marked Woman/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36348" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36349" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">The Marked Woman</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">689</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36342">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Hai Jawani Toh Ishq Hona Hai/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36342" class="movie_details_span_end">1080P  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Hai Jawani Toh Ishq Hona Hai</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">5.5K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36341">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Ugly Story/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36341" class="movie_details_span_end">1080P WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Ugly Story</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">2.8K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36340">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Chum/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36340" class="movie_details_span_end">1080P WEB-DL </a></div>
+				<div class="details">
+					<h3 class="">Chum</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">1.2K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36339">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Peddi/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36339" class="movie_details_span_end">HD  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Peddi</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">7.7K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36338">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Patriot/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36338" class="movie_details_span_end">HD  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Patriot</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">3.3K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36335">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Krishna Aur Chitthi/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36335" class="movie_details_span_end">HD  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Krishna Aur Chitthi</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">305</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36336">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/Momacu/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36336" class="movie_details_span_end">1080P WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Momacu</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">668</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36337">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/29/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36337" class="movie_details_span_end">HD  DUAL</a></div>
+				<div class="details">
+					<h3 class="">29</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">2.6K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36259">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Dacoit/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36259" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36334" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Dacoit</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">2.9K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36331">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/Drishyam 3/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36331" class="movie_details_span_end">1080P  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Drishyam 3</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">2.5K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36332">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Others/2026/The Botanist/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36332" class="movie_details_span_end">1080P WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">The Botanist</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">135</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36329">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Maa Behen/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36329" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36330" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Maa Behen</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">1.6K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36333">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Mermaid/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36333" class="movie_details_span_end">1080P WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Mermaid</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">405</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36327">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/One Two Cha Cha Chaa/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36327" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36328" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">One Two Cha Cha Chaa</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">541</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36155">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Animation/2026/Hoppers/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36155" class="movie_details_span_end">1080P  DUAL</a><a href="/m/view/36326" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Hoppers</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">9.2K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36274">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Lee Cronin’s The Mummy/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36274" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36325" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Lee Cronin’s The Mummy</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">742</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36324">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/The Highest Stakes/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36324" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">The Highest Stakes</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">176</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36322">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Miss You Love You/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36322" class="movie_details_span_end">4K WEB-DL </a></div>
+				<div class="details">
+					<h3 class="">Miss You Love You</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">117</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36323">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Return to Silent Hill/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36323" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Return to Silent Hill</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">870</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36321">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Kattalan/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36321" class="movie_details_span_end">1080P </a></div>
+				<div class="details">
+					<h3 class="">Kattalan</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">786</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36319">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Jetlee/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36319" class="movie_details_span_end">HD  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Jetlee</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">746</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36320">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Obsess/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36320" class="movie_details_span_end">1080P </a></div>
+				<div class="details">
+					<h3 class="">Obsess</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">1K</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36317">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/The Great Grand Superhero/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36317" class="movie_details_span_end">1080P </a></div>
+				<div class="details">
+					<h3 class="">The Great Grand Superhero</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">222</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36318">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2025/Mahasenha/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36318" class="movie_details_span_end">1080P WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Mahasenha</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2025</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">416</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36313">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Crime 101/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36313" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36314" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Crime 101</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">540</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36315">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2026/Mortal Kombat II/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36315" class="movie_details_span_end">1080P  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Mortal Kombat II</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">894</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36309">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Tamil/2026/Mrithyunjay/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36309" class="movie_details_span_end">1080P WEB-DL  DUAL</a><a href="/m/view/36310" class="movie_details_span_end">4K WEB-DL  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Mrithyunjay</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">136</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36307">
+					<div class="poster">
+						<img src="https://images1.discoveryftp.net/media/300/Movies/Hindi/2026/Bhabiji Ghar Par Hain Fun on the Run/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36307" class="movie_details_span_end">1080P WEB-DL </a><a href="/m/view/36308" class="movie_details_span_end">4K WEB-DL </a></div>
+				<div class="details">
+					<h3 class="">Bhabiji Ghar Par Hain Fun on the Run</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2026</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">150</span>
+					</div>
+					<br>
+				</div>
+			</div><div class="card">
+				<a class="cfocus" href="/m/view/36311">
+					<div class="poster">
+						<img src="https://images4.discoveryftp.net/media/300/Movies/English/2000/Scary Movie/poster.jpg" onerror="this.src='/assets/images/blank_poster.png';">
+					</div>
+				</a>
+				<div class="quality_stack"><a href="/m/view/36311" class="movie_details_span_end">1080P-BR  DUAL</a></div>
+				<div class="details">
+					<h3 class="">Scary Movie</h3>
+					<div class="feedback">
+						<span class="movie_details_span" title="views">2000</span>
+						<span class="movie_details_span" style="float: right;color: aliceblue;">145</span>
+					</div>
+					<br>
+				</div>
+			</div>    </div>
+    <br> <br>
+</div>
+
+<script>
+    $('.ow1').owlCarousel({
+
+        loop: true,
+        margin: 50,
+        nav: true,
+        autoplay:false,
+        autoplayTimeout:3000,
+        dots: false,
+        autoplayHoverPause:true,
+        navText: [
+            '<i class="fa fa-angle-left" aria-hidden="true"></i>',
+            '<i class="fa fa-angle-right" aria-hidden="true"></i>'
+        ],
+        navContainer: '.cn1',
+        responsive:{
+            0:{
+                items: 2
+            },
+            600:{
+                items: 3
+            },
+            800:{
+                items: 3
+            },
+            1000:{
+                items: 3
+            },
+            1200:{
+                items: 4
+            },
+            1400:{
+                items: 5
+            },
+            1600:{
+                items: 5
+            }
+        }
+    });
+
+</script>
+
+
+<script>
+    var limit = 1;
+    var offset = 1;
+    var isLoading = false;
+
+    $(window).scroll(function() {
+
+        if($(window).scrollTop() + $(window).height() > $(document).height() - 400 && !isLoading) {
+            isLoading = true;
+            console.log("loading more data...");
+            offset += limit;
+            getData(offset);
+        }
+    });
+
+    function getData(offset) {
+        $.ajax({
+            url: "/m/recent/"+offset,
+            type: "GET",
+            success: function(data) {
+                $("#moviegrid").append(data);
+                isLoading = false;
+            }
+        });
+    }
+</script>
+
+
+
+<script src="/assets/owlcarousel/owl.carousel.min.js"></script>
+
+
+
+0.002
+</body>
+
+<script type="text/javascript" src="/assets/js/bootstrap.bundle.js?v=2.119"></script>
+<script type="text/javascript" src="/assets/js/custom.js?v=2.119"></script>
+<!--<script type="text/javascript" src="/assets/js/oil.js?v=--><!--"></script>-->
+<script type="text/javascript" src="/assets/js/jquery.ba-throttle-debounce.js?v=2.119"></script>
+
+
+<script>
+
+    </script>
+</html>
