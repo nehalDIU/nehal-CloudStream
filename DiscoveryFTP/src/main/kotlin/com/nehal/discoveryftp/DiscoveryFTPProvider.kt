@@ -98,6 +98,9 @@ open class DiscoveryFTPProvider : MainAPI() {
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
 
+    private val nonAlphaNumericRegex = Regex("[^\\p{L}\\p{N}]")
+    private val whitespaceRegex = Regex("\\s+")
+
     override suspend fun search(query: String): List<SearchResponse> = coroutineScope {
         val moviesDeferred = async {
             try {
@@ -123,7 +126,39 @@ open class DiscoveryFTPProvider : MainAPI() {
             }
         }
 
-        (moviesDeferred.await() + tvShowsDeferred.await()).distinctBy { it.url }
+        val results = (moviesDeferred.await() + tvShowsDeferred.await()).distinctBy { it.url }
+
+        results.map { res ->
+            Pair(res, getRelevanceScore(res.name, query))
+        }
+        .filter { it.second > 0 }
+        .sortedByDescending { it.second }
+        .map { it.first }
+    }
+
+    private fun getRelevanceScore(title: String, query: String): Int {
+        val cleanTitle = title.lowercase()
+        val cleanQuery = query.lowercase()
+
+        if (cleanTitle == cleanQuery) return 1000
+        if (cleanTitle.startsWith(cleanQuery)) return 800
+        
+        val titleTokens = cleanTitle.replace(nonAlphaNumericRegex, " ").split(whitespaceRegex).filter { it.isNotBlank() }
+        if (titleTokens.contains(cleanQuery)) return 600
+        if (cleanTitle.contains(cleanQuery)) return 400
+
+        val queryTokens = cleanQuery.replace(nonAlphaNumericRegex, " ").split(whitespaceRegex).filter { it.isNotBlank() }
+        if (queryTokens.isEmpty()) return 0
+
+        var matchedTokens = 0
+        for (qToken in queryTokens) {
+            if (titleTokens.any { it.contains(qToken) }) {
+                matchedTokens++
+            }
+        }
+
+        if (matchedTokens == 0) return 0
+        return (matchedTokens.toDouble() / queryTokens.size * 200).toInt()
     }
 
     private fun parseSearchAjax(html: String, type: TvType): List<SearchResponse> {
