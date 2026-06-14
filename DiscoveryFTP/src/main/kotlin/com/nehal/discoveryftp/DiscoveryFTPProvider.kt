@@ -14,9 +14,10 @@ import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
-import com.lagradost.cloudstream3.newMovieSearchResponse
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
-import com.lagradost.cloudstream3.newTvSeriesSearchResponse
+import com.lagradost.cloudstream3.addQuality
+import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
@@ -92,9 +93,15 @@ open class DiscoveryFTPProvider : MainAPI() {
                 val year = card.selectFirst(".movie_details_span")?.text()?.trim()?.toIntOrNull()
                     ?: Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
 
-                newMovieSearchResponse(cleanedTitle, fixUrl(href), TvType.Movie) {
+                val qualityText = card.select(".quality_stack a").joinToString(" ") { it.text().trim() }
+
+                newAnimeSearchResponse(cleanedTitle, fixUrl(href), TvType.Movie) {
                     this.posterUrl = fixUrlNull(posterUrl)
                     this.year = year
+
+                    val (q, dubsub) = parsePosterBadges(cleanedTitle, qualityText, request.data)
+                    if (q != null) addQuality(q)
+                    addDubStatus(dubsub.first, dubsub.second)
                 }
             }
         } else {
@@ -103,16 +110,22 @@ open class DiscoveryFTPProvider : MainAPI() {
                 if (href.isEmpty() || !href.contains("/view/")) return@mapNotNull null
 
                 val fcard = linkEl.selectFirst(".fcard") ?: return@mapNotNull null
-                val title = fcard.selectFirst(".ftitle")?.text()?.trim()
-                    ?: fcard.selectFirst(".fdetails")?.text()?.trim()
+                val title = fcard.selectFirst(".fdetails")?.text()?.trim()
+                    ?: fcard.selectFirst(".ftitle")?.text()?.trim()
                     ?: return@mapNotNull null
                 val cleanedTitle = cleanTitle(title)
                 val posterUrl = fcard.selectFirst("img")?.attr("src")
                 val year = Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
 
-                newTvSeriesSearchResponse(cleanedTitle, fixUrl(href), TvType.TvSeries) {
+                val qualityText = fcard.selectFirst(".ftitle span")?.text()?.trim() ?: ""
+
+                newAnimeSearchResponse(cleanedTitle, fixUrl(href), TvType.TvSeries) {
                     this.posterUrl = fixUrlNull(posterUrl)
                     this.year = year
+
+                    val (q, dubsub) = parsePosterBadges(cleanedTitle, qualityText, request.data)
+                    if (q != null) addQuality(q)
+                    addDubStatus(dubsub.first, dubsub.second)
                 }
             }
         }
@@ -198,17 +211,50 @@ open class DiscoveryFTPProvider : MainAPI() {
                 ?: Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
 
             if (type == TvType.TvSeries) {
-                newTvSeriesSearchResponse(cleanTitle(title), fixUrl(href), TvType.TvSeries) {
+                newAnimeSearchResponse(cleanTitle(title), fixUrl(href), TvType.TvSeries) {
                     this.posterUrl = fixUrlNull(posterUrl)
                     this.year = year
+
+                    val (q, dubsub) = parsePosterBadges(title, detailsText)
+                    if (q != null) addQuality(q)
+                    addDubStatus(dubsub.first, dubsub.second)
                 }
             } else {
-                newMovieSearchResponse(cleanTitle(title), fixUrl(href), TvType.Movie) {
+                newAnimeSearchResponse(cleanTitle(title), fixUrl(href), TvType.Movie) {
                     this.posterUrl = fixUrlNull(posterUrl)
                     this.year = year
+
+                    val (q, dubsub) = parsePosterBadges(title, detailsText)
+                    if (q != null) addQuality(q)
+                    addDubStatus(dubsub.first, dubsub.second)
                 }
             }
         }
+    }
+
+    private fun parsePosterBadges(
+        title: String,
+        detailsText: String?,
+        category: String? = null
+    ): Pair<String?, Pair<Boolean, Boolean>> {
+        val cleanTitle = title.lowercase()
+        val cleanDetails = detailsText?.lowercase() ?: ""
+        val cleanCat = category?.lowercase() ?: ""
+
+        val combined = "$cleanTitle $cleanDetails $cleanCat"
+
+        val isDub = combined.contains("dub") || combined.contains("dual") || combined.contains("multi")
+        val isSub = combined.contains("sub") || combined.contains("esub")
+
+        val quality = when {
+            combined.contains("4k") || combined.contains("uhd") -> "4K"
+            combined.contains("1080") -> "1080p"
+            combined.contains("720") -> "720p"
+            combined.contains("hd") || combined.contains("bluray") || combined.contains("web-dl") || combined.contains("web-r") -> "HD"
+            else -> null
+        }
+
+        return Pair(quality, Pair(isDub, isSub))
     }
 
     override suspend fun load(url: String): LoadResponse {
