@@ -11,6 +11,8 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.newSubtitleFile
+import com.lagradost.cloudstream3.addQuality
+import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
@@ -20,6 +22,7 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -256,15 +259,66 @@ open class CineplexBDProvider : MainAPI() {
         val text = this.text()
         val year = Regex("\\b(19|20)\\d{2}\\b").find(text)?.value?.toIntOrNull()
 
+        // Extract Quality and Dub/Sub Status from card elements
+        val childDivs = this.children().filter { it.tagName() == "div" }
+        val badgeDivs = childDivs.dropLast(1)
+        val qualityBadge = badgeDivs.map { it.text().trim() }
+            .firstOrNull { it.matches(Regex("(?i)\\b\\d+p\\b|\\b4k\\b|\\buhd\\b|\\bhd\\b|\\bbluray\\b")) }
+
+        val infoWrapper = childDivs.lastOrNull()
+        val pTag = infoWrapper?.selectFirst("p")
+        val rawLangText = if (pTag != null) {
+            pTag.text().split("•").firstOrNull()?.trim()
+        } else {
+            infoWrapper?.children()?.firstOrNull { it.tagName() == "div" }?.text()?.trim()
+        }
+
+        val isDub = title.contains("dub", ignoreCase = true) || 
+                    title.contains("dual", ignoreCase = true) || 
+                    rawLangText?.contains("dub", ignoreCase = true) == true || 
+                    rawLangText?.contains("dual", ignoreCase = true) == true
+
+        val isSub = title.contains("sub", ignoreCase = true) || 
+                    rawLangText?.contains("sub", ignoreCase = true) == true
+
+        val isDual = title.contains("dual", ignoreCase = true) || 
+                     rawLangText?.contains("dual", ignoreCase = true) == true
+
+        val is4k = rawLangText?.contains("4k", ignoreCase = true) == true
+
         return if (isTvSeries) {
-            newTvSeriesSearchResponse(title, fixHref, TvType.TvSeries) {
+            newAnimeSearchResponse(title, fixHref, TvType.TvSeries) {
                 this.posterUrl = posterUrl
                 this.year = year
+
+                // Add quality badges
+                if (!qualityBadge.isNullOrBlank()) {
+                    addQuality(qualityBadge)
+                } else if (is4k) {
+                    addQuality("4K")
+                } else if (isDual) {
+                    addQuality("Dual Audio")
+                }
+
+                // Add dub/sub statuses
+                addDubStatus(isDub, isSub)
             }
         } else {
-            newMovieSearchResponse(title, fixHref, TvType.Movie) {
+            newAnimeSearchResponse(title, fixHref, TvType.Movie) {
                 this.posterUrl = posterUrl
                 this.year = year
+
+                // Add quality badges
+                if (!qualityBadge.isNullOrBlank()) {
+                    addQuality(qualityBadge)
+                } else if (is4k) {
+                    addQuality("4K")
+                } else if (isDual) {
+                    addQuality("Dual Audio")
+                }
+
+                // Add dub/sub statuses
+                addDubStatus(isDub, isSub)
             }
         }
     }
