@@ -601,17 +601,22 @@ open class DhakaFlixProvider : MainAPI() {
                 }
             }
             
-            val response = app.post(
-                "$host$path?",
-                data = mapOf(
-                    "action" to "get",
-                    "items[href]" to path,
-                    "items[what]" to "1"
-                )
-            )
+            val responseText = try {
+                app.post(
+                    "$host$path?",
+                    data = mapOf(
+                        "action" to "get",
+                        "items[href]" to path,
+                        "items[what]" to "1"
+                    )
+                ).text
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return@withLock emptyList()
+            }
 
             val items = runCatching {
-                mapper.readValue<H5ItemsResponse>(response.text).items
+                mapper.readValue<H5ItemsResponse>(responseText).items
             }.getOrElse { emptyList() }
             val direct = directChildren(items, path)
 
