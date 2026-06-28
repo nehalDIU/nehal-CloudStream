@@ -393,30 +393,48 @@ open class DhakaFlixProvider : MainAPI() {
         val phase1MoviesDeferred = async { searchMovieCategories(recentMinYear, 2026) }
         val phase1EnglishDeferred = async { searchEnglishMovies(recentMinYear, 2026) }
 
-        results.addAll(phase1TvDeferred.await())
-        results.addAll(phase1AnimeDeferred.await())
-        results.addAll(phase1MoviesDeferred.await())
-        results.addAll(phase1EnglishDeferred.await())
+        val phase1TvResults = phase1TvDeferred.await()
+        val phase1AnimeResults = phase1AnimeDeferred.await()
+        val phase1MovieResults = phase1MoviesDeferred.await()
+        val phase1EnglishResults = phase1EnglishDeferred.await()
+
+        results.addAll(phase1TvResults)
+        results.addAll(phase1AnimeResults)
+        results.addAll(phase1MovieResults)
+        results.addAll(phase1EnglishResults)
 
         // ==========================================
         // PHASE 2: FALLBACK (OLDER YEARS & OTHER GROUPS)
         // ==========================================
-        // Only run Phase 2 if we got less than 5 results and no specific year was targeted
-        if (results.size < 5 && queryYear == null) {
-            val remainingTvGroups = tvGroups.values.filter { it !in phase1TvGroups }
-            val phase2TvDeferred = if (remainingTvGroups.isNotEmpty()) async { searchTvGroups(remainingTvGroups) } else null
+        if (queryYear == null) {
+            val totalMoviesCount = phase1MovieResults.size + phase1EnglishResults.size
+            val needsOlderMovies = totalMoviesCount < 5
+            val needsOtherTv = results.size < 5
 
-            val remainingAnimeGroups = animeGroups.values.filter { it !in phase1AnimeGroups }
-            val phase2AnimeDeferred = if (remainingAnimeGroups.isNotEmpty()) async { searchAnimeGroups(remainingAnimeGroups) } else null
-            
-            // Search older years (pre-2018)
-            val phase2MoviesDeferred = async { searchMovieCategories(null, 2017) }
-            val phase2EnglishDeferred = async { searchEnglishMovies(null, 2017) }
+            coroutineScope {
+                val phase2TvDeferred = if (needsOtherTv) {
+                    val remainingTvGroups = tvGroups.values.filter { it !in phase1TvGroups }
+                    if (remainingTvGroups.isNotEmpty()) async { searchTvGroups(remainingTvGroups) } else null
+                } else null
 
-            phase2TvDeferred?.await()?.let { results.addAll(it) }
-            phase2AnimeDeferred?.await()?.let { results.addAll(it) }
-            results.addAll(phase2MoviesDeferred.await())
-            results.addAll(phase2EnglishDeferred.await())
+                val phase2AnimeDeferred = if (needsOtherTv) {
+                    val remainingAnimeGroups = animeGroups.values.filter { it !in phase1AnimeGroups }
+                    if (remainingAnimeGroups.isNotEmpty()) async { searchAnimeGroups(remainingAnimeGroups) } else null
+                } else null
+
+                val phase2MoviesDeferred = if (needsOlderMovies) {
+                    async { searchMovieCategories(null, 2017) }
+                } else null
+
+                val phase2EnglishDeferred = if (needsOlderMovies) {
+                    async { searchEnglishMovies(null, 2017) }
+                } else null
+
+                phase2TvDeferred?.await()?.let { results.addAll(it) }
+                phase2AnimeDeferred?.await()?.let { results.addAll(it) }
+                phase2MoviesDeferred?.await()?.let { results.addAll(it) }
+                phase2EnglishDeferred?.await()?.let { results.addAll(it) }
+            }
         }
 
         results.distinctBy { it.url }.take(maxResults)
