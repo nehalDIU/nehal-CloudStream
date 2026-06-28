@@ -1,0 +1,42 @@
+import urllib.request
+import urllib.parse
+import json
+
+host = "http://172.16.50.12"
+groups = [
+    "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%98%85%20%200%20%20%E2%80%94%20%209/",
+    "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A5%20%20A%20%20%E2%80%94%20%20L/",
+    "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20M%20%20%E2%80%94%20%20R/",
+    "/DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20S%20%20%E2%80%94%20%20Z/"
+]
+
+headers = {
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+}
+
+with open("scratch/all_tv_folders.txt", "w", encoding="utf-8") as f:
+    for path in groups:
+        data = {
+            "action": "get",
+            "items[href]": path,
+            "items[what]": "1"
+        }
+        encoded_data = urllib.parse.urlencode(data).encode("utf-8")
+        req = urllib.request.Request(f"{host}{path}?", data=encoded_data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                res_body = response.read().decode("utf-8")
+                parsed = json.loads(res_body)
+                items = parsed.get("items", [])
+                folders = []
+                for item in items:
+                    href = item.get("href")
+                    if href != path and href.endswith('/'):
+                        folders.append(urllib.parse.unquote(href))
+                f.write(f"\n--- Group {urllib.parse.unquote(path)}: {len(folders)} folders ---\n")
+                for folder in sorted(folders):
+                    f.write(f"  {folder}\n")
+        except Exception as e:
+            f.write(f"Error querying group {path}: {e}\n")
+
+print("Done! Dumper finished. Output written to scratch/all_tv_folders.txt")
