@@ -336,12 +336,7 @@ open class DhakaFlixProvider : MainAPI() {
             val yearFolders = fetchDirectChildren(movieHost, movieRootPath)
                 .filter { it.isFolder }
                 .filter { item ->
-                    val year = extractYear(decodeNameFromHref(item.href)) ?: return@filter false
-                    if (queryYear != null) {
-                        year == queryYear
-                    } else {
-                        (minYear == null || year >= minYear) && (maxYear == null || year <= maxYear)
-                    }
+                    matchesYearConstraint(decodeNameFromHref(item.href), minYear, maxYear, queryYear)
                 }
 
             val englishDeferreds = yearFolders.map { yearFolder ->
@@ -415,8 +410,8 @@ open class DhakaFlixProvider : MainAPI() {
             val phase2AnimeDeferred = if (remainingAnimeGroups.isNotEmpty()) async { searchAnimeGroups(remainingAnimeGroups) } else null
             
             // Search older years (pre-2018)
-            val phase2MoviesDeferred = async { searchMovieCategories(1995, 2017) }
-            val phase2EnglishDeferred = async { searchEnglishMovies(1995, 2017) }
+            val phase2MoviesDeferred = async { searchMovieCategories(null, 2017) }
+            val phase2EnglishDeferred = async { searchEnglishMovies(null, 2017) }
 
             phase2TvDeferred?.await()?.let { results.addAll(it) }
             phase2AnimeDeferred?.await()?.let { results.addAll(it) }
@@ -437,12 +432,7 @@ open class DhakaFlixProvider : MainAPI() {
         val yearFolders = fetchDirectChildren(host, rootPath)
             .filter { it.isFolder }
             .filter { item ->
-                val year = extractYear(decodeNameFromHref(item.href)) ?: return@filter false
-                if (queryYear != null) {
-                    year == queryYear
-                } else {
-                    (minYear == null || year >= minYear) && (maxYear == null || year <= maxYear)
-                }
+                matchesYearConstraint(decodeNameFromHref(item.href), minYear, maxYear, queryYear)
             }
 
         val deferreds = yearFolders.map { yearFolder ->
@@ -736,6 +726,37 @@ open class DhakaFlixProvider : MainAPI() {
 
     private fun extractYear(text: String): Int? {
         return Regex("(19|20)\\d{2}").find(text)?.value?.toIntOrNull()
+    }
+
+    private fun matchesYearConstraint(
+        folderName: String,
+        minYear: Int?,
+        maxYear: Int?,
+        queryYear: Int?
+    ): Boolean {
+        val years = Regex("(19|20)\\d{2}").findAll(folderName)
+            .mapNotNull { it.value.toIntOrNull() }
+            .toList()
+
+        if (years.isEmpty()) {
+            return true
+        }
+
+        val isBefore = folderName.contains("before", ignoreCase = true)
+
+        val (startYear, endYear) = when {
+            years.size >= 2 -> years[0] to years[1]
+            isBefore -> 0 to years[0]
+            else -> years[0] to years[0]
+        }
+
+        return if (queryYear != null) {
+            queryYear in startYear..endYear
+        } else {
+            val effectiveMin = minYear ?: 0
+            val effectiveMax = maxYear ?: 9999
+            maxOf(startYear, effectiveMin) <= minOf(endYear, effectiveMax)
+        }
     }
 
     private fun isSeasonFolder(href: String): Boolean {
