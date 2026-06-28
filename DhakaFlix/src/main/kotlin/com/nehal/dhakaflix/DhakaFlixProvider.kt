@@ -90,6 +90,8 @@ open class DhakaFlixProvider : MainAPI() {
     private val movieCategories = listOf(
         Category("movie:latest", movieRootPath, "English Movies 1080p - Latest", TvType.Movie, movieHost),
         Category("movie:english-7", "/DHAKA-FLIX-7/English%20Movies/", "English Movies", TvType.Movie, kolkataHost),
+        Category("movie:3d-7", "/DHAKA-FLIX-7/3D%20Movies/", "3D Movies", TvType.Movie, kolkataHost),
+        Category("movie:foreign-7", "/DHAKA-FLIX-7/Foreign%20Language%20Movies/", "Foreign Language Movies", TvType.Movie, kolkataHost),
         Category("movie:hindi", "/DHAKA-FLIX-14/Hindi%20Movies/", "Hindi Movies", TvType.Movie, movieHost),
         Category("movie:south-dubbed", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/", "South-Movie Hindi Dubbed", TvType.Movie, movieHost),
         Category("movie:kolkata-bangla", "/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/", "Kolkata Bangla Movies", TvType.Movie, kolkataHost),
@@ -105,6 +107,8 @@ open class DhakaFlixProvider : MainAPI() {
         "tv:all" to "TV Series 0-9 & A-Z",
         "movie:latest" to "English Movies 1080p - Latest",
         "movie:english-7" to "English Movies",
+        "movie:3d-7" to "3D Movies",
+        "movie:foreign-7" to "Foreign Language Movies",
         "movie:hindi" to "Hindi Movies",
         "movie:south-dubbed" to "South-Movie Hindi Dubbed",
         "movie:kolkata-bangla" to "Kolkata Bangla Movies",
@@ -206,6 +210,13 @@ open class DhakaFlixProvider : MainAPI() {
                     "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
                     "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
                     "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 2021, 2026)
+                    "movie:foreign-7" -> coroutineScope {
+                        val langFolders = fetchDirectChildren(kolkataHost, categoryPath).filter { it.isFolder }
+                        langFolders
+                            .map { langFolder -> async { fetchDirectChildren(kolkataHost, langFolder.href) } }
+                            .awaitAll()
+                            .flatten()
+                    }
                     "movie:anime" -> coroutineScope {
                         animeGroups.values
                             .map { groupPath -> async { fetchDirectChildren(animeHost, groupPath) } }
@@ -297,6 +308,13 @@ open class DhakaFlixProvider : MainAPI() {
                         "movie:hindi" -> fetchYearIndexedMovieFolders(category.host, category.path, minYear, maxYear, queryYear)
                         "movie:south-dubbed" -> fetchYearIndexedMovieFolders(category.host, category.path, minYear, maxYear, queryYear)
                         "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(category.host, category.path, minYear, maxYear, queryYear)
+                        "movie:foreign-7" -> coroutineScope {
+                            val langFolders = fetchDirectChildren(category.host, category.path).filter { it.isFolder }
+                            langFolders
+                                .map { langFolder -> async { fetchDirectChildren(category.host, langFolder.href) } }
+                                .awaitAll()
+                                .flatten()
+                        }
                         else -> fetchDirectChildren(category.host, category.path)
                     }.filter { it.isFolder }
 
