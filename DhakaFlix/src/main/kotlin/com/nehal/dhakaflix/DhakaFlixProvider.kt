@@ -275,8 +275,9 @@ open class DhakaFlixProvider : MainAPI() {
         val normalized = query.trim()
         if (normalized.isEmpty()) return@coroutineScope emptyList()
 
-        val queryLower = normalized.lowercase()
         val queryYear = extractYear(normalized)
+        val cleanQuery = if (queryYear != null) normalized.replace(queryYear.toString(), "").trim() else normalized
+        val queryLower = cleanQuery.lowercase()
         val maxResults = 60
         val results = ArrayList<SearchResponse>()
 
@@ -288,7 +289,7 @@ open class DhakaFlixProvider : MainAPI() {
                         .filter { it.isFolder }
                         .mapNotNull { item ->
                             val title = cleanName(decodeNameFromHref(item.href))
-                            if (title.lowercase().contains(queryLower)) {
+                            if (matchesQuery(title, queryLower, queryYear)) {
                                 val posterUrl = guessPosterUrl(tvHost, item.href)
                                 buildSearchResponse(title, absoluteUrl(tvHost, item.href), TvType.TvSeries, posterUrl)
                             } else null
@@ -320,7 +321,7 @@ open class DhakaFlixProvider : MainAPI() {
 
                     items.mapNotNull { item ->
                         val title = cleanName(decodeNameFromHref(item.href))
-                        if (title.lowercase().contains(queryLower)) {
+                        if (matchesQuery(title, queryLower, queryYear)) {
                             val url = absoluteUrl(category.host, item.href)
                             val posterUrl = guessPosterUrl(category.host, item.href)
                             buildSearchResponse(title, url, category.type, posterUrl)
@@ -346,7 +347,7 @@ open class DhakaFlixProvider : MainAPI() {
 
                     movieItems.mapNotNull { item ->
                         val title = cleanName(decodeNameFromHref(item.href))
-                        if (title.lowercase().contains(queryLower)) {
+                        if (matchesQuery(title, queryLower, queryYear)) {
                             val posterUrl = guessPosterUrl(movieHost, item.href)
                             buildSearchResponse(title, absoluteUrl(movieHost, item.href), TvType.Movie, posterUrl)
                         } else null
@@ -367,7 +368,7 @@ open class DhakaFlixProvider : MainAPI() {
                         .filter { it.isFolder }
                         .mapNotNull { item ->
                             val title = cleanName(decodeNameFromHref(item.href))
-                            if (title.lowercase().contains(queryLower)) {
+                            if (matchesQuery(title, queryLower, queryYear)) {
                                 val posterUrl = guessPosterUrl(animeHost, item.href)
                                 buildSearchResponse(title, absoluteUrl(animeHost, item.href), TvType.Anime, posterUrl)
                             } else null
@@ -774,6 +775,23 @@ open class DhakaFlixProvider : MainAPI() {
             val effectiveMin = minYear ?: 0
             val effectiveMax = maxYear ?: 9999
             maxOf(startYear, effectiveMin) <= minOf(endYear, effectiveMax)
+        }
+    }
+
+    private fun matchesQuery(title: String, queryLower: String, queryYear: Int?): Boolean {
+        val titleLower = title.lowercase()
+        if (queryYear != null) {
+            val titleYears = Regex("(19|20)\\d{2}").findAll(title)
+                .mapNotNull { it.value.toIntOrNull() }
+                .toList()
+            if (titleYears.isNotEmpty() && queryYear !in titleYears) {
+                return false
+            }
+        }
+        return if (queryLower.isEmpty()) {
+            queryYear != null && titleLower.contains(queryYear.toString())
+        } else {
+            titleLower.contains(queryLower)
         }
     }
 
