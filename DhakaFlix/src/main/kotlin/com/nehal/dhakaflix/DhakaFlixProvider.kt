@@ -32,6 +32,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Deferred
 
 open class DhakaFlixProvider : MainAPI() {
@@ -128,6 +130,25 @@ open class DhakaFlixProvider : MainAPI() {
     // Concurrent request de-duplication variables
     private val cacheMutex = Mutex()
     private val keyLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    private val networkSemaphore = Semaphore(5)
+
+    private fun getTtlForPath(path: String): Long {
+        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val years = Regex("(19|20)\\d{2}").findAll(path)
+            .mapNotNull { it.value.toIntOrNull() }
+            .toList()
+
+        if (years.isNotEmpty() && years.any { it < currentYear }) {
+            return 24 * 60 * 60 * 1000L // 24 hours for static/older years
+        }
+
+        val depth = path.split('/').filter { it.isNotEmpty() }.size
+        if (depth >= 4) {
+            return 2 * 60 * 60 * 1000L // 2 hours for deep movie/tv series directories
+        }
+
+        return 15 * 60 * 1000L // 15 minutes default for active roots
+    }
 
     private data class CacheEntry(
         val timestampMs: Long,
@@ -203,13 +224,13 @@ open class DhakaFlixProvider : MainAPI() {
                         if (latestYearPath != null) {
                             fetchDirectChildren(movieHost, latestYearPath)
                         } else {
-                            fetchYearIndexedMovieFolders(movieHost, movieRootPath, 2023, 2026)
+                            fetchYearIndexedMovieFoldersLazy(movieHost, movieRootPath, page, pageSize, 2023, 2026)
                         }
                     }
-                    "movie:english-7" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 2023, 2026)
-                    "movie:hindi" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
-                    "movie:south-dubbed" -> fetchYearIndexedMovieFolders(movieHost, categoryPath, 2023, 2026)
-                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFolders(kolkataHost, categoryPath, 2021, 2026)
+                    "movie:english-7" -> fetchYearIndexedMovieFoldersLazy(kolkataHost, categoryPath, page, pageSize, 2023, 2026)
+                    "movie:hindi" -> fetchYearIndexedMovieFoldersLazy(movieHost, categoryPath, page, pageSize, 2023, 2026)
+                    "movie:south-dubbed" -> fetchYearIndexedMovieFoldersLazy(movieHost, categoryPath, page, pageSize, 2023, 2026)
+                    "movie:kolkata-bangla" -> fetchYearIndexedMovieFoldersLazy(kolkataHost, categoryPath, page, pageSize, 2021, 2026)
                     "movie:foreign-7" -> coroutineScope {
                         val langFolders = fetchDirectChildren(kolkataHost, categoryPath).filter { it.isFolder }
                         langFolders
@@ -387,7 +408,7 @@ open class DhakaFlixProvider : MainAPI() {
         val phase1AnimeGroups = if (targetAnimeGroup != null) listOf(targetAnimeGroup) else animeGroups.values
 
         // If queryYear is provided, we skip recency tier and target that year directly
-        val recentMinYear = if (queryYear != null) null else 2018
+        val recentMinYear = if (queryYear != null) null else 2022
 
         val phase1TvDeferred = async { searchTvGroups(phase1TvGroups) }
         val phase1AnimeDeferred = async { searchAnimeGroups(phase1AnimeGroups) }
@@ -424,11 +445,11 @@ open class DhakaFlixProvider : MainAPI() {
                 } else null
 
                 val phase2MoviesDeferred = if (needsOlderMovies) {
-                    async { searchMovieCategories(null, 2017) }
+                    async { searchMovieCategories(null, 2021) }
                 } else null
 
                 val phase2EnglishDeferred = if (needsOlderMovies) {
-                    async { searchEnglishMovies(null, 2017) }
+                    async { searchEnglishMovies(null, 2021) }
                 } else null
 
                 phase2TvDeferred?.await()?.let { results.addAll(it) }
@@ -453,6 +474,9 @@ open class DhakaFlixProvider : MainAPI() {
             .filter { item ->
                 matchesYearConstraint(decodeNameFromHref(item.href), minYear, maxYear, queryYear)
             }
+            .sortedByDescending {
+                extractYear(decodeNameFromHref(it.href)) ?: 0
+            }
 
         val deferreds = yearFolders.map { yearFolder ->
             async {
@@ -460,6 +484,37 @@ open class DhakaFlixProvider : MainAPI() {
             }
         }
         deferreds.awaitAll().flatten().distinctBy { it.href }
+    }
+
+    private suspend fun fetchYearIndexedMovieFoldersLazy(
+        host: String,
+        rootPath: String,
+        page: Int,
+        pageSize: Int,
+        minYear: Int? = null,
+        maxYear: Int? = null,
+        queryYear: Int? = null
+    ): List<H5Item> = coroutineScope {
+        val yearFolders = fetchDirectChildren(host, rootPath)
+            .filter { it.isFolder }
+            .filter { item ->
+                matchesYearConstraint(decodeNameFromHref(item.href), minYear, maxYear, queryYear)
+            }
+            .sortedByDescending {
+                extractYear(decodeNameFromHref(it.href)) ?: 0
+            }
+
+        val targetCount = page * pageSize
+        val accumulatedItems = ArrayList<H5Item>()
+
+        for (yearFolder in yearFolders) {
+            val children = fetchDirectChildren(host, yearFolder.href).filter { it.isFolder }
+            accumulatedItems.addAll(children)
+            if (accumulatedItems.size >= targetCount) {
+                break
+            }
+        }
+        accumulatedItems.distinctBy { it.href }
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -608,9 +663,10 @@ open class DhakaFlixProvider : MainAPI() {
         
         // 1. Fast path: Check memory cache under cache lock
         val nowMs = System.currentTimeMillis()
+        val ttl = getTtlForPath(path)
         cacheMutex.withLock {
             childrenCache[cacheKey]?.let { entry ->
-                if (nowMs - entry.timestampMs <= childrenCacheTtlMs) {
+                if (nowMs - entry.timestampMs <= ttl) {
                     return entry.items
                 }
             }
@@ -622,21 +678,23 @@ open class DhakaFlixProvider : MainAPI() {
             // Re-check cache inside key lock
             cacheMutex.withLock {
                 childrenCache[cacheKey]?.let { entry ->
-                    if (System.currentTimeMillis() - entry.timestampMs <= childrenCacheTtlMs) {
+                    if (System.currentTimeMillis() - entry.timestampMs <= ttl) {
                         return@withLock entry.items
                     }
                 }
             }
             
             val responseText = try {
-                app.post(
-                    "$host$path?",
-                    data = mapOf(
-                        "action" to "get",
-                        "items[href]" to path,
-                        "items[what]" to "1"
-                    )
-                ).text
+                networkSemaphore.withPermit {
+                    app.post(
+                        "$host$path?",
+                        data = mapOf(
+                            "action" to "get",
+                            "items[href]" to path,
+                            "items[what]" to "1"
+                        )
+                    ).text
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 return@withLock emptyList()
