@@ -2,7 +2,7 @@
 version = 1
 
 cloudstream {
-    description = "DhakaFlix provider"
+    description = "DhakaFlix (BDIX) provider covering 172.16.50.12, 172.16.50.14, and 172.16.50.7"
     authors = listOf("Nehal")
 
     /**
@@ -16,7 +16,8 @@ cloudstream {
 
     tvTypes = listOf(
         "Movie",
-        "TvSeries"
+        "TvSeries",
+        "Anime"
     )
     language = "bn"
 

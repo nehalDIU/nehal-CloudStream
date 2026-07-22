@@ -37,7 +37,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Deferred
 
 open class DhakaFlixProvider : MainAPI() {
-    override var name = "DhakaFlix (BDIX)"
+    override var name = "DhakaFlix"
     override var mainUrl = "http://172.16.50.12"
     override var lang = "bn"
 
