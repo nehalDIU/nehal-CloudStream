@@ -448,11 +448,11 @@ open class DhakaFlixProvider : MainAPI() {
                 } else null
 
                 val phase2MoviesDeferred = if (needsOlderMovies) {
-                    async { searchMovieCategories(null, 2021) }
+                    async { searchMovieCategories(null, 2023) }
                 } else null
 
                 val phase2EnglishDeferred = if (needsOlderMovies) {
-                    async { searchEnglishMovies(null, 2021) }
+                    async { searchEnglishMovies(null, 2023) }
                 } else null
 
                 phase2TvDeferred?.await()?.let { results.addAll(it) }
