@@ -25,6 +25,7 @@ import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -46,6 +47,9 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     private val host12 = "http://172.16.50.12"
     private val host14 = "http://172.16.50.14"
     private val host7  = "http://172.16.50.7"
+
+    private val directoryCache = ConcurrentHashMap<String, Pair<Long, List<DirectoryEntry>>>()
+    private val cacheTtlMs = 30 * 60 * 1000L // 30 minutes memory cache
 
     private data class BDIXCategory(
         val name: String,
@@ -147,6 +151,20 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val isDirectory: Boolean
     )
 
+    private suspend fun fetchDirectoryListingCached(url: String): List<DirectoryEntry> {
+        val now = System.currentTimeMillis()
+        directoryCache[url]?.let { (timestamp, cachedEntries) ->
+            if (now - timestamp < cacheTtlMs && cachedEntries.isNotEmpty()) {
+                return cachedEntries
+            }
+        }
+        val freshEntries = fetchDirectoryListing(url)
+        if (freshEntries.isNotEmpty()) {
+            directoryCache[url] = Pair(now, freshEntries)
+        }
+        return freshEntries
+    }
+
     private suspend fun fetchDirectoryListing(url: String): List<DirectoryEntry> {
         return try {
             val responseHtml = app.get(url, timeout = 10).text
@@ -174,7 +192,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
     private suspend fun fetchCategoryEntries(cat: BDIXCategory): List<DirectoryEntry> {
         val rootUrl = fixUrl(cat.path, cat.host)
-        val topEntries = fetchDirectoryListing(rootUrl)
+        val topEntries = fetchDirectoryListingCached(rootUrl)
 
         val directMovies = topEntries.filter { !isContainerFolder(it.name) }
         val containers = topEntries.filter { isContainerFolder(it.name) && it.isDirectory }
@@ -183,15 +201,16 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             return directMovies
         }
 
-        // Expand container folders (recent years first, e.g. 2026, 2025, 2024...)
+        // Expand container folders (recent years first, e.g. 2026, 2025, 2024, 2023...)
         val sortedContainers = containers.sortedByDescending { container ->
             Regex("""\d{4}""").find(container.name)?.value?.toIntOrNull() ?: 0
         }
 
+        // Fetch top 5 most recent year containers in parallel with caching to maximize performance
         val expandedMovies = coroutineScope {
-            sortedContainers.take(8).map { container ->
+            sortedContainers.take(5).map { container ->
                 async {
-                    fetchDirectoryListing(container.fullUrl).filter { it.isDirectory && !isContainerFolder(it.name) }
+                    fetchDirectoryListingCached(container.fullUrl).filter { it.isDirectory && !isContainerFolder(it.name) }
                 }
             }.awaitAll().flatten()
         }
@@ -259,7 +278,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             return newMovieLoadResponse(decodedTitle, url, TvType.Movie, url)
         }
 
-        val entries = fetchDirectoryListing(url)
+        val entries = fetchDirectoryListingCached(url)
         val posterUrl = pickPosterFromEntries(entries) ?: getOptimizedPosterUrl(url)
         val videoFiles = entries.filter { isMediaFile(it.fullUrl) }
         val subDirs = entries.filter { it.isDirectory }
@@ -270,7 +289,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             var episodeNum = 1
 
             for (dir in subDirs) {
-                val seasonEntries = fetchDirectoryListing(dir.fullUrl)
+                val seasonEntries = fetchDirectoryListingCached(dir.fullUrl)
                 val seasonVideos = seasonEntries.filter { isMediaFile(it.fullUrl) }
 
                 for (vid in seasonVideos) {
@@ -329,7 +348,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             return true
         }
 
-        val entries = fetchDirectoryListing(data)
+        val entries = fetchDirectoryListingCached(data)
         val mediaFiles = entries.filter { isMediaFile(it.fullUrl) }
 
         for (file in mediaFiles) {

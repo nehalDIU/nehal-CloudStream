@@ -1,4 +1,4 @@
-﻿package com.cncverse
+package com.cncverse
 
 import android.content.Context
 import com.lagradost.cloudstream3.*
@@ -257,6 +257,20 @@ class CastleTvProvider : MainAPI() {
         val isAI: Int? = null
     )
 
+    private fun extractEncryptedPayload(responseText: String): String? {
+        val trimmed = responseText.trim()
+        if (trimmed.isEmpty()) return null
+        if (trimmed.startsWith("{")) {
+            return try {
+                val apiResponse = mapper.readValue<CastleApiResponse>(trimmed)
+                apiResponse.data ?: trimmed
+            } catch (e: Exception) {
+                trimmed
+            }
+        }
+        return trimmed
+    }
+
     private suspend fun getSecurityKey(): String? {
         return try {
             val url = "$mainUrl/v0.1/system/getSecurityKey/1?channel=IndiaA&clientType=1&lang=en-US"
@@ -266,9 +280,11 @@ class CastleTvProvider : MainAPI() {
             if (securityResponse.code == 200) {
                 securityResponse.data
             } else {
+                android.util.Log.w("CastleTvProvider", "getSecurityKey returned non-200 code: ${securityResponse.code}, msg: ${securityResponse.msg}")
                 null
             }
         } catch (e: Exception) {
+            android.util.Log.e("CastleTvProvider", "Failed to fetch security key: ${e.message}", e)
             null
         }
     }
@@ -285,6 +301,9 @@ class CastleTvProvider : MainAPI() {
     }
 
     private fun decryptData(encryptedB64: String, apiKeyB64: String): String? {
+        if (keySupFixx.isNullOrBlank()) {
+            android.util.Log.w("CastleTvProvider", "CASTLE_SUFFIX is empty! Decryption requires CASTLE_SUFFIX configured in build/gradle properties.")
+        }
         return try {
             val aesKey = deriveKey(apiKeyB64)
             val iv = aesKey // Use the same key as IV as confirmed by analysis
@@ -299,6 +318,7 @@ class CastleTvProvider : MainAPI() {
             val decrypted = cipher.doFinal(encryptedData)
             String(decrypted, StandardCharsets.UTF_8)
         } catch (e: Exception) {
+            android.util.Log.e("CastleTvProvider", "Error decrypting Castle TV payload: ${e.message}", e)
             null
         }
     }
@@ -315,13 +335,9 @@ class CastleTvProvider : MainAPI() {
             val securityKey = getSecurityKey() ?: return newHomePageResponse(emptyList())
             val url = "$mainUrl/film-api/v0.1/category/home?channel=IndiaA&clientType=1&clientType=1&lang=en-US&locationId=1001&mode=1&packageName=com.external.castle&page=$page&size=17"
             val response = app.get(url)
-            val apiResponse = try {
-                mapper.readValue<CastleApiResponse>(response.text)
-            } catch (e: Exception) {
-                CastleApiResponse(200, "OK", response.text)
-            }           
-            val encryptedData = apiResponse.data            
+            val encryptedData = extractEncryptedPayload(response.text)
             if (encryptedData.isNullOrBlank()) {
+                android.util.Log.w("CastleTvProvider", "getMainPage received empty payload")
                 return newHomePageResponse(emptyList())
             }           
             val decryptedJson = decryptData(encryptedData, securityKey)
@@ -365,6 +381,7 @@ class CastleTvProvider : MainAPI() {
             newHomePageResponse(homePageLists)
             
         } catch (e: Exception) {
+            android.util.Log.e("CastleTvProvider", "getMainPage failed: ${e.message}", e)
             newHomePageResponse(emptyList())
         }
     }
@@ -377,9 +394,10 @@ class CastleTvProvider : MainAPI() {
             val searchUrl = "$mainUrl/film-api/v1.1.0/movie/searchByKeyword?channel=IndiaA&clientType=1&clientType=1&keyword=${java.net.URLEncoder.encode(query, "UTF-8")}&lang=en-US&mode=1&packageName=com.external.castle&page=1&size=30"
             
             val response = app.get(searchUrl)
-            val encryptedData = response.text
+            val encryptedData = extractEncryptedPayload(response.text)
             
             if (encryptedData.isNullOrBlank()) {
+                android.util.Log.w("CastleTvProvider", "search received empty payload")
                 return emptyList()
             }
             
@@ -415,6 +433,7 @@ class CastleTvProvider : MainAPI() {
             } ?: emptyList()
             
         } catch (e: Exception) {
+            android.util.Log.e("CastleTvProvider", "search failed: ${e.message}", e)
             emptyList()
         }
     }
@@ -428,9 +447,10 @@ class CastleTvProvider : MainAPI() {
             val detailsUrl = "$mainUrl/film-api/v1.9.9/movie?channel=IndiaA&clientType=1&clientType=1&lang=en-US&movieId=$movieId&packageName=com.external.castle"
             
             val response = app.get(detailsUrl)
-            val encryptedData = response.text
+            val encryptedData = extractEncryptedPayload(response.text)
             
             if (encryptedData.isNullOrBlank()) {
+                android.util.Log.w("CastleTvProvider", "load received empty payload for movieId: $movieId")
                 return null
             }
             
@@ -478,7 +498,7 @@ class CastleTvProvider : MainAPI() {
                                 // Fetch episodes for this season
                                 val seasonUrl = "$mainUrl/film-api/v1.9.9/movie?channel=IndiaA&clientType=1&clientType=1&lang=en-US&movieId=$seasonId&packageName=com.external.castle"
                                 val seasonResponse = app.get(seasonUrl)
-                                val seasonEncryptedData = seasonResponse.text
+                                val seasonEncryptedData = extractEncryptedPayload(seasonResponse.text)
                                 
                                 if (!seasonEncryptedData.isNullOrBlank()) {
                                     val seasonDecryptedJson = decryptData(seasonEncryptedData, securityKey)
@@ -498,7 +518,7 @@ class CastleTvProvider : MainAPI() {
                                     }
                                 }
                             } catch (e: Exception) {
-                                // Continue with other seasons even if one fails
+                                android.util.Log.w("CastleTvProvider", "Failed to fetch season $seasonNumber: ${e.message}")
                             }
                         }
                     } else {
@@ -559,7 +579,7 @@ class CastleTvProvider : MainAPI() {
             }
             
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("CastleTvProvider", "load failed for url $url: ${e.message}", e)
             null
         }
     }
@@ -584,7 +604,8 @@ class CastleTvProvider : MainAPI() {
             val securityKey = getSecurityKey() ?: return false
             val detailsUrl = "$mainUrl/film-api/v1.9.9/movie?channel=IndiaA&clientType=1&clientType=1&lang=en-US&movieId=$movieId&packageName=com.external.castle"
             val detailsResponse = app.get(detailsUrl)
-            val detailsDecrypted = decryptData(detailsResponse.text, securityKey) ?: return false
+            val detailsEncrypted = extractEncryptedPayload(detailsResponse.text) ?: return false
+            val detailsDecrypted = decryptData(detailsEncrypted, securityKey) ?: return false
             val details = mapper.readValue<MovieDetailsResponse>(detailsDecrypted).data
             
             // Find the episode to get available tracks
@@ -633,7 +654,7 @@ class CastleTvProvider : MainAPI() {
                             requestBody = postBody.toRequestBody("application/json; charset=utf-8".toMediaType()),
                         )
 
-                        val encryptedData = videoResponse.text
+                        val encryptedData = extractEncryptedPayload(videoResponse.text)
                         if (encryptedData.isNullOrBlank()) {
                             continue
                         }
@@ -691,6 +712,7 @@ class CastleTvProvider : MainAPI() {
                         } else {
                         }
                     } catch (e: Exception) {
+                        android.util.Log.w("CastleTvProvider", "getVideo2 failed for res $resolution: ${e.message}")
                     }
                 }
             } else {
@@ -723,14 +745,13 @@ class CastleTvProvider : MainAPI() {
                                 requestBody = postBody.toRequestBody("application/json; charset=utf-8".toMediaType()),
                             )
 
-                            val encryptedData = videoResponse.text
+                            val encryptedData = extractEncryptedPayload(videoResponse.text)
 
                             if (encryptedData.isNullOrBlank()) {
                                 continue
                             }
 
                             val decryptedJson = decryptData(encryptedData, securityKey)
-                            println("Decrypted JSON: $decryptedJson") // Debug log
                             if (decryptedJson == null) {
                                 continue
                             }
@@ -783,6 +804,7 @@ class CastleTvProvider : MainAPI() {
                             } else {
                             }
                         } catch (e: Exception) {
+                            android.util.Log.w("CastleTvProvider", "getVideo2 failed for lang $languageId res $resolution: ${e.message}")
                         }
                     }
                 }
@@ -791,6 +813,7 @@ class CastleTvProvider : MainAPI() {
             videoLoaded
             
         } catch (e: Exception) {
+            android.util.Log.e("CastleTvProvider", "loadLinks failed for data $data: ${e.message}", e)
             false
         }
     }
