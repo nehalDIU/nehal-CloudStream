@@ -130,7 +130,10 @@ open class DhakaFlixProvider : MainAPI() {
     // Concurrent request de-duplication variables
     private val cacheMutex = Mutex()
     private val keyLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
-    private val networkSemaphore = Semaphore(5)
+    private val networkSemaphore = Semaphore(20)
+
+    private var cachedLatestYearPath: String? = null
+    private var cachedLatestYearPathTime = 0L
 
     private fun getTtlForPath(path: String): Long {
         val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
@@ -408,7 +411,7 @@ open class DhakaFlixProvider : MainAPI() {
         val phase1AnimeGroups = if (targetAnimeGroup != null) listOf(targetAnimeGroup) else animeGroups.values
 
         // If queryYear is provided, we skip recency tier and target that year directly
-        val recentMinYear = if (queryYear != null) null else 2022
+        val recentMinYear = if (queryYear != null) null else 2024
 
         val phase1TvDeferred = async { searchTvGroups(phase1TvGroups) }
         val phase1AnimeDeferred = async { searchAnimeGroups(phase1AnimeGroups) }
@@ -507,9 +510,11 @@ open class DhakaFlixProvider : MainAPI() {
         val targetCount = page * pageSize
         val accumulatedItems = ArrayList<H5Item>()
 
-        for (yearFolder in yearFolders) {
-            val children = fetchDirectChildren(host, yearFolder.href).filter { it.isFolder }
-            accumulatedItems.addAll(children)
+        for (chunk in yearFolders.chunked(2)) {
+            val chunkItems = chunk.map { yearFolder ->
+                async { fetchDirectChildren(host, yearFolder.href).filter { it.isFolder } }
+            }.awaitAll().flatten()
+            accumulatedItems.addAll(chunkItems)
             if (accumulatedItems.size >= targetCount) {
                 break
             }
@@ -644,6 +649,11 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     private suspend fun findLatestMovieYearPath(): String? {
+        val now = System.currentTimeMillis()
+        if (cachedLatestYearPath != null && (now - cachedLatestYearPathTime) < 60 * 60 * 1000L) {
+            return cachedLatestYearPath
+        }
+
         val items = fetchDirectChildren(movieHost, movieRootPath)
             .filter { it.isFolder }
 
@@ -653,8 +663,12 @@ open class DhakaFlixProvider : MainAPI() {
             year to item.href
         }
 
-        val latest = yearItems.maxByOrNull { it.first } ?: return null
-        return latest.second
+        val latest = yearItems.maxByOrNull { it.first }?.second
+        if (latest != null) {
+            cachedLatestYearPath = latest
+            cachedLatestYearPathTime = now
+        }
+        return latest
     }
 
     private suspend fun fetchDirectChildren(host: String, href: String): List<H5Item> {
