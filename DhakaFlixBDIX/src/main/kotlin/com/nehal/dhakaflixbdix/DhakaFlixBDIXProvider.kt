@@ -77,13 +77,39 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         *categories.map { cat -> cat.path to cat.name }.toTypedArray()
     )
 
-    private fun decodeName(raw: String): String {
-        return try {
-            URLDecoder.decode(raw, StandardCharsets.UTF_8.name())
-                .replace("/", "")
-                .trim()
+    private fun getServerTagFromUrl(url: String): String {
+        return when {
+            url.contains("172.16.50.12") || url.contains("DHAKA-FLIX-12") -> "DF-12"
+            url.contains("172.16.50.14") || url.contains("DHAKA-FLIX-14") -> "DF-14"
+            url.contains("172.16.50.7")  || url.contains("DHAKA-FLIX-7")  -> "DF-7"
+            else -> "BDIX"
+        }
+    }
+
+    private fun cleanTitle(rawPathOrHref: String, serverTag: String? = null): String {
+        val segment = rawPathOrHref.trimEnd('/').substringAfterLast('/')
+        var name = try {
+            URLDecoder.decode(segment, StandardCharsets.UTF_8.name()).trim()
         } catch (_: Exception) {
-            raw.replace("/", "").trim()
+            segment.trim()
+        }
+
+        // Remove media/subtitle extensions if present
+        name = Regex("""\.(mp4|mkv|avi|m4v|webm|flv|srt|sub|txt)$""", RegexOption.IGNORE_CASE).replace(name, "")
+
+        // Replace separator dots/underscores with spaces if dots are used as word separators
+        if (name.contains(".") && !name.contains(" ")) {
+            name = name.replace(".", " ")
+        }
+        name = name.replace("_", " ").trim()
+
+        // Clean up redundant spaces
+        name = name.replace(Regex("""\s+"""), " ")
+
+        return if (!serverTag.isNullOrBlank()) {
+            "[$serverTag] $name"
+        } else {
+            name
         }
     }
 
@@ -105,18 +131,19 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             val doc = Jsoup.parse(responseHtml)
             val baseUri = URI(url)
             val entries = mutableListOf<DirectoryEntry>()
+            val serverTag = getServerTagFromUrl(url)
 
             doc.select("a[href]").forEach { a ->
                 val href = a.attr("href")
                 if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
                 if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
 
-                val decodedName = decodeName(href)
-                if (decodedName.isBlank()) return@forEach
+                val cleanedName = cleanTitle(href, serverTag)
+                if (cleanedName.isBlank() || cleanedName == "[$serverTag]") return@forEach
 
                 val isDir = href.endsWith("/")
                 val fullUrl = baseUri.resolve(href).toString()
-                entries.add(DirectoryEntry(decodedName, href, fullUrl, isDir))
+                entries.add(DirectoryEntry(cleanedName, href, fullUrl, isDir))
             }
             entries
         } catch (e: Exception) {
@@ -171,7 +198,8 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val decodedTitle = decodeName(url.substringAfterLast('/'))
+        val serverTag = getServerTagFromUrl(url)
+        val decodedTitle = cleanTitle(url, serverTag)
         val isVideoFile = isMediaFile(url)
 
         if (isVideoFile) {
