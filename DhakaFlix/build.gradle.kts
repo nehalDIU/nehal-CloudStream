@@ -2,7 +2,7 @@
 version = 1
 
 cloudstream {
-    description = "DhakaFlix provider"
+    description = "DhakaFlix (BDIX) provider"
     authors = listOf("Nehal")
 
     /**

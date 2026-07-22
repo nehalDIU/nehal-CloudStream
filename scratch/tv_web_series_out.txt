@@ -1,7 +1,0 @@
-Path '/DHAKA-FLIX-12/TV-WEB-Series/' contains 7 items:
-  - / (/)
-  - /DHAKA-FLIX-12/ (/DHAKA-FLIX-12/)
-  - /DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%98%85%20%200%20%20%E2%80%94%20%209/ (/DHAKA-FLIX-12/TV-WEB-Series/TV Series ★  0  —  9/)
-  - /DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A5%20%20A%20%20%E2%80%94%20%20L/ (/DHAKA-FLIX-12/TV-WEB-Series/TV Series ♥  A  —  L/)
-  - /DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20M%20%20%E2%80%94%20%20R/ (/DHAKA-FLIX-12/TV-WEB-Series/TV Series ♦  M  —  R/)
-  - /DHAKA-FLIX-12/TV-WEB-Series/TV%20Series%20%E2%99%A6%20%20S%20%20%E2%80%94%20%20Z/ (/DHAKA-FLIX-12/TV-WEB-Series/TV Series ♦  S  —  Z/)
