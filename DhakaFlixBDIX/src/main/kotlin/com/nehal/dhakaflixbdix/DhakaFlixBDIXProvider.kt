@@ -130,6 +130,16 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         return preferredPoster?.fullUrl
     }
 
+    private fun isContainerFolder(name: String): Boolean {
+        val clean = name.trim().lowercase()
+        // Year container folder pattern: (2025), (2025) 1080p, 2025, (1995) 1080p & Before
+        if (Regex("""^\(?\d{4}\)?(\s*(1080p|720p|&|and|before).*)*$""", RegexOption.IGNORE_CASE).matches(clean)) return true
+        // Group pattern like "0 - 9", "A - L", "0 — 9", "A — L"
+        if (Regex("""\b(\d\s*[—–-]\s*\d|[a-z]\s*[—–-]\s*[a-z])\b""", RegexOption.IGNORE_CASE).containsMatchIn(clean)) return true
+        if (clean == "hindi dubbed" || clean == "english dubbed" || clean == "foreign language movies") return true
+        return false
+    }
+
     private data class DirectoryEntry(
         val name: String,
         val href: String,
@@ -162,12 +172,38 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
     }
 
+    private suspend fun fetchCategoryEntries(cat: BDIXCategory): List<DirectoryEntry> {
+        val rootUrl = fixUrl(cat.path, cat.host)
+        val topEntries = fetchDirectoryListing(rootUrl)
+
+        val directMovies = topEntries.filter { !isContainerFolder(it.name) }
+        val containers = topEntries.filter { isContainerFolder(it.name) && it.isDirectory }
+
+        if (containers.isEmpty()) {
+            return directMovies
+        }
+
+        // Expand container folders (recent years first, e.g. 2026, 2025, 2024...)
+        val sortedContainers = containers.sortedByDescending { container ->
+            Regex("""\d{4}""").find(container.name)?.value?.toIntOrNull() ?: 0
+        }
+
+        val expandedMovies = coroutineScope {
+            sortedContainers.take(8).map { container ->
+                async {
+                    fetchDirectoryListing(container.fullUrl).filter { it.isDirectory && !isContainerFolder(it.name) }
+                }
+            }.awaitAll().flatten()
+        }
+
+        return (expandedMovies + directMovies).distinctBy { it.fullUrl }
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val cat = categories.find { it.path == request.data }
             ?: categories.first()
 
-        val fullUrl = fixUrl(cat.path, cat.host)
-        val entries = fetchDirectoryListing(fullUrl)
+        val entries = fetchCategoryEntries(cat)
 
         val items = entries.map { entry ->
             val name = entry.name
@@ -195,8 +231,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         return coroutineScope {
             val tasks = categories.map { cat ->
                 async {
-                    val catUrl = fixUrl(cat.path, cat.host)
-                    val entries = fetchDirectoryListing(catUrl)
+                    val entries = fetchCategoryEntries(cat)
                     entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
                         val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
                         if (cat.type == TvType.TvSeries) {
