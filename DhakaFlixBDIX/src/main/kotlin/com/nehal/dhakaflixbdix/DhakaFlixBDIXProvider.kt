@@ -112,6 +112,24 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         return "$host$cleanPath"
     }
 
+    private fun getOptimizedPosterUrl(folderUrl: String): String? {
+        val cleanUrl = folderUrl.trimEnd('/')
+        if (cleanUrl.isBlank() || isMediaFile(cleanUrl)) return null
+        return "$cleanUrl/a_AL_.jpg"
+    }
+
+    private fun pickPosterFromEntries(entries: List<DirectoryEntry>): String? {
+        val imageFiles = entries.filter { isImageFile(it.fullUrl) }
+        val preferredPoster = imageFiles.firstOrNull { it.name.contains("a_VL_", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a_AL_", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a11", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("poster", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("cover", true) }
+            ?: imageFiles.firstOrNull()
+
+        return preferredPoster?.fullUrl
+    }
+
     private data class DirectoryEntry(
         val name: String,
         val href: String,
@@ -125,7 +143,6 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             val doc = Jsoup.parse(responseHtml)
             val baseUri = URI(url)
             val entries = mutableListOf<DirectoryEntry>()
-            val serverTag = getServerTagFromUrl(url)
 
             doc.select("a[href]").forEach { a ->
                 val href = a.attr("href")
@@ -155,13 +172,15 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val items = entries.map { entry ->
             val name = entry.name
             val itemUrl = entry.fullUrl
+            val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(itemUrl) else null
+
             if (cat.type == TvType.TvSeries) {
                 newTvSeriesSearchResponse(name, itemUrl, TvType.TvSeries) {
-                    this.posterUrl = null
+                    this.posterUrl = posterUrl
                 }
             } else {
                 newMovieSearchResponse(name, itemUrl, TvType.Movie) {
-                    this.posterUrl = null
+                    this.posterUrl = posterUrl
                 }
             }
         }
@@ -179,10 +198,15 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                     val catUrl = fixUrl(cat.path, cat.host)
                     val entries = fetchDirectoryListing(catUrl)
                     entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
+                        val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
                         if (cat.type == TvType.TvSeries) {
-                            newTvSeriesSearchResponse(entry.name, entry.fullUrl, TvType.TvSeries)
+                            newTvSeriesSearchResponse(entry.name, entry.fullUrl, TvType.TvSeries) {
+                                this.posterUrl = posterUrl
+                            }
                         } else {
-                            newMovieSearchResponse(entry.name, entry.fullUrl, TvType.Movie)
+                            newMovieSearchResponse(entry.name, entry.fullUrl, TvType.Movie) {
+                                this.posterUrl = posterUrl
+                            }
                         }
                     }
                 }
@@ -201,6 +225,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
 
         val entries = fetchDirectoryListing(url)
+        val posterUrl = pickPosterFromEntries(entries) ?: getOptimizedPosterUrl(url)
         val videoFiles = entries.filter { isMediaFile(it.fullUrl) }
         val subDirs = entries.filter { it.isDirectory }
 
@@ -236,12 +261,16 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                 }
             }
 
-            return newTvSeriesLoadResponse(decodedTitle, url, TvType.TvSeries, episodes)
+            return newTvSeriesLoadResponse(decodedTitle, url, TvType.TvSeries, episodes) {
+                this.posterUrl = posterUrl
+            }
         }
 
         // Direct movie folder with media files inside
         val mainVideoUrl = videoFiles.firstOrNull()?.fullUrl ?: url
-        return newMovieLoadResponse(decodedTitle, url, TvType.Movie, mainVideoUrl)
+        return newMovieLoadResponse(decodedTitle, url, TvType.Movie, mainVideoUrl) {
+            this.posterUrl = posterUrl
+        }
     }
 
     override suspend fun loadLinks(
@@ -289,6 +318,11 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val lower = url.lowercase()
         return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".avi") ||
                lower.endsWith(".m4v") || lower.endsWith(".webm") || lower.endsWith(".flv")
+    }
+
+    private fun isImageFile(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".webp")
     }
 
     private fun getQualityFromName(name: String): Int {
