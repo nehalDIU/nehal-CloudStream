@@ -127,10 +127,42 @@ open class DhakaFlixProvider : MainAPI() {
     private val childrenCacheMaxSize = 1000 // Large cache size to hold all traversed folders
     private val posterFileNames = listOf("a_AL_.jpg", "a11.jpg")
 
-    // Concurrent request de-duplication variables
+    // Concurrent request de-duplication and per-host concurrency control
     private val cacheMutex = Mutex()
     private val keyLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
-    private val networkSemaphore = Semaphore(20)
+    private val hostSemaphores = java.util.concurrent.ConcurrentHashMap<String, Semaphore>()
+
+    private fun getSemaphoreForHost(host: String): Semaphore {
+        return hostSemaphores.computeIfAbsent(host) { Semaphore(6) }
+    }
+
+    private suspend fun fetchWithRetry(host: String, path: String): String? {
+        val semaphore = getSemaphoreForHost(host)
+        val url = "$host$path?"
+        val postData = mapOf(
+            "action" to "get",
+            "items[href]" to path,
+            "items[what]" to "1"
+        )
+        var lastException: Exception? = null
+        for (attempt in 1..3) {
+            try {
+                val response = semaphore.withPermit {
+                    app.post(url, data = postData).text
+                }
+                if (response.isNotBlank()) {
+                    return response
+                }
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < 3) {
+                    kotlinx.coroutines.delay(150L * attempt)
+                }
+            }
+        }
+        lastException?.printStackTrace()
+        return null
+    }
 
     private var cachedLatestYearPath: String? = null
     private var cachedLatestYearPathTime = 0L
@@ -236,10 +268,15 @@ open class DhakaFlixProvider : MainAPI() {
                     "movie:kolkata-bangla" -> fetchYearIndexedMovieFoldersLazy(kolkataHost, categoryPath, page, pageSize, 2021, 2026)
                     "movie:foreign-7" -> coroutineScope {
                         val langFolders = fetchDirectChildren(kolkataHost, categoryPath).filter { it.isFolder }
-                        langFolders
-                            .map { langFolder -> async { fetchDirectChildren(kolkataHost, langFolder.href) } }
-                            .awaitAll()
-                            .flatten()
+                        val accumulated = ArrayList<H5Item>()
+                        for (chunk in langFolders.chunked(4)) {
+                            val chunkItems = chunk
+                                .map { langFolder -> async { fetchDirectChildren(kolkataHost, langFolder.href) } }
+                                .awaitAll()
+                                .flatten()
+                            accumulated.addAll(chunkItems)
+                        }
+                        accumulated
                     }
                     "movie:anime" -> coroutineScope {
                         animeGroups.values
@@ -674,71 +711,67 @@ open class DhakaFlixProvider : MainAPI() {
     private suspend fun fetchDirectChildren(host: String, href: String): List<H5Item> {
         val path = normalizePath(href)
         val cacheKey = host.trimEnd('/') + "|" + path
-        
-        // 1. Fast path: Check memory cache under cache lock
         val nowMs = System.currentTimeMillis()
         val ttl = getTtlForPath(path)
+
+        // 1. Fast path: Check memory cache under cache lock
         cacheMutex.withLock {
             childrenCache[cacheKey]?.let { entry ->
-                if (nowMs - entry.timestampMs <= ttl) {
+                if (nowMs - entry.timestampMs <= ttl && entry.items.isNotEmpty()) {
                     return entry.items
                 }
             }
         }
-        
+
         // 2. Slow path (lock per key): Fetch and cache
         val keyLock = keyLocks.computeIfAbsent(cacheKey) { Mutex() }
         return keyLock.withLock {
             // Re-check cache inside key lock
             cacheMutex.withLock {
                 childrenCache[cacheKey]?.let { entry ->
-                    if (System.currentTimeMillis() - entry.timestampMs <= ttl) {
+                    if (System.currentTimeMillis() - entry.timestampMs <= ttl && entry.items.isNotEmpty()) {
                         return@withLock entry.items
                     }
                 }
             }
-            
-            val responseText = try {
-                networkSemaphore.withPermit {
-                    app.post(
-                        "$host$path?",
-                        data = mapOf(
-                            "action" to "get",
-                            "items[href]" to path,
-                            "items[what]" to "1"
-                        )
-                    ).text
+
+            val responseText = fetchWithRetry(host, path)
+
+            if (responseText != null) {
+                val items = runCatching {
+                    mapper.readValue<H5ItemsResponse>(responseText).items
+                }.getOrElse { emptyList() }
+                val direct = directChildren(items, path)
+
+                if (direct.isNotEmpty()) {
+                    // Only cache valid non-empty responses
+                    cacheMutex.withLock {
+                        childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
+                        if (childrenCache.size > childrenCacheMaxSize) {
+                            val iterator = childrenCache.keys.iterator()
+                            if (iterator.hasNext()) {
+                                iterator.next()
+                                iterator.remove()
+                            }
+                        }
+                    }
+                    if (keyLocks.size > 500) {
+                        keyLocks.clear()
+                    }
+                    return@withLock direct
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                return@withLock emptyList()
             }
 
-            val items = runCatching {
-                mapper.readValue<H5ItemsResponse>(responseText).items
-            }.getOrElse { emptyList() }
-            val direct = directChildren(items, path)
-
-            // Update cache under cache lock
+            // 3. Fallback path: On network failure or empty response, serve existing stale cache if present
             cacheMutex.withLock {
-                childrenCache[cacheKey] = CacheEntry(System.currentTimeMillis(), direct)
-                
-                // Keep LinkedHashMap size bounded
-                if (childrenCache.size > childrenCacheMaxSize) {
-                    val iterator = childrenCache.keys.iterator()
-                    if (iterator.hasNext()) {
-                        iterator.next()
-                        iterator.remove()
+                childrenCache[cacheKey]?.let { entry ->
+                    if (entry.items.isNotEmpty()) {
+                        return@withLock entry.items
                     }
                 }
             }
-            
-            // Periodically clean up keyLocks to prevent memory leak
-            if (keyLocks.size > 500) {
-                keyLocks.clear()
-            }
-            
-            direct
+
+            emptyList()
         }
     }
 
