@@ -104,13 +104,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         name = name.replace("_", " ").trim()
 
         // Clean up redundant spaces
-        name = name.replace(Regex("""\s+"""), " ")
-
-        return if (!serverTag.isNullOrBlank()) {
-            "[$serverTag] $name"
-        } else {
-            name
-        }
+        return name.replace(Regex("""\s+"""), " ")
     }
 
     private fun fixUrl(path: String, host: String): String {
@@ -138,8 +132,8 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                 if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
                 if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
 
-                val cleanedName = cleanTitle(href, serverTag)
-                if (cleanedName.isBlank() || cleanedName == "[$serverTag]") return@forEach
+                val cleanedName = cleanTitle(href)
+                if (cleanedName.isBlank()) return@forEach
 
                 val isDir = href.endsWith("/")
                 val fullUrl = baseUri.resolve(href).toString()
