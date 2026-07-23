@@ -122,7 +122,6 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         if (cleanUrl.isBlank() || isMediaFile(cleanUrl)) return null
         val lower = cleanUrl.lowercase()
         return when {
-            lower.contains("tv-web-series") || lower.contains("172.16.50.12") -> "$cleanUrl/a_VL_.jpg"
             lower.contains("imdb") -> "$cleanUrl/a11.jpg"
             lower.contains("3d") -> "$cleanUrl/MV.jpg"
             else -> "$cleanUrl/a_AL_.jpg"
@@ -131,13 +130,18 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
     private fun pickPosterFromEntries(entries: List<DirectoryEntry>): String? {
         val imageFiles = entries.filter { isImageFile(it.fullUrl) }
-        val preferredPoster = imageFiles.firstOrNull { it.name.equals("a_AL_.jpg", true) || it.name.contains("a_AL_", true) }
-            ?: imageFiles.firstOrNull { it.name.equals("a_VL_.jpg", true) || it.name.contains("a_VL_", true) }
-            ?: imageFiles.firstOrNull { it.name.equals("a11.jpg", true) || it.name.contains("a11", true) }
+        val preferredPoster = imageFiles.firstOrNull { it.name.contains("a_AL_", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a_VL_", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a_v1", true) || it.name.contains("a._v1", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a11", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a22", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a06", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("a2323", true) }
             ?: imageFiles.firstOrNull { it.name.contains("mv", true) }
             ?: imageFiles.firstOrNull { it.name.contains("pha", true) }
             ?: imageFiles.firstOrNull { it.name.contains("poster", true) }
             ?: imageFiles.firstOrNull { it.name.contains("cover", true) }
+            ?: imageFiles.firstOrNull { it.name.contains("folder", true) }
             ?: imageFiles.firstOrNull()
 
         return preferredPoster?.fullUrl
