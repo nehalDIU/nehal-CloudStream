@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
+import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
@@ -142,6 +143,63 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         return preferredPoster?.fullUrl
     }
 
+    private fun extractYear(titleOrUrl: String): Int? {
+        val decoded = try { URLDecoder.decode(titleOrUrl, StandardCharsets.UTF_8.name()) } catch (_: Exception) { titleOrUrl }
+        val match = Regex("""\(?(19\d{2}|20\d{2})\)?""").find(decoded)
+        return match?.groupValues?.get(1)?.toIntOrNull()
+    }
+
+    private fun extractQualityEnum(titleOrUrl: String): SearchQuality {
+        val lower = titleOrUrl.lowercase()
+        return when {
+            lower.contains("2160p") || lower.contains("4k") || lower.contains("uhd") -> SearchQuality.FourK
+            lower.contains("1080p") || lower.contains("fhd") || lower.contains("720p") || lower.contains("hd") -> SearchQuality.HD
+            lower.contains("480p") || lower.contains("360p") || lower.contains("sd") -> SearchQuality.SD
+            else -> SearchQuality.HD
+        }
+    }
+
+    private fun populateItemMetadata(
+        response: SearchResponse,
+        rawNameOrUrl: String,
+        posterUrl: String?
+    ) {
+        val decoded = try { URLDecoder.decode(rawNameOrUrl, StandardCharsets.UTF_8.name()) } catch (_: Exception) { rawNameOrUrl }
+        val lower = decoded.lowercase()
+
+        // 1. Set poster
+        response.posterUrl = posterUrl
+
+        // 2. Set SearchQuality
+        response.quality = extractQualityEnum(decoded)
+
+        // 3. Add Quality tags (4K, 1080p, 720p, 3D)
+        if (lower.contains("2160p") || lower.contains("4k")) {
+            response.addQuality("4K")
+        } else if (lower.contains("1080p")) {
+            response.addQuality("1080p")
+        } else if (lower.contains("720p")) {
+            response.addQuality("720p")
+        }
+
+        if (lower.contains("3d")) {
+            response.addQuality("3D")
+        }
+
+        // 5. Add Audio / Dub / Sub tags
+        if (lower.contains("dual audio") || lower.contains("dual-audio") || lower.contains("dual")) {
+            response.addQuality("Dual Audio")
+        } else if (lower.contains("multi audio") || lower.contains("multi-audio") || lower.contains("multi")) {
+            response.addQuality("Multi Audio")
+        } else if (lower.contains("hindi dubbed") || lower.contains("hindi")) {
+            response.addQuality("Hindi Dubbed")
+        } else if (lower.contains("bangla dubbed")) {
+            response.addQuality("Bangla Dubbed")
+        } else if (lower.contains("sub") || lower.contains("esub") || lower.contains("msub")) {
+            response.addQuality("Subbed")
+        }
+    }
+
     private fun isContainerFolder(name: String): Boolean {
         val clean = name.trim().lowercase()
         // Year container folder pattern: (2025), (2025) 1080p, 2025, (1995) 1080p & Before
@@ -239,11 +297,11 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
             if (cat.type == TvType.TvSeries) {
                 newTvSeriesSearchResponse(name, itemUrl, TvType.TvSeries) {
-                    this.posterUrl = posterUrl
+                    populateItemMetadata(this, entry.href, posterUrl)
                 }
             } else {
                 newMovieSearchResponse(name, itemUrl, TvType.Movie) {
-                    this.posterUrl = posterUrl
+                    populateItemMetadata(this, entry.href, posterUrl)
                 }
             }
         }
@@ -263,11 +321,11 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                         val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
                         if (cat.type == TvType.TvSeries) {
                             newTvSeriesSearchResponse(entry.name, entry.fullUrl, TvType.TvSeries) {
-                                this.posterUrl = posterUrl
+                                populateItemMetadata(this, entry.href, posterUrl)
                             }
                         } else {
                             newMovieSearchResponse(entry.name, entry.fullUrl, TvType.Movie) {
-                                this.posterUrl = posterUrl
+                                populateItemMetadata(this, entry.href, posterUrl)
                             }
                         }
                     }
@@ -281,9 +339,12 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val serverTag = getServerTagFromUrl(url)
         val decodedTitle = cleanTitle(url, serverTag)
         val isVideoFile = isMediaFile(url)
+        val extractedYear = extractYear(url)
 
         if (isVideoFile) {
-            return newMovieLoadResponse(decodedTitle, url, TvType.Movie, url)
+            return newMovieLoadResponse(decodedTitle, url, TvType.Movie, url) {
+                if (extractedYear != null && extractedYear in 1900..2030) this.year = extractedYear
+            }
         }
 
         val entries = fetchDirectoryListingCached(url)
@@ -325,6 +386,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
             return newTvSeriesLoadResponse(decodedTitle, url, TvType.TvSeries, episodes) {
                 this.posterUrl = posterUrl
+                if (extractedYear != null && extractedYear in 1900..2030) this.year = extractedYear
             }
         }
 
@@ -332,6 +394,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val mainVideoUrl = videoFiles.firstOrNull()?.fullUrl ?: url
         return newMovieLoadResponse(decodedTitle, url, TvType.Movie, mainVideoUrl) {
             this.posterUrl = posterUrl
+            if (extractedYear != null && extractedYear in 1900..2030) this.year = extractedYear
         }
     }
 
