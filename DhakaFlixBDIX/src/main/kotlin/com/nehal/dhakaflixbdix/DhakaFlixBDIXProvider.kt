@@ -165,41 +165,48 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
     private fun populateItemMetadata(
         response: SearchResponse,
-        rawNameOrUrl: String,
+        entry: DirectoryEntry,
+        cat: BDIXCategory,
         posterUrl: String?
     ) {
-        val decoded = try { URLDecoder.decode(rawNameOrUrl, StandardCharsets.UTF_8.name()) } catch (_: Exception) { rawNameOrUrl }
-        val lower = decoded.lowercase()
+        val decodedTitle = try { URLDecoder.decode(entry.name, StandardCharsets.UTF_8.name()) } catch (_: Exception) { entry.name }
+        val decodedHref = try { URLDecoder.decode(entry.href, StandardCharsets.UTF_8.name()) } catch (_: Exception) { entry.href }
+        
+        val itemText = "$decodedTitle $decodedHref".lowercase()
+        val catText = "${cat.name} ${cat.path}".lowercase()
+        val combinedText = "$catText $itemText"
 
         // 1. Set poster
         response.posterUrl = posterUrl
 
         // 2. Set SearchQuality
-        response.quality = extractQualityEnum(decoded)
+        response.quality = extractQualityEnum(combinedText)
 
         // 3. Add Quality tags (4K, 1080p, 720p, 3D)
-        if (lower.contains("2160p") || lower.contains("4k")) {
+        if (combinedText.contains("2160p") || combinedText.contains("4k")) {
             response.addQuality("4K")
-        } else if (lower.contains("1080p")) {
+        } else if (combinedText.contains("1080p")) {
             response.addQuality("1080p")
-        } else if (lower.contains("720p")) {
+        } else if (combinedText.contains("720p")) {
             response.addQuality("720p")
         }
 
-        if (lower.contains("3d")) {
+        if (combinedText.contains("3d")) {
             response.addQuality("3D")
         }
 
-        // 5. Add Audio / Dub / Sub tags
-        if (lower.contains("dual audio") || lower.contains("dual-audio") || lower.contains("dual")) {
+        // 4. Add Audio / Dub / Sub tags
+        if (itemText.contains("dual audio") || itemText.contains("dual-audio") || itemText.contains("dual")) {
             response.addQuality("Dual Audio")
-        } else if (lower.contains("multi audio") || lower.contains("multi-audio") || lower.contains("multi")) {
+        } else if (itemText.contains("multi audio") || itemText.contains("multi-audio") || itemText.contains("multi")) {
             response.addQuality("Multi Audio")
-        } else if (lower.contains("hindi dubbed") || lower.contains("hindi")) {
+        }
+
+        if (combinedText.contains("hindi dubbed") || combinedText.contains("south indian") || itemText.contains("hindi")) {
             response.addQuality("Hindi Dubbed")
-        } else if (lower.contains("bangla dubbed")) {
+        } else if (combinedText.contains("bangla dubbed") || itemText.contains("bangla")) {
             response.addQuality("Bangla Dubbed")
-        } else if (lower.contains("sub") || lower.contains("esub") || lower.contains("msub")) {
+        } else if (itemText.contains("sub") || itemText.contains("esub") || itemText.contains("msub")) {
             response.addQuality("Subbed")
         }
     }
@@ -335,11 +342,11 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
             if (cat.type == TvType.TvSeries) {
                 newTvSeriesSearchResponse(name, itemUrl, TvType.TvSeries) {
-                    populateItemMetadata(this, entry.href, posterUrl)
+                    populateItemMetadata(this, entry, cat, posterUrl)
                 }
             } else {
                 newMovieSearchResponse(name, itemUrl, TvType.Movie) {
-                    populateItemMetadata(this, entry.href, posterUrl)
+                    populateItemMetadata(this, entry, cat, posterUrl)
                 }
             }
         }
@@ -359,11 +366,11 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                         val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
                         if (cat.type == TvType.TvSeries) {
                             newTvSeriesSearchResponse(entry.name, entry.fullUrl, TvType.TvSeries) {
-                                populateItemMetadata(this, entry.href, posterUrl)
+                                populateItemMetadata(this, entry, cat, posterUrl)
                             }
                         } else {
                             newMovieSearchResponse(entry.name, entry.fullUrl, TvType.Movie) {
-                                populateItemMetadata(this, entry.href, posterUrl)
+                                populateItemMetadata(this, entry, cat, posterUrl)
                             }
                         }
                     }
