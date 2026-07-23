@@ -11,8 +11,6 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.newSubtitleFile
-import com.lagradost.cloudstream3.addQuality
-import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
@@ -22,7 +20,6 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
-import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -78,22 +75,23 @@ open class CineplexBDProvider : MainAPI() {
                 }
             }
             request.data == "latest_series" -> {
-                doc.select("#tvRow a[href]").mapNotNull { el ->
+                val seriesEls = doc.select("#tvRow a[href]").ifEmpty { doc.select("a[href*=\"watch.php\"]") }
+                seriesEls.mapNotNull { el ->
                     el.toSearchResult(true)
                 }
             }
             request.data == "latest_movies" -> {
-                doc.select("a.group[href*=\"view.php\"]").mapNotNull { el ->
+                doc.select("a[href*=\"view.php\"]").mapNotNull { el ->
                     el.toSearchResult(false)
                 }
             }
             request.data.startsWith("cat:") -> {
-                doc.select("a.group[href*=\"view.php\"]").mapNotNull { el ->
+                doc.select("a[href*=\"view.php\"]").mapNotNull { el ->
                     el.toSearchResult(false)
                 }
             }
             request.data.startsWith("tcat:") -> {
-                doc.select("a.group[href*=\"watch.php\"]").mapNotNull { el ->
+                doc.select("a[href*=\"watch.php\"]").mapNotNull { el ->
                     el.toSearchResult(true)
                 }
             }
@@ -106,7 +104,7 @@ open class CineplexBDProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse>? {
         val url = "$mainUrl/search.php?q=$query"
         val doc = app.get(url).document
-        return doc.select("a.group").mapNotNull { el ->
+        return doc.select("a[href*=\"view.php\"], a[href*=\"watch.php\"]").mapNotNull { el ->
             val href = el.attr("href")
             val isTv = href.contains("watch.php")
             el.toSearchResult(isTv)
@@ -114,11 +112,12 @@ open class CineplexBDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val id = Regex("(?:id|series_id)=(\\d+)").find(url)?.groupValues?.get(1) ?: return null
-        return if (url.contains("watch.php")) {
-            loadTvSeries(url, id)
+        val fullUrl = fixUrl(url)
+        val id = Regex("(?:id|series_id)=(\\d+)").find(fullUrl)?.groupValues?.get(1) ?: return null
+        return if (fullUrl.contains("watch.php")) {
+            loadTvSeries(fullUrl, id)
         } else {
-            loadMovie(url, id)
+            loadMovie(fullUrl, id)
         }
     }
 
@@ -131,7 +130,7 @@ open class CineplexBDProvider : MainAPI() {
         val year = chips.mapNotNull { it.toIntOrNull() }.firstOrNull() ?: Regex("\\b(19|20)\\d{2}\\b").find(doc.title())?.value?.toIntOrNull()
         val genres = chips.filter { !it.matches(Regex("\\d{4}")) && !it.contains(Regex("\\d+h|\\d+m")) }
         
-        val plot = doc.select("p.text-slate-100").text().trim()
+        val plot = doc.select("p.text-slate-100, .synopsis, p").firstOrNull { it.text().isNotBlank() }?.text()?.trim()
         val rating = doc.select(".pill").firstOrNull { it.text().contains("★") }?.text()?.removePrefix("★")?.trim()
 
         val playerUrl = "$mainUrl/player.php?id=$id"
@@ -166,12 +165,14 @@ open class CineplexBDProvider : MainAPI() {
                 if (rating == null) rating = metaResponse.rating
                 
                 metaResponse.episodes?.values?.forEach { ep ->
+                    val epPath = ep.path
+                    val epData = if (!epPath.isNullOrBlank()) fixUrl(epPath) else "$mainUrl/player.php?id=$id&season=$seasonNum&ep=${ep.episode_number}"
                     episodes.add(
-                        newEpisode(ep.path ?: "") {
+                        newEpisode(epData) {
                             this.name = ep.title?.substringBefore(".mp4")?.substringBefore(".mkv")?.trim()
                             this.episode = ep.episode_number
                             this.season = seasonNum.toIntOrNull()
-                            this.posterUrl = ep.still
+                            this.posterUrl = fixUrlNull(ep.still)
                         }
                     )
                 }
@@ -199,37 +200,47 @@ open class CineplexBDProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        if (data.startsWith("http") && (data.contains(".mp4") || data.contains(".mkv") || data.contains(".m3u8"))) {
-            val type = if (data.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+        val fullUrl = fixUrl(data)
+        if (fullUrl.contains(".mp4") || fullUrl.contains(".mkv") || fullUrl.contains(".m3u8")) {
+            val type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             callback.invoke(
                 newExtractorLink(
                     name = "Direct Stream",
                     source = this.name,
-                    url = data,
+                    url = fullUrl,
                     type = type
                 )
             )
             return true
         }
 
-        if (data.contains("player.php")) {
-            val doc = app.get(data).document
+        if (fullUrl.contains("player.php")) {
+            val doc = app.get(fullUrl).document
             val html = doc.html()
-            val videoSrc = Regex("videoSrc\\s*=\\s*\"([^\"]+)\"").find(html)?.groupValues?.get(1)
+            
+            var videoSrc = Regex("""videoSrc\s*=\s*["']([^"']+)["']""").find(html)?.groupValues?.get(1)
+            
+            if (videoSrc.isNullOrBlank()) {
+                videoSrc = doc.selectFirst("video source")?.attr("src")
+                    ?: doc.selectFirst("video")?.attr("src")
+                    ?: doc.selectFirst("iframe")?.attr("src")
+            }
+
             if (!videoSrc.isNullOrBlank()) {
-                val type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                val fixedVideoUrl = fixUrl(videoSrc)
+                val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 callback.invoke(
                     newExtractorLink(
                         name = "Player Stream",
                         source = this.name,
-                        url = videoSrc,
+                        url = fixedVideoUrl,
                         type = type
                     )
                 )
             }
 
             // Extract subtitles
-            doc.select("track[kind=\"captions\"]").forEach { track ->
+            doc.select("track[kind=\"captions\"], track[kind=\"subtitles\"]").forEach { track ->
                 val label = track.attr("label").takeIf { it.isNotBlank() } ?: "English"
                 val src = track.attr("src")
                 if (src.isNotBlank()) {
@@ -287,38 +298,14 @@ open class CineplexBDProvider : MainAPI() {
         val is4k = rawLangText?.contains("4k", ignoreCase = true) == true
 
         return if (isTvSeries) {
-            newAnimeSearchResponse(title, fixHref, TvType.TvSeries) {
+            newTvSeriesSearchResponse(title, fixHref, TvType.TvSeries) {
                 this.posterUrl = posterUrl
                 this.year = year
-
-                // Add quality badges
-                if (!qualityBadge.isNullOrBlank()) {
-                    addQuality(qualityBadge)
-                } else if (is4k) {
-                    addQuality("4K")
-                } else if (isDual) {
-                    addQuality("Dual Audio")
-                }
-
-                // Add dub/sub statuses
-                addDubStatus(isDub, isSub)
             }
         } else {
-            newAnimeSearchResponse(title, fixHref, TvType.Movie) {
+            newMovieSearchResponse(title, fixHref, TvType.Movie) {
                 this.posterUrl = posterUrl
                 this.year = year
-
-                // Add quality badges
-                if (!qualityBadge.isNullOrBlank()) {
-                    addQuality(qualityBadge)
-                } else if (is4k) {
-                    addQuality("4K")
-                } else if (isDual) {
-                    addQuality("Dual Audio")
-                }
-
-                // Add dub/sub statuses
-                addDubStatus(isDub, isSub)
             }
         }
     }

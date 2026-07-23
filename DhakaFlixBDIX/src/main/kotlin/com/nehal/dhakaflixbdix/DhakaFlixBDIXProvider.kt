@@ -62,7 +62,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         // Server 14 Categories
         BDIXCategory("English Movies (1080p)", "/DHAKA-FLIX-14/English%20Movies%20%281080p%29/", host14, TvType.Movie),
         BDIXCategory("Hindi Movies", "/DHAKA-FLIX-14/Hindi%20Movies/", host14, TvType.Movie),
-        BDIXCategory("South Indian Movies", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/", host14, TvType.Movie),
+        BDIXCategory("South Indian Movies", "/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/", host14, TvType.Movie),
         BDIXCategory("Animation Movies", "/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/", host14, TvType.Movie),
         BDIXCategory("IMDb Top 250", "/DHAKA-FLIX-14/IMDb%20Top-250%20Movies/", host14, TvType.Movie),
         BDIXCategory("Korean TV & Web Series", "/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/", host14, TvType.TvSeries),
