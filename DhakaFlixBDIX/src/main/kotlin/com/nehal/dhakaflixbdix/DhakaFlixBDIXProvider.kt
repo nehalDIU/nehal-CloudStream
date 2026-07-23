@@ -188,46 +188,27 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             response.year = extractedYear
         }
 
-        // 3. Set SearchQuality enum for HD/4K/SD badge on poster
+        // 3. Set SearchQuality enum (HD, FourK, SD)
         response.quality = extractQualityEnum(combinedText)
 
-        // 4. Add Quality text pills (4K, 1080p, 720p, 3D)
-        if (combinedText.contains("2160p") || combinedText.contains("4k")) {
-            response.addQuality("4K")
-        } else if (combinedText.contains("1080p")) {
-            response.addQuality("1080p")
-        } else if (combinedText.contains("720p")) {
-            response.addQuality("720p")
+        // 4. Set exact Quality Pill string (3D, 4K, 1080p, 720p, HD)
+        val qualityPill = when {
+            combinedText.contains("3d") -> "3D"
+            combinedText.contains("2160p") || combinedText.contains("4k") || combinedText.contains("uhd") -> "4K"
+            combinedText.contains("1080p") || combinedText.contains("1080") || combinedText.contains("fhd") -> "1080p"
+            combinedText.contains("720p") || combinedText.contains("720") -> "720p"
+            combinedText.contains("480p") || combinedText.contains("360p") || combinedText.contains("sd") -> "SD"
+            else -> "HD"
         }
+        response.addQuality(qualityPill)
 
-        if (combinedText.contains("3d")) {
-            response.addQuality("3D")
-        }
-
-        // 5. Set Dub/Sub status for floating DUB/SUB poster labels
-        val isDual = combinedText.contains("dual audio") || combinedText.contains("dual-audio") || combinedText.contains("multi audio") || combinedText.contains("multi-audio") || combinedText.contains("dual") || combinedText.contains("multi")
-        val isDubbed = isDual || combinedText.contains("dubbed") || combinedText.contains("hindi") || combinedText.contains("south indian") || combinedText.contains("bangla")
+        // 5. Set Dub/Sub status for DUB / SUB poster card badges
+        val isDualOrMulti = combinedText.contains("dual audio") || combinedText.contains("dual-audio") || combinedText.contains("multi audio") || combinedText.contains("multi-audio") || combinedText.contains("dual") || combinedText.contains("multi")
+        val isDubbed = isDualOrMulti || combinedText.contains("dubbed") || combinedText.contains("hindi") || combinedText.contains("south indian") || combinedText.contains("bangla")
         val isSubbed = combinedText.contains("sub") || combinedText.contains("esub") || combinedText.contains("msub")
 
-        if (isDual) {
-            response.addDubStatus(dubExist = true, subExist = true)
-        } else if (isDubbed) {
-            response.addDubStatus(dubExist = true, subExist = false)
-        } else if (isSubbed) {
-            response.addDubStatus(dubExist = false, subExist = true)
-        } else {
-            response.addDubStatus(dubExist = true, subExist = false)
-        }
-
-        // 6. Add Audio text tags
-        if (isDual) {
-            response.addQuality("Dual Audio")
-        } else if (combinedText.contains("hindi dubbed") || combinedText.contains("south indian") || combinedText.contains("hindi")) {
-            response.addQuality("Hindi Dubbed")
-        } else if (combinedText.contains("bangla dubbed") || combinedText.contains("bangla")) {
-            response.addQuality("Bangla Dubbed")
-        } else if (isSubbed) {
-            response.addQuality("Subbed")
+        if (isDubbed || isSubbed) {
+            response.addDubStatus(dubExist = isDubbed, subExist = isSubbed)
         }
     }
 
