@@ -1,5 +1,6 @@
 package com.nehal.dhakaflixbdix
 
+import com.lagradost.cloudstream3.AnimeSearchResponse
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
@@ -10,9 +11,11 @@ import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.addQuality
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -153,18 +156,18 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         return match?.groupValues?.get(1)?.toIntOrNull()
     }
 
-    private fun extractQualityEnum(titleOrUrl: String): SearchQuality? {
+    private fun extractQualityEnum(titleOrUrl: String): SearchQuality {
         val lower = titleOrUrl.lowercase()
         return when {
             lower.contains("2160p") || lower.contains("4k") || lower.contains("uhd") -> SearchQuality.FourK
             lower.contains("1080p") || lower.contains("fhd") || lower.contains("720p") || lower.contains("hd") -> SearchQuality.HD
             lower.contains("480p") || lower.contains("360p") || lower.contains("sd") -> SearchQuality.SD
-            else -> null
+            else -> SearchQuality.HD
         }
     }
 
     private fun populateItemMetadata(
-        response: SearchResponse,
+        response: AnimeSearchResponse,
         entry: DirectoryEntry,
         cat: BDIXCategory,
         posterUrl: String?
@@ -179,13 +182,16 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         // 1. Set poster
         response.posterUrl = posterUrl
 
-        // 2. Set SearchQuality enum pill
-        val enumQuality = extractQualityEnum(combinedText)
-        if (enumQuality != null) {
-            response.quality = enumQuality
+        // 2. Set release year badge
+        val extractedYear = extractYear(decodedTitle)
+        if (extractedYear != null && extractedYear in 1900..2030) {
+            response.year = extractedYear
         }
 
-        // 4. Add Quality tags (4K, 1080p, 720p, 3D, HD)
+        // 3. Set SearchQuality enum for HD/4K/SD badge on poster
+        response.quality = extractQualityEnum(combinedText)
+
+        // 4. Add Quality text pills (4K, 1080p, 720p, 3D)
         if (combinedText.contains("2160p") || combinedText.contains("4k")) {
             response.addQuality("4K")
         } else if (combinedText.contains("1080p")) {
@@ -198,18 +204,29 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             response.addQuality("3D")
         }
 
-        // 5. Add Audio / Dub / Sub tags
-        if (itemText.contains("dual audio") || itemText.contains("dual-audio") || itemText.contains("dual")) {
-            response.addQuality("Dual Audio")
-        } else if (itemText.contains("multi audio") || itemText.contains("multi-audio") || itemText.contains("multi")) {
-            response.addQuality("Multi Audio")
+        // 5. Set Dub/Sub status for floating DUB/SUB poster labels
+        val isDual = combinedText.contains("dual audio") || combinedText.contains("dual-audio") || combinedText.contains("multi audio") || combinedText.contains("multi-audio") || combinedText.contains("dual") || combinedText.contains("multi")
+        val isDubbed = isDual || combinedText.contains("dubbed") || combinedText.contains("hindi") || combinedText.contains("south indian") || combinedText.contains("bangla")
+        val isSubbed = combinedText.contains("sub") || combinedText.contains("esub") || combinedText.contains("msub")
+
+        if (isDual) {
+            response.addDubStatus(dubExist = true, subExist = true)
+        } else if (isDubbed) {
+            response.addDubStatus(dubExist = true, subExist = false)
+        } else if (isSubbed) {
+            response.addDubStatus(dubExist = false, subExist = true)
+        } else {
+            response.addDubStatus(dubExist = true, subExist = false)
         }
 
-        if (combinedText.contains("hindi dubbed") || combinedText.contains("south indian") || itemText.contains("hindi")) {
+        // 6. Add Audio text tags
+        if (isDual) {
+            response.addQuality("Dual Audio")
+        } else if (combinedText.contains("hindi dubbed") || combinedText.contains("south indian") || combinedText.contains("hindi")) {
             response.addQuality("Hindi Dubbed")
-        } else if (combinedText.contains("bangla dubbed") || itemText.contains("bangla")) {
+        } else if (combinedText.contains("bangla dubbed") || combinedText.contains("bangla")) {
             response.addQuality("Bangla Dubbed")
-        } else if (itemText.contains("sub") || itemText.contains("esub") || itemText.contains("msub")) {
+        } else if (isSubbed) {
             response.addQuality("Subbed")
         }
     }
@@ -343,14 +360,8 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             val itemUrl = entry.fullUrl
             val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(itemUrl) else null
 
-            if (cat.type == TvType.TvSeries) {
-                newTvSeriesSearchResponse(name, itemUrl, TvType.TvSeries) {
-                    populateItemMetadata(this, entry, cat, posterUrl)
-                }
-            } else {
-                newMovieSearchResponse(name, itemUrl, TvType.Movie) {
-                    populateItemMetadata(this, entry, cat, posterUrl)
-                }
+            newAnimeSearchResponse(name, itemUrl, cat.type) {
+                populateItemMetadata(this, entry, cat, posterUrl)
             }
         }
 
@@ -367,14 +378,8 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                     val entries = fetchCategoryEntries(cat)
                     entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
                         val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
-                        if (cat.type == TvType.TvSeries) {
-                            newTvSeriesSearchResponse(entry.name, entry.fullUrl, TvType.TvSeries) {
-                                populateItemMetadata(this, entry, cat, posterUrl)
-                            }
-                        } else {
-                            newMovieSearchResponse(entry.name, entry.fullUrl, TvType.Movie) {
-                                populateItemMetadata(this, entry, cat, posterUrl)
-                            }
+                        newAnimeSearchResponse(entry.name, entry.fullUrl, cat.type) {
+                            populateItemMetadata(this, entry, cat, posterUrl)
                         }
                     }
                 }
