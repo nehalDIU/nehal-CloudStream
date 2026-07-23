@@ -214,7 +214,8 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val name: String,
         val href: String,
         val fullUrl: String,
-        val isDirectory: Boolean
+        val isDirectory: Boolean,
+        val modifiedTimeMs: Long = 0L
     )
 
     private suspend fun fetchDirectoryListingCached(url: String): List<DirectoryEntry> {
@@ -237,19 +238,51 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             val doc = Jsoup.parse(responseHtml)
             val baseUri = URI(url)
             val entries = mutableListOf<DirectoryEntry>()
+            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
 
-            doc.select("a[href]").forEach { a ->
-                val href = a.attr("href")
-                if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
-                if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
+            val trs = doc.select("tr")
+            if (trs.isNotEmpty()) {
+                trs.forEach { tr ->
+                    val a = tr.selectFirst("a[href]") ?: return@forEach
+                    val href = a.attr("href")
+                    if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
+                    if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
 
-                val cleanedName = cleanTitle(href)
-                if (cleanedName.isBlank()) return@forEach
+                    val cleanedName = cleanTitle(href)
+                    if (cleanedName.isBlank()) return@forEach
 
-                val isDir = href.endsWith("/")
-                val fullUrl = baseUri.resolve(href).toString()
-                entries.add(DirectoryEntry(cleanedName, href, fullUrl, isDir))
+                    val isDir = href.endsWith("/")
+                    val fullUrl = baseUri.resolve(href).toString()
+
+                    var modifiedMs = 0L
+                    tr.select("td").forEach { td ->
+                        val txt = td.text().trim()
+                        if (txt.length == 16 && txt[4] == '-' && txt[7] == '-') {
+                            try {
+                                modifiedMs = dateFormat.parse(txt)?.time ?: 0L
+                            } catch (_: Exception) {}
+                        }
+                    }
+
+                    entries.add(DirectoryEntry(cleanedName, href, fullUrl, isDir, modifiedMs))
+                }
             }
+
+            if (entries.isEmpty()) {
+                doc.select("a[href]").forEach { a ->
+                    val href = a.attr("href")
+                    if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
+                    if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
+
+                    val cleanedName = cleanTitle(href)
+                    if (cleanedName.isBlank()) return@forEach
+
+                    val isDir = href.endsWith("/")
+                    val fullUrl = baseUri.resolve(href).toString()
+                    entries.add(DirectoryEntry(cleanedName, href, fullUrl, isDir, 0L))
+                }
+            }
+
             entries
         } catch (e: Exception) {
             emptyList()
@@ -264,7 +297,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val containers = topEntries.filter { isContainerFolder(it.name) && it.isDirectory }
 
         if (containers.isEmpty()) {
-            return directMovies
+            return directMovies.sortedByDescending { it.modifiedTimeMs }
         }
 
         // Expand container folders (recent years first, e.g. 2026, 2025, 2024, 2023...)
@@ -281,7 +314,8 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             }.awaitAll().flatten()
         }
 
-        return (expandedMovies + directMovies).distinctBy { it.fullUrl }
+        val allMovies = (expandedMovies + directMovies).distinctBy { it.fullUrl }
+        return allMovies.sortedByDescending { it.modifiedTimeMs }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
