@@ -166,6 +166,42 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
     }
 
+    private fun formatCardName(entryName: String, cat: BDIXCategory, entryHref: String): String {
+        val decodedTitle = try { URLDecoder.decode(entryName, StandardCharsets.UTF_8.name()) } catch (_: Exception) { entryName }
+        val decodedHref = try { URLDecoder.decode(entryHref, StandardCharsets.UTF_8.name()) } catch (_: Exception) { entryHref }
+        val combined = "${cat.name} ${cat.path} $decodedTitle $decodedHref".lowercase()
+
+        val qTag = when {
+            combined.contains("3d") -> "3D"
+            combined.contains("2160p") || combined.contains("4k") || combined.contains("uhd") -> "4K"
+            combined.contains("1080p") || combined.contains("1080") -> "1080p"
+            combined.contains("720p") || combined.contains("720") -> "720p"
+            else -> null
+        }
+
+        val audioTag = when {
+            combined.contains("dual") || combined.contains("multi") -> "Dual Audio"
+            combined.contains("hindi") -> "Hindi"
+            combined.contains("bangla") -> "Bangla"
+            else -> null
+        }
+
+        val clean = decodedTitle.trim()
+        val tags = mutableListOf<String>()
+        if (qTag != null && !clean.lowercase().contains(qTag.lowercase())) {
+            tags.add(qTag)
+        }
+        if (audioTag != null && !clean.lowercase().contains(audioTag.lowercase())) {
+            tags.add(audioTag)
+        }
+
+        return if (tags.isNotEmpty()) {
+            "$clean [${tags.joinToString(", ")}]"
+        } else {
+            clean
+        }
+    }
+
     private fun populateItemMetadata(
         response: AnimeSearchResponse,
         entry: DirectoryEntry,
@@ -188,27 +224,18 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             response.year = extractedYear
         }
 
-        // 3. Set SearchQuality enum (HD, FourK, SD)
+        // 3. Set SearchQuality enum (HD, FourK, SD) for top-right poster pill
         response.quality = extractQualityEnum(combinedText)
 
-        // 4. Set exact Quality Pill string (3D, 4K, 1080p, 720p, HD)
-        val qualityPill = when {
-            combinedText.contains("3d") -> "3D"
-            combinedText.contains("2160p") || combinedText.contains("4k") || combinedText.contains("uhd") -> "4K"
-            combinedText.contains("1080p") || combinedText.contains("1080") || combinedText.contains("fhd") -> "1080p"
-            combinedText.contains("720p") || combinedText.contains("720") -> "720p"
-            combinedText.contains("480p") || combinedText.contains("360p") || combinedText.contains("sd") -> "SD"
-            else -> "HD"
-        }
-        response.addQuality(qualityPill)
-
-        // 5. Set Dub/Sub status for DUB / SUB poster card badges
+        // 4. Set Dub/Sub status for bottom floating poster badge (DUB, SUB, DUB | SUB)
         val isDualOrMulti = combinedText.contains("dual audio") || combinedText.contains("dual-audio") || combinedText.contains("multi audio") || combinedText.contains("multi-audio") || combinedText.contains("dual") || combinedText.contains("multi")
         val isDubbed = isDualOrMulti || combinedText.contains("dubbed") || combinedText.contains("hindi") || combinedText.contains("south indian") || combinedText.contains("bangla")
         val isSubbed = combinedText.contains("sub") || combinedText.contains("esub") || combinedText.contains("msub")
 
         if (isDubbed || isSubbed) {
             response.addDubStatus(dubExist = isDubbed, subExist = isSubbed)
+        } else {
+            response.addDubStatus(dubExist = true, subExist = false)
         }
     }
 
@@ -337,11 +364,11 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val entries = fetchCategoryEntries(cat)
 
         val items = entries.map { entry ->
-            val name = entry.name
+            val formattedName = formatCardName(entry.name, cat, entry.href)
             val itemUrl = entry.fullUrl
             val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(itemUrl) else null
 
-            newAnimeSearchResponse(name, itemUrl, cat.type) {
+            newAnimeSearchResponse(formattedName, itemUrl, cat.type) {
                 populateItemMetadata(this, entry, cat, posterUrl)
             }
         }
@@ -358,8 +385,9 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                 async {
                     val entries = fetchCategoryEntries(cat)
                     entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
+                        val formattedName = formatCardName(entry.name, cat, entry.href)
                         val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
-                        newAnimeSearchResponse(entry.name, entry.fullUrl, cat.type) {
+                        newAnimeSearchResponse(formattedName, entry.fullUrl, cat.type) {
                             populateItemMetadata(this, entry, cat, posterUrl)
                         }
                     }
