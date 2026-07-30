@@ -71,14 +71,17 @@ open class VegaMoviesProvider : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.select("img").attr("alt").replace("Download ", "")
-        val href = this.attr("href")
-        var posterUrl = this.select("img").attr("src")
-        if(!posterUrl.contains("https:")) posterUrl =  this.select("img").attr("data-src")
-
-        return newMovieSearchResponse(title, URI(href).path, TvType.Movie) {
-            this.posterUrl = posterUrl
+        val imgEl = this.selectFirst("img")
+        val title = imgEl?.attr("alt")?.takeIf { it.isNotBlank() }
+            ?: this.attr("title").takeIf { it.isNotBlank() }
+            ?: return null
+        val href = this.attr("href").takeIf { it.isNotBlank() } ?: return null
+        var posterUrl = imgEl?.attr("src") ?: ""
+        if (!posterUrl.contains("https:")) {
+            posterUrl = imgEl?.attr("data-src") ?: posterUrl
         }
+
+        return buildSearchResponse(title, href, posterUrl)
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
@@ -86,11 +89,58 @@ open class VegaMoviesProvider : MainAPI() {
         val response = tryParseJson<VegaSearchResponse>(json) ?: return null
         val results = response.hits.map { hit ->
             val doc = hit.document
-            newMovieSearchResponse(doc.post_title.replace("Download ", ""), doc.permalink, TvType.Movie) {
-                this.posterUrl = doc.post_thumbnail
-            }
+            buildSearchResponse(doc.post_title, doc.permalink, doc.post_thumbnail)
         }
         return newSearchResponseList(results)
+    }
+
+    private fun buildSearchResponse(
+        rawTitle: String,
+        url: String,
+        posterUrl: String?
+    ): SearchResponse {
+        val cleanTitle = rawTitle.replace(Regex("(?i)^Download\\s+"), "").trim()
+
+        // Extract release year (e.g. 2024 or (2024))
+        val year = Regex("""\b(19|20)\d{2}\b""").find(cleanTitle)?.value?.toIntOrNull()
+
+        // Determine TvType (Movie vs TvSeries) based on title keywords
+        val isSeries = cleanTitle.contains(Regex("(?i)\\b(Season|Series|S\\d+|Episode|Episodes|Anime Series|Korean Series)\\b"))
+        val tvType = if (isSeries) TvType.TvSeries else TvType.Movie
+
+        // Extract Quality Label Badge (4K, 1080p, 720p, 480p, CAM)
+        val qualityLabel = when {
+            cleanTitle.contains("2160p", true) || cleanTitle.contains("4K", true) -> "4K"
+            cleanTitle.contains("1080p", true) -> "1080p"
+            cleanTitle.contains("720p", true) -> "720p"
+            cleanTitle.contains("480p", true) -> "480p"
+            cleanTitle.contains("CAM", true) || cleanTitle.contains("PreDVD", true) -> "CAM"
+            else -> null
+        }
+
+        // Extract Audio / Dub / Sub Status Badges
+        val isDualAudio = cleanTitle.contains("Dual Audio", true) ||
+                          cleanTitle.contains("Multi Audio", true) ||
+                          cleanTitle.contains("Hindi", true)
+        val isSubbed = cleanTitle.contains("Sub", true) ||
+                       cleanTitle.contains("ESub", true) ||
+                       cleanTitle.contains("MSub", true)
+
+        return newAnimeSearchResponse(cleanTitle, fixUrl(url), tvType) {
+            this.posterUrl = fixUrlNull(posterUrl)
+            this.year = year
+            if (qualityLabel != null) {
+                addQuality(qualityLabel)
+            }
+            if (isDualAudio || isSubbed) {
+                addDubStatus(dubExist = isDualAudio, subExist = isSubbed)
+            }
+        }
+    }
+
+    private fun fixUrlNull(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return fixUrl(url)
     }
 
     override suspend fun load(url: String): LoadResponse? {
