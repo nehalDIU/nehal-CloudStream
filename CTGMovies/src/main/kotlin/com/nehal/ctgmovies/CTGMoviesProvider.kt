@@ -201,7 +201,7 @@ class CTGMoviesProvider : MainAPI() {
         val rating = ratingMatch?.groupValues?.get(1)?.toFloatOrNull()
 
         val subtitleTracks = extractSubtitles(payload, html)
-        val allAudioUrls = extractAudioUrls(payload, html)
+        val allVideoUrls = extractVideoUrls(payload, html).distinct()
 
         if (isTv) {
             val episodesList = mutableListOf<Episode>()
@@ -214,24 +214,17 @@ class CTGMoviesProvider : MainAPI() {
                     val epName = epObj["name"]?.toString() ?: "Episode $epNum"
                     val epOverview = epObj["overview"]?.toString()
                     val stillUrl = epObj["still_url"]?.toString()
-                    val epId = epObj["episode_id"]?.toString() ?: epObj["id"]?.toString() ?: ""
 
-                    val epVideoUrls = extractVideoUrls(payload, html).filter { vUrl ->
-                        vUrl.contains("E0$epNum", ignoreCase = true) ||
-                        vUrl.contains("E$epNum", ignoreCase = true) ||
-                        vUrl.contains("S0${sNum}E0$epNum", ignoreCase = true) ||
-                        epMediaMatches(payload, epId, sNum, epNum, vUrl)
+                    val epVideoUrls = allVideoUrls.filter { vUrl ->
+                        val uLower = vUrl.lowercase()
+                        val epFormat1 = "e%02d".format(epNum)
+                        val epFormat2 = "e%d".format(epNum)
+                        val sEpFormat = "s%02de%02d".format(sNum, epNum)
+                        uLower.contains(epFormat1) || uLower.contains(epFormat2) || uLower.contains(sEpFormat)
                     }.distinct()
 
-                    val epStreamsList = epVideoUrls.map { vUrl ->
-                        mapOf(
-                            "url" to vUrl,
-                            "audio_tracks" to matchAudioTracksForVideo(vUrl, allAudioUrls)
-                        )
-                    }
-
                     val epDataMap = mapOf(
-                        "streams" to epStreamsList,
+                        "video_urls" to epVideoUrls,
                         "subtitles" to subtitleTracks
                     )
                     val epDataString = mapper.writeValueAsString(epDataMap)
@@ -257,17 +250,8 @@ class CTGMoviesProvider : MainAPI() {
             }
         } else {
             // Movie
-            val movieVideoUrls = extractVideoUrls(payload, html).distinct()
-
-            val movieStreamsList = movieVideoUrls.map { vUrl ->
-                mapOf(
-                    "url" to vUrl,
-                    "audio_tracks" to matchAudioTracksForVideo(vUrl, allAudioUrls)
-                )
-            }
-
             val movieDataMap = mapOf(
-                "streams" to movieStreamsList,
+                "video_urls" to allVideoUrls,
                 "subtitles" to subtitleTracks
             )
             val movieDataString = mapper.writeValueAsString(movieDataMap)
@@ -306,31 +290,28 @@ class CTGMoviesProvider : MainAPI() {
                     subtitleCallback(newSubtitleFile(sLang, sUrl))
                 }
 
-                // Video Streams with Multi Audio Tracks
-                val streamsList = mapData["streams"] as? List<Map<String, Any?>>
-                streamsList?.forEach { streamObj ->
-                    val vUrl = streamObj["url"]?.toString() ?: return@forEach
-                    val audioList = streamObj["audio_tracks"] as? List<Map<String, String>> ?: emptyList()
-                    if (emitVideoLinksWithAudioOptions(vUrl, audioList, callback)) {
+                // Video Streams
+                val vUrls = mapData["video_urls"] as? List<String>
+                vUrls?.forEach { videoUrl ->
+                    if (emitFastVideoLink(videoUrl, callback)) {
                         foundLink = true
                     }
                 }
             } else if (data.startsWith("http")) {
-                foundLink = emitVideoLinksWithAudioOptions(data, emptyList(), callback)
+                foundLink = emitFastVideoLink(data, callback)
             }
 
             return foundLink
         } catch (_: Exception) {
             if (data.startsWith("http")) {
-                return emitVideoLinksWithAudioOptions(data, emptyList(), callback)
+                return emitFastVideoLink(data, callback)
             }
             return false
         }
     }
 
-    private suspend fun emitVideoLinksWithAudioOptions(
+    private suspend fun emitFastVideoLink(
         videoUrl: String,
-        audioTracksList: List<Map<String, String>>,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val uLower = videoUrl.lowercase()
@@ -340,14 +321,11 @@ class CTGMoviesProvider : MainAPI() {
         val serverName = extractServerName(videoUrl)
         val detectedLangs = extractLanguagesFromUrl(videoUrl)
 
-        // Main Video Link (Dual/Multi Audio or Default)
         val mainLabel = buildString {
             append("CTGMovies [$serverName")
             if (detectedLangs.isNotEmpty()) {
                 append(" - ")
                 append(detectedLangs)
-            } else if (audioTracksList.size > 1) {
-                append(" - Dual/Multi Audio")
             }
             append("]")
         }
@@ -362,24 +340,6 @@ class CTGMoviesProvider : MainAPI() {
                 this.quality = qualityVal
             }
         )
-
-        // Separate Audio Track Options for Selector
-        audioTracksList.forEach { audio ->
-            val aUrl = audio["url"] ?: return@forEach
-            val aLabel = audio["label"] ?: "Audio"
-            val audioLinkName = "CTGMovies [$serverName - $aLabel Audio Track]"
-
-            callback(
-                newExtractorLink(
-                    name = audioLinkName,
-                    source = audioLinkName,
-                    url = aUrl,
-                    type = ExtractorLinkType.VIDEO
-                ) {
-                    this.quality = qualityVal
-                }
-            )
-        }
 
         return true
     }
@@ -406,39 +366,6 @@ class CTGMoviesProvider : MainAPI() {
         }
 
         return videoUrls
-    }
-
-    private fun extractAudioUrls(payload: String, html: String): List<Map<String, String>> {
-        val rawUrls = mutableSetOf<String>()
-        val pattern = Regex("""https?://[^\s"'\\]+""")
-
-        pattern.findAll(payload).forEach { rawUrls.add(it.value) }
-        pattern.findAll(html).forEach { rawUrls.add(it.value) }
-
-        val audioList = mutableListOf<Map<String, String>>()
-
-        rawUrls.forEach { u ->
-            val uLower = u.lowercase()
-            if (uLower.contains(".audio.") || uLower.endsWith(".m4a") || uLower.endsWith(".aac")) {
-                val label = when {
-                    uLower.contains(".eng.") || uLower.contains("english") -> "English"
-                    uLower.contains(".hin.") || uLower.contains("hindi") -> "Hindi"
-                    uLower.contains(".ben.") || uLower.contains("bangla") -> "Bangla"
-                    else -> "Audio Track"
-                }
-                audioList.add(mapOf("url" to u, "label" to label))
-            }
-        }
-
-        return audioList.distinctBy { it["url"] }
-    }
-
-    private fun matchAudioTracksForVideo(videoUrl: String, allAudios: List<Map<String, String>>): List<Map<String, String>> {
-        val folderBase = if (videoUrl.contains("/")) videoUrl.substringBeforeLast("/") else videoUrl
-        return allAudios.filter { audio ->
-            val aUrl = audio["url"] ?: ""
-            aUrl.contains(folderBase) || folderBase.contains(aUrl.substringBeforeLast("/"))
-        }
     }
 
     private fun extractSubtitles(payload: String, html: String): List<Map<String, String>> {
@@ -479,11 +406,6 @@ class CTGMoviesProvider : MainAPI() {
         if (uLower.contains("telugu")) langs.add("Telugu")
 
         return langs.joinToString(" + ")
-    }
-
-    private fun epMediaMatches(payload: String, epId: String, sNum: Int, epNum: Int, vUrl: String): Boolean {
-        if (epId.isNotEmpty() && payload.contains(epId) && payload.contains(vUrl)) return true
-        return false
     }
 
     private fun extractServerName(url: String): String {
