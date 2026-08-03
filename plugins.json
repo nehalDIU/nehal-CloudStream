@@ -1,0 +1,523 @@
+[
+    {
+        "iconUrl": "https://all-wish.me/assets/logo.png",
+        "jarFileSize": 161416,
+        "fileHash": "sha256-9a8a9435224bd5fd90f4e574b71e2591357a1cac5a2706ea7b2b7f5144087046",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 44182,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "Phisher98"
+        ],
+        "tvTypes": [
+            "All"
+        ],
+        "version": 7,
+        "internalName": "AllWish",
+        "jarUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/AllWish.jar",
+        "description": "Anime from all-wish.me",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/AllWish.cs3",
+        "name": "AllWish",
+        "jarHash": "sha256-43bc17df50fe45e7db77a3784b4ccbd1c393139ad89d3477e25533181117ff67"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/AnimeDekhoProvider/icon.png",
+        "fileHash": "sha256-4212d0dcae1a7b91f36302ec8ceab8009a51700c13c307ad7d987baca19fe9fd",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 56682,
+        "status": 1,
+        "language": "hi",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "Anime",
+            "Cartoon"
+        ],
+        "version": 73,
+        "internalName": "AnimeDekhoProvider",
+        "description": "AnimeDekho Provider (Clean & Ad-Free)",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/AnimeDekhoProvider.cs3",
+        "name": "AnimeDekhoProvider"
+    },
+    {
+        "iconUrl": "https://aniwatch.co.at/wp-content/uploads/2026/01/cropped-favicon-192x192.webp",
+        "jarFileSize": 101791,
+        "fileHash": "sha256-de93f0ff4030cb457336684a70ab89dc82540b6d5e6a9adcadbb370d6d70571f",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 33262,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "nehal"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 2,
+        "internalName": "Aniwatch",
+        "jarUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/Aniwatch.jar",
+        "description": "Anime provider for aniwatch.co.at",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/Aniwatch.cs3",
+        "name": "Aniwatch",
+        "jarHash": "sha256-ef0884bf6a9e1709f17e3724f20bfd8239602c8027efbcc39a5716e70afbd9a5"
+    },
+    {
+        "iconUrl": "https://banglaplex.biz/uploads/system_logo/favicon_61916a9838d38.png",
+        "fileHash": "sha256-9568bb1deaf7f13dcc5ea90fd17387a05b87f1b65857b7b183c881d0dfc5fde7",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 51967,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 3,
+        "internalName": "BanglaPlex",
+        "description": "BanglaPlex Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BanglaPlex.cs3",
+        "name": "BanglaPlex"
+    },
+    {
+        "iconUrl": "http://new.circleftp.net/static/media/logo.fce2c9029060a10687b8.png",
+        "fileHash": "sha256-44cb3f2ef6df0a25eb1d7486be26935fcd7f04fd2fffcac553b7f64690111b6b",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 22855,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Redowan"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "Cartoon",
+            "AsianDrama",
+            "Others",
+            "Documentary"
+        ],
+        "version": 26,
+        "internalName": "BdixCircleftp",
+        "description": "Only works in Bangladesh. Works even in internet Shutdown",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixCircleftp.cs3",
+        "name": "BdixCircleftp"
+    },
+    {
+        "iconUrl": "http://main.circleftp.net/wp-content/uploads/2019/01/Circle-logo-768x168-1.png",
+        "fileHash": "sha256-39ce1f432086e28404958a2aab5f6d1aaf804dc01cbaaf180b03467e4453a7a7",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 32458,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "Cartoon",
+            "AsianDrama",
+            "Others",
+            "Documentary"
+        ],
+        "version": 4,
+        "internalName": "BdixCircleFtpOld",
+        "description": "Circle FTP Old server (main.circleftp.net). Only works on BDIX in Bangladesh.",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixCircleFtpOld.cs3",
+        "name": "BdixCircleFtpOld"
+    },
+    {
+        "iconUrl": "http://10.16.100.244/images/logo-purple.svg",
+        "fileHash": "sha256-889e497aa46571467324a64c58153e9569939479bfc9770ab716f732f1deeeaa",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 17366,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Redowan"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie",
+            "OVA",
+            "Cartoon",
+            "AsianDrama",
+            "Others",
+            "Documentary"
+        ],
+        "version": 3,
+        "internalName": "BdixICCFtp",
+        "description": "ICC BDIX Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/BdixICCFtp.cs3",
+        "name": "BdixICCFtp"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/CastleTvProvider/icon.png",
+        "fileHash": "sha256-cb3c2d772e4d9bbc1ac854b0b3998aabb6d8bdaf9a1eeb0aab00b3736b835da6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 58605,
+        "status": 1,
+        "language": "ta",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 3,
+        "internalName": "CastleTvProvider",
+        "description": "Castle TV Movies and Series Provider (Ad-Free)",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/CastleTvProvider.cs3",
+        "name": "CastleTvProvider"
+    },
+    {
+        "iconUrl": "http://cineplexbd.net/favicon.ico",
+        "fileHash": "sha256-46cfbd4011787520fafd5786dc63fb31ccc08c3cdb3062e1637142e0701b44ea",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 32223,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 3,
+        "internalName": "CineplexBD",
+        "description": "CineplexBD Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/CineplexBD.cs3",
+        "name": "CineplexBD"
+    },
+    {
+        "iconUrl": "https://ctgmovies.com/brand-icon?d=2&c=%23e8b600",
+        "fileHash": "sha256-f20dca9e6cf02211be64630e5523f1efe5fd5b9784bb20f3f12e3bd9101b167a",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 37445,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AsianDrama",
+            "Others"
+        ],
+        "version": 3,
+        "internalName": "CTGMovies",
+        "description": "Watch Movies, TV Shows & Anime from CTGMovies",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/CTGMovies.cs3",
+        "name": "CTGMovies"
+    },
+    {
+        "iconUrl": "https://salamonline.com.bd/wp-content/uploads/2026/01/salamonline-Custom.png",
+        "fileHash": "sha256-7edfaa6609b68f900f8c19b00b04815008d1359fce9e30b0b4b2e8d67066de79",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 65385,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "DhakaFlix",
+        "description": "DhakaFlix provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/DhakaFlix.cs3",
+        "name": "DhakaFlix"
+    },
+    {
+        "iconUrl": "https://salamonline.com.bd/wp-content/uploads/2026/01/salamonline-Custom.png",
+        "fileHash": "sha256-c1bb6bfd312186b5ab93eba67e55c7fa2fecc1fb353b7da4b9551ba1d538c524",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 41674,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime"
+        ],
+        "version": 4,
+        "internalName": "DhakaFlixBDIX",
+        "description": "DhakaFlix (BDIX) provider covering 172.16.50.12, 172.16.50.14, and 172.16.50.7",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/DhakaFlixBDIX.cs3",
+        "name": "DhakaFlixBDIX"
+    },
+    {
+        "iconUrl": "https://movies.discoveryftp.net/assets/images/icon.png",
+        "fileHash": "sha256-dcf04bfeabb248ad63c5691060e9a8fc1683fc292c86c835eac8c813fa05623b",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 34261,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "DiscoveryFTP",
+        "description": "DiscoveryFTP provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/DiscoveryFTP.cs3",
+        "name": "DiscoveryFTP"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/icon.png",
+        "fileHash": "sha256-95efea17d62d429c5e3bcff6cd9c44a42465d2896b4e9b3a8e3384c93af23ff2",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 39851,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime"
+        ],
+        "version": 3,
+        "internalName": "FmFtp",
+        "description": "FM FTP (FTPBD) Gigabit BDIX Streaming Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/FmFtp.cs3",
+        "name": "FmFtp"
+    },
+    {
+        "iconUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAAt1BMVEWFeW19tkJ9tkJjd3VHcEyGeGXkXUHUHF/UHF/UHF99tkJ9tkJ9tkLVGV/UHF99tkLUHF/UG199tkJ9tkLUHF/rdjV3hGVxc3Zxc3Zxc3Zxc3ZudHZicX9xc3ZwcXNxc3Zxc3Zxc3Zxc3Zrc3xxc3Zyc3Vxc3YleLYleLYgb7EZb7DzlSPzlSMdc7MRZ6vzlSMhdbQQZqrzlSMleLbzlSMjeLcAUpYleLYkeLbzlSPzlSPzlSPzlSNAuOE6AAAAPXRSTlMJwv8SACAQx//Ate5UUd51cqHRnPImRIydaW98OmHs/7DXzi72VcH/V3gbUv9s/m+f56HFxE5w9unxbd516BumlQAAAbRJREFUeAFciwUSwzAQxC6XTWuGMP7/mzWUZbZGRA03LQptB3S3er/dhSRSzKzTyzTpAgghpE1Ply/EGZi0KW8AG6IQwkJkqM/lwDqJF3YUMZeOuuSYB/yQ6lGIiQAa2OOPIGIyac7/XW1tkVqjXdZtW/djWff1XNZr2TGOWRp+1E0WOA7EUAyNNl5sKyyThzFlhvufa51l9GDy5E9SVMuUXQQhSBtYEhFHLVkNntQdSHTj21sS45gJyBEeHgVvngBt9CfAhCEwYJgy8FlhjErVRjaOgR77QJ+9t4LvzK1Svm9ElD1k+joK36cFbqcvMKagXq8Qd/DwHwnGeQGprPSyxtqXN6TadYzNZ57N56Ixe1mIgDFTYOHuDPKl4Gy+EkwZR0SYYDoF1g4Gmxww4/kKFj2mHIMZmABuK7jLd2lglnsQsjGy7N2yr5S1IA7HLqeSSDjmYMJBFgGnEzzcKat90y1wa2+NMsrooVmq4B86u7Un1SE/5PJ+lXzu5NTnJs/z4zI/7j5RfXLri3PuYnIv5ZW7LASucimf83p1Aij8D/zmtgbgnVsjunk/DhXQeT8OW7FnfeMzkPwOWpQAAAAASUVORK5CYII=",
+        "fileHash": "sha256-b4ccb0c072f89aed818c0196d45ad4a2e52008529b31384911682d148a3371d6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 61358,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime"
+        ],
+        "version": 4,
+        "internalName": "FTPBD",
+        "description": "FTPBD provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/FTPBD.cs3",
+        "name": "FTPBD"
+    },
+    {
+        "iconUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAAt1BMVEWFeW19tkJ9tkJjd3VHcEyGeGXkXUHUHF/UHF/UHF99tkJ9tkJ9tkLVGV/UHF99tkLUHF/UG199tkJ9tkLUHF/rdjV3hGVxc3Zxc3Zxc3Zxc3ZudHZicX9xc3ZwcXNxc3Zxc3Zxc3Zxc3Zrc3xxc3Zyc3Vxc3YleLYleLYgb7EZb7DzlSPzlSMdc7MRZ6vzlSMhdbQQZqrzlSMleLbzlSMjeLcAUpYleLYkeLbzlSPzlSPzlSPzlSNAuOE6AAAAPXRSTlMJwv8SACAQx//Ate5UUd51cqHRnPImRIydaW98OmHs/7DXzi72VcH/V3gbUv9s/m+f56HFxE5w9unxbd516BumlQAAAbRJREFUeAFciwUSwzAQxC6XTWuGMP7/mzWUZbZGRA03LQptB3S3er/dhSRSzKzTyzTpAgghpE1Ply/EGZi0KW8AG6IQwkJkqM/lwDqJF3YUMZeOuuSYB/yQ6lGIiQAa2OOPIGIyac7/XW1tkVqjXdZtW/djWff1XNZr2TGOWRp+1E0WOA7EUAyNNl5sKyyThzFlhvufa51l9GDy5E9SVMuUXQQhSBtYEhFHLVkNntQdSHTj21sS45gJyBEeHgVvngBt9CfAhCEwYJgy8FlhjErVRjaOgR77QJ+9t4LvzK1Svm9ElD1k+joK36cFbqcvMKagXq8Qd/DwHwnGeQGprPSyxtqXN6TadYzNZ57N56Ixe1mIgDFTYOHuDPKl4Gy+EkwZR0SYYDoF1g4Gmxww4/kKFj2mHIMZmABuK7jLd2lglnsQsjGy7N2yr5S1IA7HLqeSSDjmYMJBFgGnEzzcKat90y1wa2+NMsrooVmq4B86u7Un1SE/5PJ+lXzu5NTnJs/z4zI/7j5RfXLri3PuYnIv5ZW7LASucimf83p1Aij8D/zmtgbgnVsjunk/DhXQeT8OW7FnfeMzkPwOWpQAAAAASUVORK5CYII=",
+        "fileHash": "sha256-d03b26c65bc3e660abaaef8235516bf1d666aa38bed0eecc65590884644b3e54",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 37480,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime"
+        ],
+        "version": 2,
+        "internalName": "FTPBDMedia",
+        "description": "FTPBD Media (Emby) Provider with high-speed BDIX streaming",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/FTPBDMedia.cs3",
+        "name": "FTPBDMedia"
+    },
+    {
+        "iconUrl": "https://pub-66c415049e354d59968472f8a48aff3d.r2.dev/icon%20(2).png",
+        "fileHash": "sha256-0e9cf1c7bee19db84a70055cf34d604b8a4169420b6c52abe9acc35024593cf9",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 31063,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "JellyfinBD",
+        "description": "JellyfinBD Provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/JellyfinBD.cs3",
+        "name": "JellyfinBD"
+    },
+    {
+        "iconUrl": "https://www.mojaloss.stream/wp-content/uploads/2021/12/favicon.png",
+        "fileHash": "sha256-46bed267a2d9f0c4470b1063d2973ab03c2c8c777b847e5b6042567689fc7738",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 62989,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "MojaLoss",
+        "description": "Watch movies and series from MojaLoss",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/MojaLoss.cs3",
+        "name": "MojaLoss"
+    },
+    {
+        "iconUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/raw/refs/heads/master/MovieBoxProviderIN/icon.png",
+        "fileHash": "sha256-05f448b81c36218c7e197de3c160f624666d86384294a324b56d2dd4e96ed680",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 67645,
+        "status": 1,
+        "language": "ta",
+        "authors": [
+            "NivinCNC"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 55,
+        "internalName": "MovieBoxProviderIN",
+        "description": "Multi Language Movies and Series Provider (Local homepage based on region)",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/MovieBoxProviderIN.cs3",
+        "name": "MovieBoxProviderIN"
+    },
+    {
+        "iconUrl": "https://movielinkbd.one/img/favicon-192x192.png",
+        "fileHash": "sha256-fcdfc4caf9857231269a8767f8158071356d0cd69f8d10fbf26bc804e89cfea3",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 27521,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "NivinCNC"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "AnimeMovie",
+            "AsianDrama"
+        ],
+        "version": 4,
+        "internalName": "MovieLinkBDProvider",
+        "description": "MovieLinkBD - Largest Movie Download Site in Bangladesh",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/MovieLinkBDProvider.cs3",
+        "name": "MovieLinkBDProvider"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/Sushan64/NetMirror-Extension/refs/heads/master/Netmirror/logo.jpeg",
+        "fileHash": "sha256-04a27490b516040da44e202d5dc70d5ffd2e320934c1bd14c5cfd389ee0ff2b6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 97500,
+        "status": 1,
+        "language": "hi",
+        "authors": [
+            "Sushan64"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 47,
+        "internalName": "Netmirror",
+        "description": "Netflix, PrimeVideo, Disney+ Hotstar Contents in Multiple Languages",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/Netmirror.cs3",
+        "name": "Netmirror"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/ShowTimeBD/icon.png",
+        "fileHash": "sha256-da243ce146f633f06d68a01e9710e6e1de5c11e601e0bc6a14e393c280aeb9b6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 28808,
+        "status": 1,
+        "language": "bn",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 4,
+        "internalName": "ShowTimeBD",
+        "description": "ShowTime BD provider",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/ShowTimeBD.cs3",
+        "name": "ShowTimeBD"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/VegaMovies/icon.jpg",
+        "fileHash": "sha256-f2498cddde49995b81f5b0ff3e4b2b00e812fe1806fe31a6368771995052c839",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nehalDIU/nehal-CloudStream",
+        "fileSize": 44167,
+        "status": 1,
+        "language": "hi",
+        "authors": [
+            "Nehal"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime"
+        ],
+        "version": 83,
+        "internalName": "VegaMovies",
+        "description": "Includes LuxMovies, Rogmovies",
+        "url": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/VegaMovies.cs3",
+        "name": "VegaMovies"
+    }
+]
