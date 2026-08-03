@@ -298,6 +298,10 @@ class MovieBoxProviderIN : MainAPI() {
         return newHomePageResponse(homePageLists)
     }
 
+    override suspend fun search(query: String): List<SearchResponse> {
+        return search(query, 1).items
+    }
+
     override suspend fun search(query: String, page: Int): SearchResponseList {
         var token = getOrFetchToken()
         val url = "$mainUrl/wefeed-mobile-bff/subject-api/search/v2"
