@@ -957,7 +957,7 @@ class MovieBoxProviderIN : MainAPI() {
                 joinTv.setOnClickListener {
                     dialog.dismiss()
                     try {
-                        val i = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/cncverse"))
+                        val i = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/openstream3"))
                         i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         ctx.startActivity(i)
                     } catch (_: Exception) {}
