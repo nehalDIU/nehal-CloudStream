@@ -89,9 +89,10 @@ class MovieBoxProviderIN : MainAPI() {
         cachedToken?.let { return it }
         try {
             val bm = randomBrandModel()
+            val ts = System.currentTimeMillis()
             val url = "$mainUrl/wefeed-mobile-bff/tab-operating?page=1&tabId=0&version="
-            val xClientToken = generateXClientToken()
-            val xTrSignature = generateXTrSignature("GET", "application/json", "application/json", url)
+            val xClientToken = generateXClientToken(ts)
+            val xTrSignature = generateXTrSignature("GET", "application/json", "application/json", url, hardcodedTimestamp = ts)
             val headers = mapOf(
                 "user-agent" to "com.community.mbox.in/50020042 (Linux; U; Android 16; en_IN; sdk_gphone64_x86_64; Build/BP22.250325.006; Cronet/133.0.6876.3)",
                 "accept" to "application/json",
@@ -320,14 +321,15 @@ class MovieBoxProviderIN : MainAPI() {
         val jsonBody = mapper.writeValueAsString(payloadMap)
 
         suspend fun doSearchRequest(authToken: String?): String? {
+            val contentType = "application/json; charset=utf-8"
             val bm = randomBrandModel()
             val ts = System.currentTimeMillis()
             val xClientToken = generateXClientToken(ts)
-            val xTrSignature = generateXTrSignature("POST", "application/json", "application/json", url, jsonBody, hardcodedTimestamp = ts)
+            val xTrSignature = generateXTrSignature("POST", "application/json", contentType, url, jsonBody, hardcodedTimestamp = ts)
             val headers = mutableMapOf(
                 "user-agent" to "com.community.mbox.in/50020042 (Linux; U; Android 16; en_IN; sdk_gphone64_x86_64; Build/BP22.250325.006; Cronet/133.0.6876.3)",
                 "accept" to "application/json",
-                "content-type" to "application/json",
+                "content-type" to contentType,
                 "connection" to "keep-alive",
                 "x-client-token" to xClientToken,
                 "x-tr-signature" to xTrSignature,
@@ -337,7 +339,7 @@ class MovieBoxProviderIN : MainAPI() {
             if (!authToken.isNullOrBlank()) {
                 headers["Authorization"] = "Bearer $authToken"
             }
-            val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
+            val requestBody = jsonBody.toRequestBody(contentType.toMediaType())
             return try {
                 val response = app.post(
                     url,
