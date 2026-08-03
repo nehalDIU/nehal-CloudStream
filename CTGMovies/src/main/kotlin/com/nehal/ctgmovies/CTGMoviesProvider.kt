@@ -2,6 +2,7 @@ package com.nehal.ctgmovies
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -12,8 +13,10 @@ import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.addEpisodes
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.newAnimeLoadResponse
 import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
@@ -59,6 +62,8 @@ class CTGMoviesProvider : MainAPI() {
 
     private val mapper = jacksonObjectMapper().apply {
         configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true)
+        configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true)
     }
 
     override suspend fun getMainPage(
@@ -222,7 +227,7 @@ class CTGMoviesProvider : MainAPI() {
             } else {
                 val watchRes = app.get(targetUrl).text
                 val docWatch = Jsoup.parse(watchRes)
-                val canonical = docWatch.selectFirst("a[href^=\"/tv/\"], a[href^=\"/movies/\"]")?.attr("href")
+                val canonical = docWatch.selectFirst("a[href^=\"/tv/\"], a[href^=\"/anime/\"], a[href^=\"/movies/\"]")?.attr("href")
                 if (!canonical.isNullOrEmpty()) {
                     targetUrl = if (canonical.startsWith("http")) canonical else "$mainUrl$canonical"
                 }
@@ -277,60 +282,109 @@ class CTGMoviesProvider : MainAPI() {
             val episodesList = mutableListOf<Episode>()
             val episodeObjects = extractJsonArray(payload, "episodes")
 
-            episodeObjects.forEach { epObj ->
-                try {
-                    val epNum = epObj["episode_number"]?.toString()?.toIntOrNull() ?: 1
-                    val sNum = epObj["season_number"]?.toString()?.toIntOrNull() ?: 1
-                    val epName = epObj["name"]?.toString() ?: "Episode $epNum"
-                    val epOverview = epObj["overview"]?.toString()
-                    val stillUrl = epObj["still_url"]?.toString()
+            if (episodeObjects.isNotEmpty()) {
+                episodeObjects.forEach { epObj ->
+                    try {
+                        val epNum = epObj["episode_number"]?.toString()?.toIntOrNull() ?: 1
+                        val sNum = epObj["season_number"]?.toString()?.toIntOrNull() ?: 1
+                        val epName = epObj["name"]?.toString() ?: "Episode $epNum"
+                        val epOverview = epObj["overview"]?.toString()
+                        val stillUrl = epObj["still_url"]?.toString()
 
-                    val p1 = Regex("""s0*${sNum}e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
-                    val p2 = Regex("""[._\-\s/]e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
+                        val p1 = Regex("""s0*${sNum}e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
+                        val p2 = Regex("""[._\-\s/]e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
 
-                    val epVideoUrls = allVideoUrls.filter { vUrl ->
-                        val uLower = vUrl.lowercase()
-                        p1.containsMatchIn(uLower) || p2.containsMatchIn(uLower)
-                    }.distinct()
+                        val epVideoUrls = allVideoUrls.filter { vUrl ->
+                            val uLower = vUrl.lowercase()
+                            p1.containsMatchIn(uLower) || p2.containsMatchIn(uLower)
+                        }.distinct()
 
-                    val epAudioUrls = audioTracks.filter { audio ->
-                        val aUrl = audio["url"] ?: ""
-                        val aLower = aUrl.lowercase()
-                        p1.containsMatchIn(aLower) || p2.containsMatchIn(aLower)
-                    }
+                        val epAudioUrls = audioTracks.filter { audio ->
+                            val aUrl = audio["url"] ?: ""
+                            val aLower = aUrl.lowercase()
+                            p1.containsMatchIn(aLower) || p2.containsMatchIn(aLower)
+                        }
 
-                    val epSubtitleUrls = subtitleTracks.filter { sub ->
-                        val sUrl = sub["url"] ?: ""
-                        val sLower = sUrl.lowercase()
-                        p1.containsMatchIn(sLower) || p2.containsMatchIn(sLower)
-                    }
+                        val epSubtitleUrls = subtitleTracks.filter { sub ->
+                            val sUrl = sub["url"] ?: ""
+                            val sLower = sUrl.lowercase()
+                            p1.containsMatchIn(sLower) || p2.containsMatchIn(sLower)
+                        }
 
+                        val epDataMap = mapOf(
+                            "video_urls" to epVideoUrls.ifEmpty { allVideoUrls },
+                            "audio_tracks" to epAudioUrls,
+                            "subtitles" to epSubtitleUrls
+                        )
+                        val epDataString = mapper.writeValueAsString(epDataMap)
+
+                        episodesList.add(newEpisode(epDataString) {
+                            this.name = epName
+                            this.season = sNum
+                            this.episode = epNum
+                            this.description = epOverview
+                            this.posterUrl = stillUrl
+                        })
+                    } catch (_: Exception) {}
+                }
+            }
+
+            // Fallback Episode Generator if JSON episodes array was empty
+            if (episodesList.isEmpty() && allVideoUrls.isNotEmpty()) {
+                val epMap = mutableMapOf<Pair<Int, Int>, MutableList<String>>()
+                allVideoUrls.forEach { vUrl ->
+                    val uLower = vUrl.lowercase()
+                    val matchSE = Regex("""s(\d+)e(\d+)""", RegexOption.IGNORE_CASE).find(uLower)
+                    val matchE = Regex("""[._\-\s/]e(\d+)""", RegexOption.IGNORE_CASE).find(uLower)
+
+                    val sNum = matchSE?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                    val epNum = matchSE?.groupValues?.get(2)?.toIntOrNull() 
+                        ?: matchE?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+                    val key = Pair(sNum, epNum)
+                    epMap.getOrPut(key) { mutableListOf() }.add(vUrl)
+                }
+
+                epMap.forEach { (seKey, vList) ->
+                    val sNum = seKey.first
+                    val epNum = seKey.second
                     val epDataMap = mapOf(
-                        "video_urls" to epVideoUrls,
-                        "audio_tracks" to epAudioUrls,
-                        "subtitles" to epSubtitleUrls
+                        "video_urls" to vList,
+                        "audio_tracks" to emptyList<Map<String, String>>(),
+                        "subtitles" to subtitleTracks
                     )
                     val epDataString = mapper.writeValueAsString(epDataMap)
 
                     episodesList.add(newEpisode(epDataString) {
-                        this.name = epName
+                        this.name = "Episode $epNum"
                         this.season = sNum
                         this.episode = epNum
-                        this.description = epOverview
-                        this.posterUrl = stillUrl
                     })
-                } catch (_: Exception) {}
+                }
             }
 
             val mainType = if (targetUrl.contains("/anime/")) TvType.Anime else TvType.TvSeries
 
-            return newTvSeriesLoadResponse(title, targetUrl, mainType, episodesList.distinctBy { Pair(it.season, it.episode) }) {
-                this.posterUrl = poster
-                this.backgroundPosterUrl = backdrop
-                this.plot = plot
-                this.year = year
-                if (rating != null) {
-                    this.score = Score.from10(rating)
+            if (mainType == TvType.Anime) {
+                return newAnimeLoadResponse(title, targetUrl, TvType.Anime) {
+                    this.posterUrl = poster
+                    this.backgroundPosterUrl = backdrop
+                    this.plot = plot
+                    this.year = year
+                    if (rating != null) {
+                        this.score = Score.from10(rating)
+                    }
+                    this.addEpisodes(DubStatus.Subbed, episodesList.distinctBy { Pair(it.season, it.episode) })
+                }
+            } else {
+                return newTvSeriesLoadResponse(title, targetUrl, TvType.TvSeries, episodesList.distinctBy { Pair(it.season, it.episode) }) {
+                    this.posterUrl = poster
+                    this.backgroundPosterUrl = backdrop
+                    this.plot = plot
+                    this.year = year
+                    if (rating != null) {
+                        this.score = Score.from10(rating)
+                    }
                 }
             }
         } else {
@@ -608,8 +662,9 @@ class CTGMoviesProvider : MainAPI() {
                     depth--
                     if (depth == 0) {
                         val arrayStr = text.substring(startIdx, i + 1)
+                        val cleanArrayStr = arrayStr.replace(Regex("""[\r\n\t]"""), " ")
                         return try {
-                            mapper.readValue(arrayStr)
+                            mapper.readValue(cleanArrayStr)
                         } catch (_: Exception) {
                             emptyList()
                         }
