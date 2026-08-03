@@ -11,6 +11,7 @@ import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.addQuality
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAnimeSearchResponse
@@ -84,6 +85,9 @@ class CTGMoviesProvider : MainAPI() {
             val cleanUrl = if (href.startsWith("http")) href else "$mainUrl$href"
             if (!seenUrls.add(cleanUrl)) return@forEach
 
+            val cardText = a.text().trim()
+            if (cardText == "Watch Now" || cardText == "Details" || cardText == "Play") return@forEach
+
             val isAnimeSection = request.data == "/anime" || cleanUrl.contains("/anime/")
             val isTv = cleanUrl.contains("/tv/")
             val img = a.selectFirst("img")
@@ -93,11 +97,19 @@ class CTGMoviesProvider : MainAPI() {
                 poster = URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
             }
 
+            val qualityMatch = Regex("""\b(4K|2160p|1080p|720p|480p|HDTS|CAM|WEBRip|WebRip|WEB-DL|BluRay)\b""", RegexOption.IGNORE_CASE).find(cardText)
+            val qualityStr = qualityMatch?.value
+
+            val yearMatch = Regex("""\b(19\d{2}|20\d{2})\b""").find(cardText)
+            val yearVal = yearMatch?.value?.toIntOrNull()
+
             var rawTitle = a.selectFirst("h2, h3, .font-display")?.text()?.trim()
             if (rawTitle.isNullOrEmpty()) {
-                rawTitle = a.text().trim()
+                rawTitle = cardText
             }
-            var finalTitle = rawTitle.replace(Regex("""^\d{3,4}p.*?"""), "").trim()
+            var finalTitle = rawTitle.replace(Regex("""^\d{3,4}p.*?\s"""), "").trim()
+            finalTitle = finalTitle.replace(Regex("""\b(4K|2160p|1080p|720p|WEBRip|WebRip|HDTS|BluRay|WEB-DL)\b""", RegexOption.IGNORE_CASE), "").trim()
+            finalTitle = finalTitle.replace(Regex("""\b(19\d{2}|20\d{2})\b$"""), "").trim()
             if (finalTitle.isEmpty()) {
                 finalTitle = href.substringAfterLast("/").replace("-", " ").capitalizeWords()
             }
@@ -111,14 +123,20 @@ class CTGMoviesProvider : MainAPI() {
             if (tvType == TvType.Anime) {
                 items.add(newAnimeSearchResponse(finalTitle, cleanUrl, TvType.Anime) {
                     this.posterUrl = poster.ifEmpty { null }
+                    if (yearVal != null) this.year = yearVal
+                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
                 })
             } else if (tvType == TvType.TvSeries) {
                 items.add(newTvSeriesSearchResponse(finalTitle, cleanUrl, TvType.TvSeries) {
                     this.posterUrl = poster.ifEmpty { null }
+                    if (yearVal != null) this.year = yearVal
+                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
                 })
             } else {
                 items.add(newMovieSearchResponse(finalTitle, cleanUrl, TvType.Movie) {
                     this.posterUrl = poster.ifEmpty { null }
+                    if (yearVal != null) this.year = yearVal
+                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
                 })
             }
         }
@@ -140,6 +158,9 @@ class CTGMoviesProvider : MainAPI() {
             val fullUrl = if (href.startsWith("http")) href else "$mainUrl$href"
             if (!seen.add(fullUrl)) return@forEach
 
+            val cardText = a.text().trim()
+            if (cardText == "Watch Now" || cardText == "Details" || cardText == "Play") return@forEach
+
             val isTv = fullUrl.contains("/tv/")
             val isAnime = fullUrl.contains("/anime/")
             val img = a.selectFirst("img")
@@ -149,11 +170,19 @@ class CTGMoviesProvider : MainAPI() {
                 poster = URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
             }
 
+            val qualityMatch = Regex("""\b(4K|2160p|1080p|720p|480p|HDTS|CAM|WEBRip|WebRip|WEB-DL|BluRay)\b""", RegexOption.IGNORE_CASE).find(cardText)
+            val qualityStr = qualityMatch?.value
+
+            val yearMatch = Regex("""\b(19\d{2}|20\d{2})\b""").find(cardText)
+            val yearVal = yearMatch?.value?.toIntOrNull()
+
             var rawTitle = a.selectFirst("h2, h3, .font-display")?.text()?.trim()
             if (rawTitle.isNullOrEmpty()) {
-                rawTitle = a.text().trim()
+                rawTitle = cardText
             }
             var finalTitle = rawTitle.replace(Regex("""\d{3,4}p\s+\w+"""), "").trim()
+            finalTitle = finalTitle.replace(Regex("""\b(4K|2160p|1080p|720p|WEBRip|WebRip|HDTS|BluRay|WEB-DL)\b""", RegexOption.IGNORE_CASE), "").trim()
+            finalTitle = finalTitle.replace(Regex("""\b(19\d{2}|20\d{2})\b$"""), "").trim()
             if (finalTitle.isEmpty()) {
                 finalTitle = href.substringAfterLast("/").replace("-", " ").capitalizeWords()
             }
@@ -167,14 +196,20 @@ class CTGMoviesProvider : MainAPI() {
             if (tvType == TvType.Anime) {
                 results.add(newAnimeSearchResponse(finalTitle, fullUrl, TvType.Anime) {
                     this.posterUrl = poster.ifEmpty { null }
+                    if (yearVal != null) this.year = yearVal
+                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
                 })
             } else if (tvType == TvType.TvSeries) {
                 results.add(newTvSeriesSearchResponse(finalTitle, fullUrl, TvType.TvSeries) {
                     this.posterUrl = poster.ifEmpty { null }
+                    if (yearVal != null) this.year = yearVal
+                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
                 })
             } else {
                 results.add(newMovieSearchResponse(finalTitle, fullUrl, TvType.Movie) {
                     this.posterUrl = poster.ifEmpty { null }
+                    if (yearVal != null) this.year = yearVal
+                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
                 })
             }
         }
