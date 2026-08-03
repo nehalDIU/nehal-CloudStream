@@ -8,10 +8,10 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.Score
+import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.addQuality
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAnimeSearchResponse
@@ -97,11 +97,9 @@ class CTGMoviesProvider : MainAPI() {
                 poster = URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
             }
 
-            val qualityMatch = Regex("""\b(4K|2160p|1080p|720p|480p|HDTS|CAM|WEBRip|WebRip|WEB-DL|BluRay)\b""", RegexOption.IGNORE_CASE).find(cardText)
-            val qualityStr = qualityMatch?.value
-
             val yearMatch = Regex("""\b(19\d{2}|20\d{2})\b""").find(cardText)
             val yearVal = yearMatch?.value?.toIntOrNull()
+            val qualityEnum = getSearchQuality(cardText)
 
             var rawTitle = a.selectFirst("h2, h3, .font-display")?.text()?.trim()
             if (rawTitle.isNullOrEmpty()) {
@@ -124,19 +122,19 @@ class CTGMoviesProvider : MainAPI() {
                 items.add(newAnimeSearchResponse(finalTitle, cleanUrl, TvType.Anime) {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
-                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
+                    this.quality = qualityEnum
                 })
             } else if (tvType == TvType.TvSeries) {
                 items.add(newTvSeriesSearchResponse(finalTitle, cleanUrl, TvType.TvSeries) {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
-                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
+                    this.quality = qualityEnum
                 })
             } else {
                 items.add(newMovieSearchResponse(finalTitle, cleanUrl, TvType.Movie) {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
-                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
+                    this.quality = qualityEnum
                 })
             }
         }
@@ -170,11 +168,9 @@ class CTGMoviesProvider : MainAPI() {
                 poster = URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
             }
 
-            val qualityMatch = Regex("""\b(4K|2160p|1080p|720p|480p|HDTS|CAM|WEBRip|WebRip|WEB-DL|BluRay)\b""", RegexOption.IGNORE_CASE).find(cardText)
-            val qualityStr = qualityMatch?.value
-
             val yearMatch = Regex("""\b(19\d{2}|20\d{2})\b""").find(cardText)
             val yearVal = yearMatch?.value?.toIntOrNull()
+            val qualityEnum = getSearchQuality(cardText)
 
             var rawTitle = a.selectFirst("h2, h3, .font-display")?.text()?.trim()
             if (rawTitle.isNullOrEmpty()) {
@@ -197,19 +193,19 @@ class CTGMoviesProvider : MainAPI() {
                 results.add(newAnimeSearchResponse(finalTitle, fullUrl, TvType.Anime) {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
-                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
+                    this.quality = qualityEnum
                 })
             } else if (tvType == TvType.TvSeries) {
                 results.add(newTvSeriesSearchResponse(finalTitle, fullUrl, TvType.TvSeries) {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
-                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
+                    this.quality = qualityEnum
                 })
             } else {
                 results.add(newMovieSearchResponse(finalTitle, fullUrl, TvType.Movie) {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
-                    if (!qualityStr.isNullOrEmpty()) this.addQuality(qualityStr)
+                    this.quality = qualityEnum
                 })
             }
         }
@@ -542,6 +538,20 @@ class CTGMoviesProvider : MainAPI() {
         if (uLower.contains("telugu")) langs.add("Telugu")
 
         return langs.joinToString(" + ")
+    }
+
+    private fun getSearchQuality(check: String?): SearchQuality? {
+        val lower = check?.lowercase() ?: return null
+        return when {
+            lower.contains("4k") || lower.contains("2160p") -> SearchQuality.FourK
+            lower.contains("bluray") -> SearchQuality.BlueRay
+            lower.contains("webrip") || lower.contains("web-dl") -> SearchQuality.WebRip
+            lower.contains("hdts") || lower.contains("hdcam") || lower.contains("hdtc") -> SearchQuality.HdCam
+            lower.contains("cam") || lower.contains("camrip") -> SearchQuality.Cam
+            lower.contains("1080p") || lower.contains("720p") || lower.contains("hd") -> SearchQuality.HD
+            lower.contains("480p") || lower.contains("360p") || lower.contains("sd") -> SearchQuality.SD
+            else -> SearchQuality.HD
+        }
     }
 
     private fun extractServerName(url: String): String {
