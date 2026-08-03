@@ -1,5 +1,6 @@
 package com.nehal.fmftp
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
@@ -51,10 +52,10 @@ class FmFtpProvider : MainAPI() {
             "$mainUrl/api/$endpoint?library=$libraryId&limit=30&page=$page"
         }
 
-        val res = app.get(url).parsed<FmFtpListResponse>()
+        val res = app.get(url).parsedSafe<FmFtpListResponse>()
         val isTv = endpoint == "tv-shows"
 
-        val items = res.data.mapNotNull { item ->
+        val items = res?.data?.mapNotNull { item ->
             val title = item.title ?: return@mapNotNull null
             val itemUrl = "$mainUrl/$endpoint/${item.id}"
             val poster = fixPosterUrl(item.posterPath)
@@ -68,18 +69,22 @@ class FmFtpProvider : MainAPI() {
                     this.posterUrl = poster
                 }
             }
-        }
+        } ?: emptyList()
 
-        return newHomePageResponse(request.name, items, hasNext = page < res.pages)
+        val pages = res?.pages ?: 1
+        return newHomePageResponse(request.name, items, hasNext = page < pages)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
         val searchUrl = "$mainUrl/api/search?search=$encodedQuery"
-        val response = app.get(searchUrl).parsed<List<FmFtpItem>>()
+        
+        val response = app.get(searchUrl).parsedSafe<Array<FmFtpItem>>() ?: return emptyList()
 
         return response.mapNotNull { item ->
-            val title = item.title ?: return@mapNotNull null
+            val title = item.title?.trim() ?: return@mapNotNull null
+            if (title.isEmpty()) return@mapNotNull null
+
             val isTv = isTvItem(item)
             val endpoint = if (isTv) "tv-shows" else "movies"
             val itemUrl = "$mainUrl/$endpoint/${item.id}"
@@ -104,7 +109,9 @@ class FmFtpProvider : MainAPI() {
 
         if (isTv) {
             val apiUrl = "$mainUrl/api/tv-shows/$id?fields=episodes"
-            val show = app.get(apiUrl).parsed<FmFtpItem>()
+            val show = app.get(apiUrl).parsedSafe<FmFtpItem>()
+                ?: throw ErrorLoadingException("Failed to load show details")
+
             val title = show.title ?: throw ErrorLoadingException("Missing title")
             val poster = fixPosterUrl(show.posterPath)
             val backdrop = fixPosterUrl(show.backdropPath)
@@ -134,7 +141,9 @@ class FmFtpProvider : MainAPI() {
             }
         } else {
             val apiUrl = "$mainUrl/api/movies/$id"
-            val movie = app.get(apiUrl).parsed<FmFtpItem>()
+            val movie = app.get(apiUrl).parsedSafe<FmFtpItem>()
+                ?: throw ErrorLoadingException("Failed to load movie details")
+
             val title = movie.title ?: throw ErrorLoadingException("Missing title")
             val poster = fixPosterUrl(movie.posterPath)
             val backdrop = fixPosterUrl(movie.backdropPath)
@@ -193,6 +202,7 @@ class FmFtpProvider : MainAPI() {
         return Regex("^(\\d{4})").find(releaseDate)?.value?.toIntOrNull()
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class FmFtpListResponse(
         @JsonProperty("total") val total: Int = 0,
         @JsonProperty("pages") val pages: Int = 1,
@@ -201,6 +211,7 @@ class FmFtpProvider : MainAPI() {
         @JsonProperty("data") val data: List<FmFtpItem> = emptyList()
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class FmFtpItem(
         @JsonProperty("id") val id: Int,
         @JsonProperty("library") val library: Int? = null,
@@ -217,6 +228,7 @@ class FmFtpProvider : MainAPI() {
         @JsonProperty("episodes") val episodes: List<FmFtpEpisode> = emptyList()
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class FmFtpEpisode(
         @JsonProperty("id") val id: Int,
         @JsonProperty("name") val name: String? = null,
