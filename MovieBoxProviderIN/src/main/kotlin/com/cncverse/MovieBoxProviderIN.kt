@@ -65,6 +65,7 @@ class MovieBoxProviderIN : MainAPI() {
     override var mainUrl = "https://api3.aoneroom.com"
     override var name = "MovieBoxIN"
     override val hasMainPage = true
+    override val hasQuickSearch = true
     override var lang = "ta"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
@@ -298,6 +299,10 @@ class MovieBoxProviderIN : MainAPI() {
         return newHomePageResponse(homePageLists)
     }
 
+    override suspend fun quickSearch(query: String): List<SearchResponse> {
+        return search(query)
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
         return search(query, 1).items
     }
@@ -309,14 +314,16 @@ class MovieBoxProviderIN : MainAPI() {
         val payloadMap = mapOf(
             "page" to page,
             "perPage" to 20,
-            "keyword" to query
+            "keyword" to query,
+            "tabId" to "All"
         )
         val jsonBody = mapper.writeValueAsString(payloadMap)
 
         suspend fun doSearchRequest(authToken: String?): String? {
             val bm = randomBrandModel()
-            val xClientToken = generateXClientToken()
-            val xTrSignature = generateXTrSignature("POST", "application/json", "application/json", url, jsonBody)
+            val ts = System.currentTimeMillis()
+            val xClientToken = generateXClientToken(ts)
+            val xTrSignature = generateXTrSignature("POST", "application/json", "application/json", url, jsonBody, hardcodedTimestamp = ts)
             val headers = mutableMapOf(
                 "user-agent" to "com.community.mbox.in/50020042 (Linux; U; Android 16; en_IN; sdk_gphone64_x86_64; Build/BP22.250325.006; Cronet/133.0.6876.3)",
                 "accept" to "application/json",
@@ -338,7 +345,7 @@ class MovieBoxProviderIN : MainAPI() {
                     requestBody = requestBody
                 )
                 extractAndCacheToken(response.headers)
-                response.body.string()
+                response.text
             } catch (_: Exception) {
                 null
             }
@@ -347,7 +354,7 @@ class MovieBoxProviderIN : MainAPI() {
         var responseBody = doSearchRequest(token)
 
         // If unauthorized or missing token, clear cache, fetch fresh token and retry once
-        if (responseBody == null || responseBody.contains("UNAUTHORIZED") || responseBody.contains("miss token")) {
+        if (responseBody == null || responseBody.contains("UNAUTHORIZED") || responseBody.contains("miss token") || responseBody.contains("Signature invalid")) {
             cachedToken = null
             token = getOrFetchToken()
             responseBody = doSearchRequest(token)
@@ -380,11 +387,12 @@ class MovieBoxProviderIN : MainAPI() {
     private fun parseSearchSubject(subject: JsonNode): SearchResponse? {
         val title = subject["title"]?.asText() ?: return null
         val id = subject["subjectId"]?.asText() ?: return null
-        val coverImg = subject["cover"]?.get("url")?.asText()
+        val coverImg = subject["cover"]?.get("url")?.asText() ?: subject["stills"]?.get("url")?.asText()
         val subjectType = subject["subjectType"]?.asInt() ?: 1
         val type = when (subjectType) {
             1 -> TvType.Movie
             2 -> TvType.TvSeries
+            7 -> TvType.TvSeries
             else -> TvType.Movie
         }
         return newMovieSearchResponse(
