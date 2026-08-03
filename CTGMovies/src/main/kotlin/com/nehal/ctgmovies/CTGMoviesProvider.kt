@@ -13,6 +13,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -77,12 +78,13 @@ class CTGMoviesProvider : MainAPI() {
         val items = mutableListOf<SearchResponse>()
         val seenUrls = mutableSetOf<String>()
 
-        doc.select("a[href^=\"/movies/\"], a[href^=\"/tv/\"]").forEach { a ->
+        doc.select("a[href^=\"/movies/\"], a[href^=\"/tv/\"], a[href^=\"/anime/\"]").forEach { a ->
             val href = a.attr("href").trim()
             if (href.contains("/page-") || href.contains("/watch/")) return@forEach
             val cleanUrl = if (href.startsWith("http")) href else "$mainUrl$href"
             if (!seenUrls.add(cleanUrl)) return@forEach
 
+            val isAnimeSection = request.data == "/anime" || cleanUrl.contains("/anime/")
             val isTv = cleanUrl.contains("/tv/")
             val img = a.selectFirst("img")
             var poster = img?.attr("src") ?: img?.attr("srcset") ?: ""
@@ -100,7 +102,17 @@ class CTGMoviesProvider : MainAPI() {
                 finalTitle = href.substringAfterLast("/").replace("-", " ").capitalizeWords()
             }
 
-            if (isTv) {
+            val tvType = when {
+                isAnimeSection -> TvType.Anime
+                isTv -> TvType.TvSeries
+                else -> TvType.Movie
+            }
+
+            if (tvType == TvType.Anime) {
+                items.add(newAnimeSearchResponse(finalTitle, cleanUrl, TvType.Anime) {
+                    this.posterUrl = poster.ifEmpty { null }
+                })
+            } else if (tvType == TvType.TvSeries) {
                 items.add(newTvSeriesSearchResponse(finalTitle, cleanUrl, TvType.TvSeries) {
                     this.posterUrl = poster.ifEmpty { null }
                 })
@@ -122,13 +134,14 @@ class CTGMoviesProvider : MainAPI() {
         val results = mutableListOf<SearchResponse>()
         val seen = mutableSetOf<String>()
 
-        doc.select("a[href^=\"/movies/\"], a[href^=\"/tv/\"]").forEach { a ->
+        doc.select("a[href^=\"/movies/\"], a[href^=\"/tv/\"], a[href^=\"/anime/\"]").forEach { a ->
             val href = a.attr("href").trim()
             if (href.contains("/page-")) return@forEach
             val fullUrl = if (href.startsWith("http")) href else "$mainUrl$href"
             if (!seen.add(fullUrl)) return@forEach
 
             val isTv = fullUrl.contains("/tv/")
+            val isAnime = fullUrl.contains("/anime/")
             val img = a.selectFirst("img")
             var poster = img?.attr("src") ?: img?.attr("srcset") ?: ""
             if (poster.contains("url=")) {
@@ -145,7 +158,17 @@ class CTGMoviesProvider : MainAPI() {
                 finalTitle = href.substringAfterLast("/").replace("-", " ").capitalizeWords()
             }
 
-            if (isTv) {
+            val tvType = when {
+                isAnime -> TvType.Anime
+                isTv -> TvType.TvSeries
+                else -> TvType.Movie
+            }
+
+            if (tvType == TvType.Anime) {
+                results.add(newAnimeSearchResponse(finalTitle, fullUrl, TvType.Anime) {
+                    this.posterUrl = poster.ifEmpty { null }
+                })
+            } else if (tvType == TvType.TvSeries) {
                 results.add(newTvSeriesSearchResponse(finalTitle, fullUrl, TvType.TvSeries) {
                     this.posterUrl = poster.ifEmpty { null }
                 })
@@ -164,7 +187,7 @@ class CTGMoviesProvider : MainAPI() {
         val doc = Jsoup.parse(html)
         val payload = decodeNextPayload(html)
 
-        val isTv = url.contains("/tv/")
+        val isTvOrAnime = url.contains("/tv/") || url.contains("/anime/") || payload.contains("\"episodes\":[")
         val title = doc.selectFirst("h1, h2")?.text()?.trim() 
             ?: url.substringAfterLast("/").replace("-", " ").capitalizeWords()
 
@@ -203,9 +226,9 @@ class CTGMoviesProvider : MainAPI() {
         val subtitleTracks = extractSubtitles(payload, html)
         val allVideoUrls = extractVideoUrls(payload, html).distinct()
 
-        if (isTv) {
+        if (isTvOrAnime) {
             val episodesList = mutableListOf<Episode>()
-            val episodeObjects = extractJsonObjects(payload, "episode_number")
+            val episodeObjects = extractJsonArray(payload, "episodes")
 
             episodeObjects.forEach { epObj ->
                 try {
@@ -215,12 +238,12 @@ class CTGMoviesProvider : MainAPI() {
                     val epOverview = epObj["overview"]?.toString()
                     val stillUrl = epObj["still_url"]?.toString()
 
+                    val p1 = Regex("""s0*${sNum}e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
+                    val p2 = Regex("""[._\-\s/]e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
+
                     val epVideoUrls = allVideoUrls.filter { vUrl ->
                         val uLower = vUrl.lowercase()
-                        val epFormat1 = "e%02d".format(epNum)
-                        val epFormat2 = "e%d".format(epNum)
-                        val sEpFormat = "s%02de%02d".format(sNum, epNum)
-                        uLower.contains(epFormat1) || uLower.contains(epFormat2) || uLower.contains(sEpFormat)
+                        p1.containsMatchIn(uLower) || p2.containsMatchIn(uLower)
                     }.distinct()
 
                     val epDataMap = mapOf(
@@ -239,7 +262,9 @@ class CTGMoviesProvider : MainAPI() {
                 } catch (_: Exception) {}
             }
 
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodesList.distinctBy { Pair(it.season, it.episode) }) {
+            val mainType = if (url.contains("/anime/")) TvType.Anime else TvType.TvSeries
+
+            return newTvSeriesLoadResponse(title, url, mainType, episodesList.distinctBy { Pair(it.season, it.episode) }) {
                 this.posterUrl = poster
                 this.backgroundPosterUrl = backdrop
                 this.plot = plot
@@ -432,16 +457,46 @@ class CTGMoviesProvider : MainAPI() {
         return sb.toString()
     }
 
-    private fun extractJsonObjects(text: String, requiredKey: String): List<Map<String, Any?>> {
-        val results = mutableListOf<Map<String, Any?>>()
-        val pattern = Regex("""\{[^{}]*?"$requiredKey"\s*:\s*[^}]*?\}""")
-        pattern.findAll(text).forEach { m ->
-            try {
-                val jsonMap: Map<String, Any?> = mapper.readValue(m.value)
-                results.add(jsonMap)
-            } catch (_: Exception) {}
+    private fun extractJsonArray(text: String, key: String): List<Map<String, Any?>> {
+        val pattern = Regex("""""$key"\s*:\s*\[""")
+        val match = pattern.find(text) ?: return emptyList()
+        val startIdx = match.range.last
+
+        var depth = 0
+        var inString = false
+        var escape = false
+
+        for (i in startIdx until text.length) {
+            val c = text[i]
+            if (escape) {
+                escape = false
+                continue
+            }
+            if (c == '\\') {
+                escape = true
+                continue
+            }
+            if (c == '"') {
+                inString = !inString
+                continue
+            }
+            if (!inString) {
+                if (c == '[') {
+                    depth++
+                } else if (c == ']') {
+                    depth--
+                    if (depth == 0) {
+                        val arrayStr = text.substring(startIdx, i + 1)
+                        return try {
+                            mapper.readValue(arrayStr)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
+                }
+            }
         }
-        return results
+        return emptyList()
     }
 
     private fun getQualityFromString(q: String): Int {
