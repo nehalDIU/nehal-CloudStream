@@ -46,9 +46,14 @@ open class DiscoveryFTPProvider : MainAPI() {
         "m/category/Bangla" to "Movies: Bangla",
         "m/category/English" to "Movies: English",
         "m/category/Hindi" to "Movies: Hindi",
+        "m/category/Tamil" to "Movies: Tamil",
+        "m/category/Others" to "Movies: Others",
+        "m/category/Animation" to "Movies: Animation",
         "s/category/Bangla" to "Series: Bangla",
         "s/category/Foreign" to "Series: Foreign / English",
-        "s/category/Hindi" to "Series: Hindi"
+        "s/category/Hindi" to "Series: Hindi",
+        "s/category/Tamil" to "Series: Tamil",
+        "s/category/Anime" to "Series: Anime"
     )
 
     private data class HomePageCacheEntry(
@@ -93,7 +98,9 @@ open class DiscoveryFTPProvider : MainAPI() {
                 val year = card.selectFirst(".movie_details_span")?.text()?.trim()?.toIntOrNull()
                     ?: Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
 
-                val qualityText = card.select(".quality_stack a").joinToString(" ") { it.text().trim() }
+                val qualityText = card.selectFirst(".movie_details_span_end")?.text()?.trim()
+                    ?: card.selectFirst(".poster")?.attr("title")?.trim()
+                    ?: card.select(".quality_stack a").joinToString(" ") { it.text().trim() }
 
                 newAnimeSearchResponse(cleanedTitle, fixUrl(href), TvType.Movie) {
                     this.posterUrl = fixUrlNull(posterUrl)
@@ -250,6 +257,7 @@ open class DiscoveryFTPProvider : MainAPI() {
             combined.contains("4k") || combined.contains("uhd") -> "4K"
             combined.contains("1080") -> "1080p"
             combined.contains("720") -> "720p"
+            combined.contains("cam") || combined.contains("hdcam") || combined.contains("predvd") -> "CAM"
             combined.contains("hd") || combined.contains("bluray") || combined.contains("web-dl") || combined.contains("web-r") -> "HD"
             else -> null
         }
