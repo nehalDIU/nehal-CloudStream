@@ -13,6 +13,7 @@ import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.addEpisodes
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
@@ -106,14 +107,15 @@ class CTGMoviesProvider : MainAPI() {
             val yearVal = yearMatch?.value?.toIntOrNull()
             val qualityEnum = getSearchQuality(cardText)
 
-            var rawTitle = a.selectFirst("h2, h3, .font-display")?.text()?.trim()
-            if (rawTitle.isNullOrEmpty()) {
-                rawTitle = cardText
-            }
+            var rawTitle = img?.attr("alt")?.trim()?.takeIf { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
+                ?: a.attr("title")?.trim()?.takeIf { it.isNotBlank() }
+                ?: a.selectFirst("h1, h2, h3, h4, .title, .entry-title")?.text()?.trim()
+                ?: href.substringAfterLast("/").replace("-", " ")
+
             var finalTitle = rawTitle.replace(Regex("""^\d{3,4}p.*?\s"""), "").trim()
             finalTitle = finalTitle.replace(Regex("""\b(4K|2160p|1080p|720p|WEBRip|WebRip|HDTS|BluRay|WEB-DL)\b""", RegexOption.IGNORE_CASE), "").trim()
             finalTitle = finalTitle.replace(Regex("""\b(19\d{2}|20\d{2})\b$"""), "").trim()
-            if (finalTitle.isEmpty()) {
+            if (finalTitle.isEmpty() || finalTitle.contains(Regex("""(Drama|Action|Comedy|Crime|Mystery|Romance|Thriller|Horror|Sci-Fi),\s"""))) {
                 finalTitle = href.substringAfterLast("/").replace("-", " ").capitalizeWords()
             }
 
@@ -128,6 +130,7 @@ class CTGMoviesProvider : MainAPI() {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
                     this.quality = qualityEnum
+                    this.addDubStatus(dubExist = true, subExist = true)
                 })
             } else if (tvType == TvType.TvSeries) {
                 items.add(newTvSeriesSearchResponse(finalTitle, cleanUrl, TvType.TvSeries) {
@@ -177,14 +180,15 @@ class CTGMoviesProvider : MainAPI() {
             val yearVal = yearMatch?.value?.toIntOrNull()
             val qualityEnum = getSearchQuality(cardText)
 
-            var rawTitle = a.selectFirst("h2, h3, .font-display")?.text()?.trim()
-            if (rawTitle.isNullOrEmpty()) {
-                rawTitle = cardText
-            }
+            var rawTitle = img?.attr("alt")?.trim()?.takeIf { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
+                ?: a.attr("title")?.trim()?.takeIf { it.isNotBlank() }
+                ?: a.selectFirst("h1, h2, h3, h4, .title, .entry-title")?.text()?.trim()
+                ?: href.substringAfterLast("/").replace("-", " ")
+
             var finalTitle = rawTitle.replace(Regex("""\d{3,4}p\s+\w+"""), "").trim()
             finalTitle = finalTitle.replace(Regex("""\b(4K|2160p|1080p|720p|WEBRip|WebRip|HDTS|BluRay|WEB-DL)\b""", RegexOption.IGNORE_CASE), "").trim()
             finalTitle = finalTitle.replace(Regex("""\b(19\d{2}|20\d{2})\b$"""), "").trim()
-            if (finalTitle.isEmpty()) {
+            if (finalTitle.isEmpty() || finalTitle.contains(Regex("""(Drama|Action|Comedy|Crime|Mystery|Romance|Thriller|Horror|Sci-Fi),\s"""))) {
                 finalTitle = href.substringAfterLast("/").replace("-", " ").capitalizeWords()
             }
 
@@ -199,6 +203,7 @@ class CTGMoviesProvider : MainAPI() {
                     this.posterUrl = poster.ifEmpty { null }
                     if (yearVal != null) this.year = yearVal
                     this.quality = qualityEnum
+                    this.addDubStatus(dubExist = true, subExist = true)
                 })
             } else if (tvType == TvType.TvSeries) {
                 results.add(newTvSeriesSearchResponse(finalTitle, fullUrl, TvType.TvSeries) {
@@ -366,6 +371,12 @@ class CTGMoviesProvider : MainAPI() {
             val mainType = if (targetUrl.contains("/anime/")) TvType.Anime else TvType.TvSeries
 
             if (mainType == TvType.Anime) {
+                val uniqueEps = episodesList.distinctBy { Pair(it.season, it.episode) }
+                val dubbedEps = uniqueEps.filter { ep ->
+                    val data = ep.data
+                    data.contains("hindi", ignoreCase = true) || data.contains(".hin.", ignoreCase = true) || data.contains("dub", ignoreCase = true)
+                }
+
                 return newAnimeLoadResponse(title, targetUrl, TvType.Anime) {
                     this.posterUrl = poster
                     this.backgroundPosterUrl = backdrop
@@ -374,7 +385,12 @@ class CTGMoviesProvider : MainAPI() {
                     if (rating != null) {
                         this.score = Score.from10(rating)
                     }
-                    this.addEpisodes(DubStatus.Subbed, episodesList.distinctBy { Pair(it.season, it.episode) })
+                    this.addEpisodes(DubStatus.Subbed, uniqueEps)
+                    if (dubbedEps.isNotEmpty()) {
+                        this.addEpisodes(DubStatus.Dubbed, dubbedEps)
+                    } else {
+                        this.addEpisodes(DubStatus.Dubbed, uniqueEps)
+                    }
                 }
             } else {
                 return newTvSeriesLoadResponse(title, targetUrl, TvType.TvSeries, episodesList.distinctBy { Pair(it.season, it.episode) }) {
