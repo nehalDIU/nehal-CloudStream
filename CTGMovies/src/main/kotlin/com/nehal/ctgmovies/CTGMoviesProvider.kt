@@ -500,24 +500,6 @@ class CTGMoviesProvider : MainAPI() {
             }
         )
 
-        // Separate Audio Track Options for Selector
-        audioTracksList.forEach { audio ->
-            val aUrl = audio["url"] ?: return@forEach
-            val aLabel = audio["label"] ?: "Audio"
-            val audioLinkName = "CTGMovies [$serverName - $aLabel Audio Track]"
-
-            callback(
-                newExtractorLink(
-                    name = audioLinkName,
-                    source = audioLinkName,
-                    url = aUrl,
-                    type = ExtractorLinkType.VIDEO
-                ) {
-                    this.quality = qualityVal
-                }
-            )
-        }
-
         return true
     }
 
