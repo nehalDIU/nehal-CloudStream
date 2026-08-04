@@ -275,12 +275,7 @@ open class VegaMoviesProvider : MainAPI() {
             val buttons = document.select("a:has(button.dwd-button)")
             val data = buttons.mapNotNull { button ->
                 val link = fixUrl(button.attr("href"))
-                val doc = app.get(link).document
-                val source = doc.select("a:contains(V-Cloud)").attr("href")
-
-                Log.d("Vega", "source: $source")
-
-                EpisodeLink(source)
+                if (link.isNotBlank()) EpisodeLink(link) else null
             }
             return newMovieLoadResponse(title, url, TvType.Movie, data) {
                 this.posterUrl = posterUrl
@@ -303,9 +298,24 @@ open class VegaMoviesProvider : MainAPI() {
     ): Boolean {
         val sources = parseJson<ArrayList<EpisodeLink>>(data)
         sources.amap {
-            val source = it.source
-            if(source.contains("vcloud")) VCloud().getUrl(source, "", subtitleCallback, callback)
-            else loadExtractor(source, "", subtitleCallback, callback)
+            var targetSource = it.source
+            if (targetSource.isBlank()) return@amap
+
+            if (!targetSource.contains("vcloud") && !targetSource.contains("hubcloud")) {
+                try {
+                    val doc = app.get(targetSource, timeout = 10_000L).document
+                    val extracted = doc.selectFirst("a:contains(V-Cloud), a:contains(HubCloud), a[href*=\"vcloud\"], a[href*=\"hubcloud\"]")?.attr("href")
+                    if (!extracted.isNullOrBlank()) {
+                        targetSource = fixUrl(extracted)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            if (targetSource.contains("vcloud") || targetSource.contains("hubcloud")) {
+                VCloud().getUrl(targetSource, "", subtitleCallback, callback)
+            } else {
+                loadExtractor(targetSource, "", subtitleCallback, callback)
+            }
         }
         return true
     }
