@@ -767,7 +767,10 @@ class MovieBoxProviderIN : MainAPI() {
                                             else -> INFER_TYPE
                                         }
                                     ) {
-                                        this.headers = mapOf("Referer" to mainUrl)
+                                        this.headers = mapOf(
+                                            "Referer" to mainUrl,
+                                            "User-Agent" to "com.community.mbox.in/50020042 (Linux; U; Android 16; en_IN; sdk_gphone64_x86_64; Build/BP22.250325.006; Cronet/133.0.6876.3)"
+                                        )
                                         if (quality != null) {
                                             this.quality = quality
                                         }
@@ -913,10 +916,16 @@ class MovieBoxProviderIN : MainAPI() {
         if (now - lastBrowserOpenMs < BROWSER_DEBOUNCE_MS) return
         lastBrowserOpenMs = now
         try {
-            if (java.awt.Desktop.isDesktopSupported()) {
-                java.awt.Desktop.getDesktop().browse(java.net.URI(url))
+            val desktopClass = Class.forName("java.awt.Desktop")
+            val isSupportedMethod = desktopClass.getMethod("isDesktopSupported")
+            val isSupported = isSupportedMethod.invoke(null) as? Boolean ?: false
+            if (isSupported) {
+                val getDesktopMethod = desktopClass.getMethod("getDesktop")
+                val desktop = getDesktopMethod.invoke(null)
+                val browseMethod = desktopClass.getMethod("browse", java.net.URI::class.java)
+                browseMethod.invoke(desktop, java.net.URI(url))
             }
-        } catch (_: Exception) {}
+        } catch (_: Throwable) {}
     }
 }
 
