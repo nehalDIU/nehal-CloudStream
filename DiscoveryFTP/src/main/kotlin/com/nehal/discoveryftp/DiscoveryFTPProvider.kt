@@ -20,6 +20,7 @@ import com.lagradost.cloudstream3.addQuality
 import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -386,17 +387,25 @@ open class DiscoveryFTPProvider : MainAPI() {
         if (!primaryLink.isNullOrBlank()) {
             val qualityLabel = doc.select(".badge-wrapper .badge").map { it.text() }
                 .firstOrNull { it.contains("1080") || it.contains("720") || it.contains("4K") || it.contains("UHD") }
-                ?: "Direct"
+                ?: "1080p"
+
+            val sizeBadge = doc.select(".badge-wrapper .badge").map { it.text() }
+                .firstOrNull { it.contains("GB", ignoreCase = true) || it.contains("MB", ignoreCase = true) }
+
+            val parsedQuality = getQualityFromName(qualityLabel)
+            val nameLabel = "CDN - $qualityLabel" + if (!sizeBadge.isNullOrBlank()) " | $sizeBadge" else ""
 
             val urlFixed = fixUrl(primaryLink)
             val type = if (urlFixed.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             callback.invoke(
                 newExtractorLink(
-                    name = "CDN - $qualityLabel",
+                    name = nameLabel,
                     source = this.name,
                     url = urlFixed,
                     type = type
-                )
+                ) {
+                    this.quality = parsedQuality
+                }
             )
         }
 
@@ -411,17 +420,25 @@ open class DiscoveryFTPProvider : MainAPI() {
                 if (!altLink.isNullOrBlank()) {
                     val altQualityLabel = altDoc.select(".badge-wrapper .badge").map { it.text() }
                         .firstOrNull { it.contains("1080") || it.contains("720") || it.contains("4K") || it.contains("UHD") }
-                        ?: "Alt"
+                        ?: "1080p"
+
+                    val altSizeBadge = altDoc.select(".badge-wrapper .badge").map { it.text() }
+                        .firstOrNull { it.contains("GB", ignoreCase = true) || it.contains("MB", ignoreCase = true) }
+
+                    val altParsedQuality = getQualityFromName(altQualityLabel)
+                    val altNameLabel = "CDN - $altQualityLabel" + if (!altSizeBadge.isNullOrBlank()) " | $altSizeBadge" else ""
 
                     val altUrlFixed = fixUrl(altLink)
                     val type = if (altUrlFixed.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     callback.invoke(
                         newExtractorLink(
-                            name = "CDN - $altQualityLabel",
+                            name = altNameLabel,
                             source = this.name,
                             url = altUrlFixed,
                             type = type
-                        )
+                        ) {
+                            this.quality = altParsedQuality
+                        }
                     )
                 }
             } catch (e: Exception) {
