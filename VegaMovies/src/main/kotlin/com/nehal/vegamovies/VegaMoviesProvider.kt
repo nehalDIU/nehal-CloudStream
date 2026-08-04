@@ -345,13 +345,17 @@ open class VegaMoviesProvider : MainAPI() {
 
             if (targetSource.contains("vcloud") || targetSource.contains("hubcloud")) {
                 VCloud().getUrl(targetSource, "", subtitleCallback) { link ->
-                    foundLink = true
-                    callback(link)
+                    if (link != null && !link.url.isNullOrBlank()) {
+                        foundLink = true
+                        callback(link)
+                    }
                 }
             } else {
                 loadExtractor(targetSource, "", subtitleCallback) { link ->
-                    foundLink = true
-                    callback(link)
+                    if (link != null && !link.url.isNullOrBlank()) {
+                        foundLink = true
+                        callback(link)
+                    }
                 }
             }
         }
