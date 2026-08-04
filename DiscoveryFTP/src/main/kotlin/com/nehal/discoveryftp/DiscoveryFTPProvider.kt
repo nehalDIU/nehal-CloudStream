@@ -110,14 +110,14 @@ open class DiscoveryFTPProvider : MainAPI() {
                 if (href.isEmpty() || !href.contains("/view/")) return@mapNotNull null
 
                 val fcard = linkEl.selectFirst(".fcard") ?: return@mapNotNull null
-                val title = fcard.selectFirst(".fdetails")?.text()?.trim()
-                    ?: fcard.selectFirst(".ftitle")?.text()?.trim()
+                val title = fcard.selectFirst(".ftitle")?.text()?.trim()
+                    ?: fcard.selectFirst(".fdetails")?.text()?.trim()
                     ?: return@mapNotNull null
                 val cleanedTitle = cleanTitle(title)
                 val posterUrl = fcard.selectFirst("img")?.attr("src")
                 val year = Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
 
-                val qualityText = fcard.selectFirst(".ftitle span")?.text()?.trim() ?: ""
+                val qualityText = fcard.select(".fdetails").text().trim()
 
                 newAnimeSearchResponse(cleanedTitle, fixUrl(href), TvType.TvSeries) {
                     this.posterUrl = fixUrlNull(posterUrl)
@@ -440,6 +440,10 @@ open class DiscoveryFTPProvider : MainAPI() {
     }
 
     private fun cleanTitle(title: String): String {
-        return title.replace(Regex("\\(\\(\\d{4}\\)\\)"), "").replace(Regex("\\(\\d{4}\\)"), "").trim()
+        return title
+            .replace(Regex("\\(\\(\\d{4}\\)\\)"), "")
+            .replace(Regex("\\(\\d{4}\\)"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 }
