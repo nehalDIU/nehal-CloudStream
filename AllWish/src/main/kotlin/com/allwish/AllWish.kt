@@ -64,7 +64,11 @@ class AllWish : MainAPI() {
         return results
     }
 
-    override suspend fun search(query: String,page: Int): SearchResponseList {
+    override suspend fun search(query: String): List<AnimeSearchResponse> {
+        return search(query, 1).items.filterIsInstance<AnimeSearchResponse>()
+    }
+
+    override suspend fun search(query: String, page: Int): SearchResponseList {
         val res = app.get("$mainUrl/filter?keyword=$query&page=$page").document
         return searchResponseBuilder(res).toNewSearchResponseList()
     }
@@ -88,18 +92,31 @@ class AllWish : MainAPI() {
         val malId = epRes?.html?.selectFirst("div.range > div > a")
             ?.attr("data-mal")?.toIntOrNull()
 
-        val syncMetaData = app.get("https://api.ani.zip/mappings?mal_id=$malId").toString()
-        val animeMetaData = parseAnimeData(syncMetaData)
+        val animeMetaData = if (malId != null) {
+            val syncMetaData = app.get("https://api.ani.zip/mappings?mal_id=$malId").text
+            parseAnimeData(syncMetaData)
+        } else null
 
         val data = res.selectFirst("div#media-info")
         val name = data?.selectFirst("h1.title")?.text()?.trim()?.replace(" (Dub)", "") ?: ""
-        val posterRegex = Regex("/'(.*)'/gm")
+        val posterRegex = Regex("""'([^']+)'""")
 
         val (subEpisodes, dubEpisodes) = parseEpisodes(epRes, animeMetaData)
         val status = getStatus(data?.select("div:contains(Status:) > span > a")?.text()?.trim())
         val genres = data?.select("div:contains(Genre:) > span > a")?.map { it.text() }
         val content = data?.select("div.status > span.rating.mini-status")?.text()
         val year = data?.select("div:contains(Premiered:) > span > a")?.text()?.trim()?.substringAfterLast(" ")?.toIntOrNull()
+            ?: data?.select("div.meta > div > span")
+                ?.find { it.attr("itemprop") == "dateCreated" }
+                ?.text()?.toIntOrNull()
+
+        val bgPoster = animeMetaData?.images?.firstOrNull { it.coverType == "Fanart" }?.url
+            ?: posterRegex.find(res.selectFirst("div.media-bg")?.attr("style") ?: "")?.groupValues?.getOrNull(1)
+            ?: data?.selectFirst("div.poster img")?.attr("src").orEmpty()
+
+        val mainPoster = data?.selectFirst("#media-info div.poster img")?.attr("src")
+            ?: data?.selectFirst("#media-info div.poster img")?.attr("data-src")
+            ?: animeMetaData?.images?.firstOrNull { it.coverType.equals("Poster", ignoreCase = true) }?.url
 
         return newAnimeLoadResponse(name, url, TvType.Anime) {
             addEpisodes(DubStatus.Subbed, subEpisodes)
@@ -110,16 +127,8 @@ class AllWish : MainAPI() {
             this.plot = data?.selectFirst("div.description > div.full > div")?.text()?.trim()
             this.contentRating = content
             this.year = year
-            this.backgroundPosterUrl = animeMetaData?.images
-                ?.firstOrNull { it.coverType == "Fanart" }?.url
-                ?: posterRegex.find(res.selectFirst("div.media-bg")?.attr("style") ?: "")
-                    ?.destructured?.toList()?.getOrNull(0)
-                        ?: data?.selectFirst("div.poster img")?.attr("src").orEmpty()
-            this.posterUrl = data?.selectFirst("#media-info div.poster img")?.attr("src") ?: animeMetaData?.images
-                ?.firstOrNull { it.coverType.equals("Poster", ignoreCase = true) }?.url
-            this.year = data?.select("div.meta > div > span")
-                ?.find { it.attr("itemprop") == "dateCreated" }
-                ?.text()?.toIntOrNull()
+            this.backgroundPosterUrl = bgPoster
+            this.posterUrl = mainPoster
         }
     }
 
@@ -129,8 +138,12 @@ class AllWish : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val type = data.replace("$mainUrl/", "").split("|")[0].split(",")
-        val id = data.replace("$mainUrl/", "").split("|")[1]
+        val cleanData = data.substringAfter("$mainUrl/").substringAfter("/")
+        val parts = cleanData.split("|")
+        if (parts.size < 2) return false
+
+        val type = parts[0].split(",")
+        val id = parts[1]
         val res = app.get("$mainUrl/ajax/server/list?servers=$id", xmlHeader).parsedSafe<APIResponse>()
 
         if (res?.status == 200) {
@@ -140,19 +153,19 @@ class AllWish : MainAPI() {
 
                 if (type.contains(sectionType)) {
                     section.select("div.server-list > div.server").forEach { server ->
-                        //val serverName = server.selectFirst("div > span")?.text() ?: ""
                         val dataId = server.attr("data-link-id")
                         val apiRes = app.get("$mainUrl/ajax/server?get=$dataId", xmlHeader)
                             .parsedSafe<APIResponseUrl>()
                         val realUrl = apiRes?.result?.url ?: ""
 
-                        val epIdWithType = when (sectionType) {
-                            "dub" -> "[Dub]"
-                            "sub" if isHardSub -> "[Hard Sub]"
-                            else -> "[Sub]"
+                        if (realUrl.isNotBlank()) {
+                            val epIdWithType = when {
+                                sectionType == "dub" -> "[Dub]"
+                                sectionType == "sub" && isHardSub -> "[Hard Sub]"
+                                else -> "[Sub]"
+                            }
+                            loadExtractor(realUrl, epIdWithType, subtitleCallback, callback)
                         }
-                        Log.d("Phisher",realUrl)
-                        loadExtractor(realUrl,epIdWithType,subtitleCallback,callback)
                     }
                 }
             }
