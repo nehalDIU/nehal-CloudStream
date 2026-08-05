@@ -547,7 +547,8 @@ open class DhakaFlixProvider : MainAPI() {
         val targetCount = page * pageSize
         val accumulatedItems = ArrayList<H5Item>()
 
-        for (chunk in yearFolders.chunked(2)) {
+        val chunkSize = if (page == 1) 1 else 2
+        for (chunk in yearFolders.chunked(chunkSize)) {
             val chunkItems = chunk.map { yearFolder ->
                 async { fetchDirectChildren(host, yearFolder.href).filter { it.isFolder } }
             }.awaitAll().flatten()

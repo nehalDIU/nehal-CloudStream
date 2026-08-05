@@ -33,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 open class DhakaFlixBDIXProvider : MainAPI() {
     override var name = "DhakaFlix (BDIX)"
@@ -54,6 +56,12 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
     private val directoryCache = ConcurrentHashMap<String, Pair<Long, List<DirectoryEntry>>>()
     private val cacheTtlMs = 30 * 60 * 1000L // 30 minutes memory cache
+    private val hostSemaphores = ConcurrentHashMap<String, Semaphore>()
+
+    private fun getSemaphoreForHost(url: String): Semaphore {
+        val host = try { URI(url).host ?: url } catch (_: Exception) { url }
+        return hostSemaphores.computeIfAbsent(host) { Semaphore(4) }
+    }
 
     private data class BDIXCategory(
         val name: String,
@@ -267,13 +275,16 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val freshEntries = fetchDirectoryListing(url)
         if (freshEntries.isNotEmpty()) {
             directoryCache[url] = Pair(now, freshEntries)
+            return freshEntries
         }
-        return freshEntries
+        return directoryCache[url]?.second ?: emptyList()
     }
 
     private suspend fun fetchDirectoryListing(url: String): List<DirectoryEntry> {
         return try {
-            val responseHtml = app.get(url, timeout = 10).text
+            val responseHtml = getSemaphoreForHost(url).withPermit {
+                app.get(url, timeout = 4).text
+            }
             val doc = Jsoup.parse(responseHtml)
             val baseUri = URI(url)
             val entries = mutableListOf<DirectoryEntry>()
@@ -328,7 +339,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
     }
 
-    private suspend fun fetchCategoryEntries(cat: BDIXCategory): List<DirectoryEntry> {
+    private suspend fun fetchCategoryEntries(cat: BDIXCategory, maxContainers: Int = 1): List<DirectoryEntry> {
         val rootUrl = fixUrl(cat.path, cat.host)
         val topEntries = fetchDirectoryListingCached(rootUrl)
 
@@ -344,9 +355,9 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             Regex("""\d{4}""").find(container.name)?.value?.toIntOrNull() ?: 0
         }
 
-        // Fetch top 5 most recent year containers in parallel with caching to maximize performance
+        // Fetch top recent year container(s) in parallel with caching to maximize performance
         val expandedMovies = coroutineScope {
-            sortedContainers.take(5).map { container ->
+            sortedContainers.take(maxContainers).map { container ->
                 async {
                     fetchDirectoryListingCached(container.fullUrl).filter { it.isDirectory && !isContainerFolder(it.name) }
                 }
@@ -361,7 +372,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val cat = categories.find { it.path == request.data }
             ?: categories.first()
 
-        val entries = fetchCategoryEntries(cat)
+        val entries = fetchCategoryEntries(cat, maxContainers = 1)
 
         val items = entries.map { entry ->
             val formattedName = formatCardName(entry.name, cat, entry.href)
@@ -383,7 +394,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         return coroutineScope {
             val tasks = categories.map { cat ->
                 async {
-                    val entries = fetchCategoryEntries(cat)
+                    val entries = fetchCategoryEntries(cat, maxContainers = 3)
                     entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
                         val formattedName = formatCardName(entry.name, cat, entry.href)
                         val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
