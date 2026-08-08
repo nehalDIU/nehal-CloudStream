@@ -167,6 +167,26 @@ class MovieLinkBDProvider : MainAPI() {
             } catch (_: Exception) {}
         }
 
+        fun fixContainerUrl(url: String): String {
+            val lower = url.lowercase()
+            if (lower.contains(".mkv") || lower.contains(".mp4") || lower.contains(".m3u8")) return url
+            return "$url#.mkv"
+        }
+
+        suspend fun resolveMediaUrl(rawUrl: String): String {
+            return try {
+                val res = app.get(rawUrl)
+                val resolved = res.url
+                if (resolved.isNotBlank() && resolved != rawUrl) {
+                    fixContainerUrl(resolved)
+                } else {
+                    fixContainerUrl(rawUrl)
+                }
+            } catch (_: Exception) {
+                fixContainerUrl(rawUrl)
+            }
+        }
+
         for (fileUrl in filePagesToVisit.distinct()) {
             try {
                 val doc = app.get(fileUrl).document
@@ -188,7 +208,7 @@ class MovieLinkBDProvider : MainAPI() {
                             val directPath = Regex("""["']DIRECT_DOWNLOAD_PATH["']?\s*=\s*["']([^"']+)["']""").find(instantText)?.groupValues?.get(1)
 
                             if (!driveId.isNullOrBlank()) {
-                                val gdriveUrl = "https://drive.google.com/uc?id=$driveId&export=download"
+                                val gdriveUrl = fixContainerUrl("https://drive.google.com/uc?id=$driveId&export=download")
                                 val gdriveViewUrl = "https://drive.google.com/file/d/$driveId/view"
                                 
                                 loadExtractor(gdriveUrl, mainUrl, subtitleCallback, callback)
@@ -206,22 +226,25 @@ class MovieLinkBDProvider : MainAPI() {
                             }
 
                             val downloadUrl = directPath ?: if (link.endsWith("/")) "${link}download" else "$link/download"
+                            val resolvedUrl = resolveMediaUrl(downloadUrl)
+
                             callback.invoke(
                                 newExtractorLink(
                                     name = "InstantCloud Direct",
                                     source = this.name,
-                                    url = downloadUrl,
+                                    url = resolvedUrl,
                                     type = ExtractorLinkType.VIDEO
                                 )
                             )
                             foundAny = true
                         } catch (e: Exception) {
                             val downloadUrl = if (link.endsWith("/")) "${link}download" else "$link/download"
+                            val resolvedUrl = resolveMediaUrl(downloadUrl)
                             callback.invoke(
                                 newExtractorLink(
                                     name = "InstantCloud Direct",
                                     source = this.name,
-                                    url = downloadUrl,
+                                    url = resolvedUrl,
                                     type = ExtractorLinkType.VIDEO
                                 )
                             )
@@ -234,7 +257,7 @@ class MovieLinkBDProvider : MainAPI() {
                             val xcloudText = app.get(link).text
                             val driveId = Regex("""["']drive_id["']?\s*:\s*["']([^"']+)["']""").find(xcloudText)?.groupValues?.get(1)
                             if (!driveId.isNullOrBlank()) {
-                                val gdriveUrl = "https://drive.google.com/uc?id=$driveId&export=download"
+                                val gdriveUrl = fixContainerUrl("https://drive.google.com/uc?id=$driveId&export=download")
                                 loadExtractor(gdriveUrl, mainUrl, subtitleCallback, callback)
                                 callback.invoke(
                                     newExtractorLink(
@@ -248,22 +271,24 @@ class MovieLinkBDProvider : MainAPI() {
                             }
                             
                             val downloadUrl = if (link.endsWith("/")) "${link}download" else "$link/download"
+                            val resolvedUrl = resolveMediaUrl(downloadUrl)
                             callback.invoke(
                                 newExtractorLink(
                                     name = "XCloud Stream",
                                     source = this.name,
-                                    url = downloadUrl,
+                                    url = resolvedUrl,
                                     type = ExtractorLinkType.VIDEO
                                 )
                             )
                             foundAny = true
                         } catch (_: Exception) {
                             val downloadUrl = if (link.endsWith("/")) "${link}download" else "$link/download"
+                            val resolvedUrl = resolveMediaUrl(downloadUrl)
                             callback.invoke(
                                 newExtractorLink(
                                     name = "XCloud Stream",
                                     source = this.name,
-                                    url = downloadUrl,
+                                    url = resolvedUrl,
                                     type = ExtractorLinkType.VIDEO
                                 )
                             )
@@ -277,7 +302,7 @@ class MovieLinkBDProvider : MainAPI() {
                             newExtractorLink(
                                 name = "Direct Stream",
                                 source = this.name,
-                                url = link,
+                                url = fixContainerUrl(link),
                                 type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                             )
                         )
