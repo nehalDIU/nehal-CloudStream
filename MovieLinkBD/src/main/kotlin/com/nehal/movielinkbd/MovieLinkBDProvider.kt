@@ -174,31 +174,108 @@ class MovieLinkBDProvider : MainAPI() {
                     .filter { link ->
                         link.contains("instantcloud.org") ||
                         link.contains("xcloud.asia") ||
+                        link.contains("xcloud") ||
                         link.contains(".mp4") ||
                         link.contains(".mkv") ||
                         link.contains(".m3u8")
                     }
 
                 for (link in streamLinks) {
-                    if (link.contains("instantcloud.org") || link.contains("xcloud.asia")) {
-                        val hostName = if (link.contains("xcloud")) "XCloud" else "InstantCloud"
-                        callback.invoke(
-                            newExtractorLink(
-                                name = "$hostName (Use WebView)",
-                                source = this.name,
-                                url = link,
-                                type = ExtractorLinkType.VIDEO
+                    if (link.contains("instantcloud.org")) {
+                        try {
+                            val instantText = app.get(link).text
+                            val driveId = Regex("""["']drive_id["']?\s*:\s*["']([^"']+)["']""").find(instantText)?.groupValues?.get(1)
+                            val directPath = Regex("""["']DIRECT_DOWNLOAD_PATH["']?\s*=\s*["']([^"']+)["']""").find(instantText)?.groupValues?.get(1)
+
+                            if (!driveId.isNullOrBlank()) {
+                                val gdriveUrl = "https://drive.google.com/uc?id=$driveId&export=download"
+                                val gdriveViewUrl = "https://drive.google.com/file/d/$driveId/view"
+                                
+                                loadExtractor(gdriveUrl, mainUrl, subtitleCallback, callback)
+                                loadExtractor(gdriveViewUrl, mainUrl, subtitleCallback, callback)
+
+                                callback.invoke(
+                                    newExtractorLink(
+                                        name = "InstantCloud (GDrive Stream)",
+                                        source = this.name,
+                                        url = gdriveUrl,
+                                        type = ExtractorLinkType.VIDEO
+                                    )
+                                )
+                                foundAny = true
+                            }
+
+                            val downloadUrl = directPath ?: if (link.endsWith("/")) "${link}download" else "$link/download"
+                            callback.invoke(
+                                newExtractorLink(
+                                    name = "InstantCloud Direct",
+                                    source = this.name,
+                                    url = downloadUrl,
+                                    type = ExtractorLinkType.VIDEO
+                                )
                             )
-                        )
-                        loadExtractor(link, mainUrl, subtitleCallback, callback)
-                        foundAny = true
+                            foundAny = true
+                        } catch (e: Exception) {
+                            val downloadUrl = if (link.endsWith("/")) "${link}download" else "$link/download"
+                            callback.invoke(
+                                newExtractorLink(
+                                    name = "InstantCloud Direct",
+                                    source = this.name,
+                                    url = downloadUrl,
+                                    type = ExtractorLinkType.VIDEO
+                                )
+                            )
+                            foundAny = true
+                        }
+                    }
+
+                    if (link.contains("xcloud")) {
+                        try {
+                            val xcloudText = app.get(link).text
+                            val driveId = Regex("""["']drive_id["']?\s*:\s*["']([^"']+)["']""").find(xcloudText)?.groupValues?.get(1)
+                            if (!driveId.isNullOrBlank()) {
+                                val gdriveUrl = "https://drive.google.com/uc?id=$driveId&export=download"
+                                loadExtractor(gdriveUrl, mainUrl, subtitleCallback, callback)
+                                callback.invoke(
+                                    newExtractorLink(
+                                        name = "XCloud (GDrive)",
+                                        source = this.name,
+                                        url = gdriveUrl,
+                                        type = ExtractorLinkType.VIDEO
+                                    )
+                                )
+                                foundAny = true
+                            }
+                            
+                            val downloadUrl = if (link.endsWith("/")) "${link}download" else "$link/download"
+                            callback.invoke(
+                                newExtractorLink(
+                                    name = "XCloud Stream",
+                                    source = this.name,
+                                    url = downloadUrl,
+                                    type = ExtractorLinkType.VIDEO
+                                )
+                            )
+                            foundAny = true
+                        } catch (_: Exception) {
+                            val downloadUrl = if (link.endsWith("/")) "${link}download" else "$link/download"
+                            callback.invoke(
+                                newExtractorLink(
+                                    name = "XCloud Stream",
+                                    source = this.name,
+                                    url = downloadUrl,
+                                    type = ExtractorLinkType.VIDEO
+                                )
+                            )
+                            foundAny = true
+                        }
                     }
 
                     if (link.contains(".mp4") || link.contains(".mkv") || link.contains(".m3u8")) {
                         val isM3u8 = link.contains(".m3u8")
                         callback.invoke(
                             newExtractorLink(
-                                name = if (link.contains("xcloud")) "XCloud Stream" else "Cloud Stream",
+                                name = "Direct Stream",
                                 source = this.name,
                                 url = link,
                                 type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
