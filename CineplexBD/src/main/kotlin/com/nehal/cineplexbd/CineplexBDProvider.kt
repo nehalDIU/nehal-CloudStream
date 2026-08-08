@@ -221,59 +221,67 @@ open class CineplexBDProvider : MainAPI() {
             return true
         }
 
-        val movieId = Regex("id=(\\d+)").find(fullUrl)?.groupValues?.get(1)
+        val movieId = Regex("(?:id|series_id)=(\\d+)").find(fullUrl)?.groupValues?.get(1)
 
-        if (fullUrl.contains("player.php") || fullUrl.contains("download.php")) {
+        if (fullUrl.contains("player.php") || fullUrl.contains("download.php") || fullUrl.contains("view.php") || fullUrl.contains("watch.php")) {
             var found = false
+            
+            // Extract subtitles from player page if playerUrl or fullUrl is available
             try {
-                val doc = app.get(fullUrl).document
-                val html = doc.html()
-                
-                var videoSrc = Regex("""videoSrc\s*=\s*["']([^"']+)["']""").find(html)?.groupValues?.get(1)
-                
-                if (videoSrc.isNullOrBlank()) {
-                    videoSrc = doc.selectFirst("video source")?.attr("src")
+                val playerUrl = if (fullUrl.contains("player.php")) fullUrl else if (!movieId.isNullOrBlank()) "$mainUrl/player.php?id=$movieId" else null
+                if (playerUrl != null) {
+                    val doc = app.get(playerUrl).document
+                    doc.select("track[kind=\"captions\"], track[kind=\"subtitles\"]").forEach { track ->
+                        val label = track.attr("label").takeIf { it.isNotBlank() } ?: "English"
+                        val src = track.attr("src")
+                        if (src.isNotBlank()) {
+                            subtitleCallback(
+                                newSubtitleFile(label, fixUrl(src))
+                            )
+                        }
+                    }
+
+                    // Check iframe or direct video source in player HTML if present
+                    val videoSrc = doc.selectFirst("video source")?.attr("src")
                         ?: doc.selectFirst("video")?.attr("src")
                         ?: doc.selectFirst("iframe")?.attr("src")
-                }
 
-                if (!videoSrc.isNullOrBlank()) {
-                    val fixedVideoUrl = fixUrl(videoSrc)
-                    val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                    callback.invoke(
-                        newExtractorLink(
-                            name = "Player Stream",
-                            source = this.name,
-                            url = fixedVideoUrl,
-                            type = type
+                    if (!videoSrc.isNullOrBlank() && (videoSrc.contains(".m3u8") || videoSrc.contains(".mp4"))) {
+                        val fixedVideoUrl = fixUrl(videoSrc)
+                        val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                        callback.invoke(
+                            newExtractorLink(
+                                name = "Player Stream",
+                                source = this.name,
+                                url = fixedVideoUrl,
+                                type = type
+                            )
                         )
-                    )
-                    found = true
-                }
-
-                // Extract subtitles
-                doc.select("track[kind=\"captions\"], track[kind=\"subtitles\"]").forEach { track ->
-                    val label = track.attr("label").takeIf { it.isNotBlank() } ?: "English"
-                    val src = track.attr("src")
-                    if (src.isNotBlank()) {
-                        subtitleCallback(
-                            newSubtitleFile(label, fixUrl(src))
-                        )
+                        found = true
                     }
                 }
             } catch (_: Exception) {}
 
-            if (!found && !movieId.isNullOrBlank()) {
-                val downloadUrl = "$mainUrl/download.php?id=$movieId"
-                callback.invoke(
-                    newExtractorLink(
-                        name = "Cineplex Stream",
-                        source = this.name,
-                        url = downloadUrl,
-                        type = ExtractorLinkType.M3U8
-                    )
-                )
-                found = true
+            // Resolve redirected stream URL via download.php
+            if (!movieId.isNullOrBlank()) {
+                try {
+                    val downloadUrl = "$mainUrl/download.php?id=$movieId"
+                    val res = app.get(downloadUrl)
+                    val streamUrl = res.url
+                    if (streamUrl.isNotBlank() && !streamUrl.contains("download.php")) {
+                        val isM3u8 = streamUrl.contains(".m3u8") || 
+                                     res.headers["Content-Type"]?.contains("mpegurl", ignoreCase = true) == true
+                        callback.invoke(
+                            newExtractorLink(
+                                name = "Cineplex Stream",
+                                source = this.name,
+                                url = streamUrl,
+                                type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                            )
+                        )
+                        found = true
+                    }
+                } catch (_: Exception) {}
             }
 
             return found
