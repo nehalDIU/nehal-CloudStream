@@ -93,8 +93,9 @@ class MovieLinkBDProvider : MainAPI() {
         val title = rawTitle.replace(Regex("(?i)\\b(HDTC|WEB-DL|BluRay|HDRip|720p|1080p|480p|Best Quality Print|Completed|Hindi|Bangla|Dual Audio)\\b"), "").trim()
 
         val poster = fixUrlNull(
-            doc.selectFirst("img[src*=\"poster\"], img[src*=\"cover\"], .entry-content img, .post-content img")?.attr("src")
-                ?: doc.selectFirst("img")?.attr("src")
+            doc.selectFirst("img[title*=\"Poster\"], img[alt*=\"MovieLinkBD\"], .entry-content img, .post-content img")?.let {
+                it.attr("data-src").takeIf { src -> src.isNotBlank() } ?: it.attr("src")
+            } ?: doc.select("img").firstOrNull { !it.attr("src").contains("logo", true) && !it.attr("src").contains("movielinkbd.webp", true) }?.attr("src")
         )
 
         val textContent = doc.text()
@@ -180,6 +181,15 @@ class MovieLinkBDProvider : MainAPI() {
 
                 for (link in streamLinks) {
                     if (link.contains("instantcloud.org") || link.contains("xcloud.asia")) {
+                        val hostName = if (link.contains("xcloud")) "XCloud" else "InstantCloud"
+                        callback.invoke(
+                            newExtractorLink(
+                                name = "$hostName (Use WebView)",
+                                source = this.name,
+                                url = link,
+                                type = ExtractorLinkType.VIDEO
+                            )
+                        )
                         loadExtractor(link, mainUrl, subtitleCallback, callback)
                         foundAny = true
                     }
@@ -214,10 +224,13 @@ class MovieLinkBDProvider : MainAPI() {
         }
         if (title.isNullOrBlank()) return null
 
-        val posterUrl = fixUrlNull(
-            this.selectFirst("img")?.attr("src")
-                ?: this.selectFirst("img")?.attr("data-src")
+        var posterUrl = fixUrlNull(
+            this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotBlank() }
+                ?: this.selectFirst("img")?.attr("src")
         )
+        if (posterUrl?.contains("mlbd_load.svg") == true) {
+            posterUrl = null
+        }
 
         val year = Regex("\\b(19|20)\\d{2}\\b").find(this.text())?.value?.toIntOrNull()
             ?: Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
