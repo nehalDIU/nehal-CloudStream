@@ -3,7 +3,6 @@ package com.nehal.banglaplex
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import org.jsoup.Jsoup
 import java.net.URI
 
 fun getBaseUrl(url: String): String {
@@ -32,6 +31,88 @@ fun getIndexQuality(str: String?): Int {
         lowerStr.contains("480p") -> 480
         lowerStr.contains("360p") -> 360
         else -> Qualities.Unknown.value
+    }
+}
+
+open class StreamTapeCustom : ExtractorApi() {
+    override val name: String = "StreamTape"
+    override val mainUrl: String = "https://streamtape.com"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        try {
+            val res = app.get(url)
+            val doc = res.document
+            val scripts = doc.select("script").map { it.html() }
+
+            for (script in scripts) {
+                if (script.contains("link')") || script.contains("captchalink") || script.contains("norobotlink") || script.contains("ideoooolink")) {
+                    val match = Regex("""innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
+                    if (match != null) {
+                        val prefix = match.groupValues[1]
+                        val rawStr = match.groupValues[2]
+                        val sub1 = match.groupValues[3].toIntOrNull() ?: 0
+                        val sub2 = match.groupValues[4].toIntOrNull() ?: 0
+
+                        var body = rawStr.substring(sub1)
+                        if (sub2 > 0) body = body.substring(sub2)
+
+                        var full = prefix + body
+                        if (full.startsWith("//")) full = "https:$full"
+                        else if (full.startsWith("/")) full = "https:/$full"
+                        else if (!full.startsWith("http")) full = "https://$full"
+
+                        val streamUrl = if (full.contains("?")) "$full&stream=1" else "$full?stream=1"
+
+                        callback(
+                            newExtractorLink(
+                                name,
+                                name,
+                                streamUrl,
+                                ExtractorLinkType.VIDEO
+                            ) {
+                                this.referer = "https://streamtape.com/"
+                                this.quality = Qualities.Unknown.value
+                            }
+                        )
+                        return
+                    }
+
+                    // Fallback to evaluating JS if pattern differs
+                    val jsMatch = Regex("""document\.getElementById\(['"][^'"]*link['"]\)\.innerHTML\s*=\s*(.*?);""").find(script)
+                    if (jsMatch != null) {
+                        val expr = jsMatch.groupValues[1]
+                        val evaluated = evalJs("var url = $expr", "url")?.toString()
+                        if (!evaluated.isNullOrBlank()) {
+                            val fixedUrl = when {
+                                evaluated.startsWith("//") -> "https:$evaluated&stream=1"
+                                evaluated.startsWith("http") -> "$evaluated&stream=1"
+                                else -> "https://$evaluated&stream=1"
+                            }
+                            callback(
+                                newExtractorLink(
+                                    name,
+                                    name,
+                                    fixedUrl,
+                                    ExtractorLinkType.VIDEO
+                                ) {
+                                    this.referer = "https://streamtape.com/"
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            return
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("StreamTape", "Extraction error: ${e.message}")
+        }
     }
 }
 
@@ -236,57 +317,6 @@ open class GDFlix : ExtractorApi() {
             }
         } catch (e: Exception) {
             Log.e("GDFlix", "Error extracting: ${e.message}")
-        }
-    }
-}
-
-open class StreamTapeCustom : ExtractorApi() {
-    override val name: String = "StreamTape"
-    override val mainUrl: String = "https://streamtape.com"
-    override val requiresReferer = false
-
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        try {
-            val res = app.get(url)
-            val doc = res.document
-            val html = doc.html()
-
-            // Look for captchalink, norobotlink, ideoooolink, robotlink
-            val scriptLines = doc.select("script").map { it.html() }
-            for (script in scriptLines) {
-                if (script.contains("captchalink") || script.contains("norobotlink") || script.contains("robotlink") || script.contains("ideoooolink")) {
-                    val match = Regex("""document\.getElementById\(['"][^'"]*link['"]\)\.innerHTML\s*=\s*(.*?);""").find(script)
-                    if (match != null) {
-                        val expression = match.groupValues[1]
-                        val evaluated = evalJs("var url = $expression", "url")?.toString()
-                        if (!evaluated.isNullOrBlank()) {
-                            val fixedUrl = if (evaluated.startsWith("//")) "https:$evaluated&stream=1"
-                            else if (evaluated.startsWith("http")) "$evaluated&stream=1"
-                            else "https://$evaluated&stream=1"
-
-                            callback(
-                                newExtractorLink(
-                                    name,
-                                    name,
-                                    fixedUrl,
-                                    ExtractorLinkType.VIDEO
-                                ) {
-                                    this.referer = url
-                                    this.quality = Qualities.Unknown.value
-                                }
-                            )
-                            return
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("StreamTape", "Extraction error: ${e.message}")
         }
     }
 }
