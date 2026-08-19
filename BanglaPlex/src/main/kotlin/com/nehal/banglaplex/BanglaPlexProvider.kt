@@ -118,8 +118,7 @@ class BanglaPlexProvider : MainAPI() {
             val isTv = context.contains("series", ignoreCase = true) ||
                     cleanUrl.contains("series", ignoreCase = true) ||
                     title.contains("season", ignoreCase = true) ||
-                    title.contains("s0", ignoreCase = true) ||
-                    title.contains("web-dl", ignoreCase = true) && title.contains("complete", ignoreCase = true)
+                    title.contains("s0", ignoreCase = true)
 
             if (isTv) {
                 items.add(
@@ -181,32 +180,56 @@ class BanglaPlexProvider : MainAPI() {
         val plot = doc.selectFirst("meta[property=\"og:description\"]")?.attr("content")
             ?: doc.selectFirst("p.text-slate-100, .movie-details p, .synopsis, .description")?.text()?.trim()
 
-        val yearText = doc.selectFirst(".video_year_movie, .label-year, .badge")?.text()?.trim()
-        val year = yearText?.toIntOrNull()
+        // Extract release year accurately
+        val releaseText = doc.select("p").firstOrNull { it.text().contains("Release:", ignoreCase = true) }?.text()
+        val year = Regex("""\b(19|20)\d{2}\b""").find(releaseText ?: "")?.value?.toIntOrNull()
+            ?: doc.selectFirst(".video_year_movie, .label-year, .badge")?.text()?.trim()?.toIntOrNull()
             ?: Regex("""\b(19|20)\d{2}\b""").find(doc.title())?.value?.toIntOrNull()
             ?: Regex("""\b(19|20)\d{2}\b""").find(rawTitle)?.value?.toIntOrNull()
 
-        val tags = doc.select("a[href*=\"/genre/\"], .genre-badge").map { it.text().trim() }.filter { it.isNotBlank() && !it.equals("Home", true) }
-        val rating = doc.selectFirst(".imdb-rating .label-imdb, .label-imdb")?.text()?.replace(Regex("(?i)imdb"), "")?.trim()
-        val actors = doc.select("a[href*=\"/star/\"], .stars a").map { it.text().trim() }.filter { it.isNotBlank() }
+        // Real genre extraction (exclude navbar header!)
+        val detailsSection = doc.selectFirst(".movie-details, #main-content")
+        val tags = if (detailsSection != null) {
+            detailsSection.select("p").firstOrNull { it.text().contains("Genre:", ignoreCase = true) }
+                ?.select("a[href*=\"/genre/\"]")?.map { it.text().trim() }
+                ?: detailsSection.select("a[href*=\"/genre/\"]").map { it.text().trim() }
+        } else {
+            doc.select("p:contains(Genre) a[href*=\"/genre/\"]").map { it.text().trim() }
+        }.filter { it.isNotBlank() && !it.equals("Home", true) }.distinct()
 
-        // Check for Season buttons (?key=...) and PasteURL download buttons
-        val seasonLinks = doc.select("a[href*=\"?key=\"]")
+        val rating = doc.selectFirst(".imdb-rating .label-imdb, .label-imdb")?.text()?.replace(Regex("(?i)imdb"), "")?.trim()
+            ?: doc.select("p").firstOrNull { it.text().contains("Rating:", ignoreCase = true) }?.text()?.replace(Regex("(?i)Rating:"), "")?.trim()
+
+        // Extract actors
+        val actors = doc.select("p:contains(Actor) a[href*=\"/star/\"]").map { it.text().trim() }
+            .ifEmpty { doc.select("a[href*=\"/star/\"], .stars a").map { it.text().trim() } }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        // Distinguish TV Series vs Movie
+        val seasonButtons = doc.select("a[href*=\"?key=\"]")
         val pasteLinks = doc.select("a[href*=\"pasteurl.net/view/\"]")
 
-        val isSeries = seasonLinks.isNotEmpty() ||
-                pasteLinks.any { it.text().contains("s0", ignoreCase = true) || it.text().contains("season", ignoreCase = true) || it.text().contains("complete", ignoreCase = true) } ||
-                cleanUrl.contains("series", ignoreCase = true) ||
+        val hasSeriesGenre = tags.any { it.contains("series", ignoreCase = true) }
+        val hasSeasonButton = seasonButtons.any { 
+            val text = it.text().lowercase()
+            text.contains("season") || text.contains("web series") || text.contains("series")
+        }
+        val isFullMovieButton = seasonButtons.any { it.text().contains("full movie", ignoreCase = true) }
+
+        val isSeries = !isFullMovieButton && (
+                hasSeriesGenre ||
+                hasSeasonButton ||
+                pasteLinks.any { it.text().contains("s0", ignoreCase = true) || it.text().contains("season", ignoreCase = true) } ||
                 rawTitle.contains("s0", ignoreCase = true) ||
-                rawTitle.contains("season", ignoreCase = true) ||
-                rawTitle.contains("complete", ignoreCase = true)
+                rawTitle.contains("season", ignoreCase = true)
+        )
 
         if (isSeries) {
             val episodes = mutableListOf<Episode>()
 
-            if (seasonLinks.isNotEmpty()) {
-                // Parse and sort seasons
-                val parsedSeasons = seasonLinks.mapIndexed { index, link ->
+            if (seasonButtons.isNotEmpty()) {
+                val parsedSeasons = seasonButtons.mapIndexed { index, link ->
                     val epUrl = fixUrl(link.attr("href"))
                     val linkText = link.text().trim()
                     val sNum = Regex("""(?i)s(?:eason)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull()
@@ -214,10 +237,10 @@ class BanglaPlexProvider : MainAPI() {
                     val epNum = Regex("""(?i)ep(?:isode)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull()
                         ?: 1
 
-                    val epName = if (linkText.equals("web series", ignoreCase = true)) {
+                    val epName = if (linkText.equals("web series", ignoreCase = true) || linkText.isBlank()) {
                         "Season $sNum Complete"
                     } else {
-                        linkText.ifBlank { "Season $sNum" }
+                        linkText
                     }
 
                     Triple(sNum, epNum, Pair(epName, epUrl))
@@ -235,7 +258,6 @@ class BanglaPlexProvider : MainAPI() {
                     )
                 }
             } else if (pasteLinks.isNotEmpty()) {
-                // Map download links to seasons
                 pasteLinks.forEachIndexed { index, link ->
                     val linkText = link.text().trim()
                     val sNum = Regex("""(?i)s(?:eason)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull()
@@ -252,10 +274,9 @@ class BanglaPlexProvider : MainAPI() {
                     )
                 }
             } else {
-                // Single season complete web series without key buttons
                 episodes.add(
                     newEpisode(cleanUrl) {
-                        this.name = "Full Series (Complete)"
+                        this.name = "Season 1 Complete"
                         this.season = 1
                         this.episode = 1
                         this.posterUrl = poster
@@ -273,6 +294,7 @@ class BanglaPlexProvider : MainAPI() {
             }
         }
 
+        // It is a single Movie!
         return newMovieLoadResponse(cleanTitle, cleanUrl, TvType.Movie, cleanUrl) {
             this.posterUrl = poster
             this.year = year
