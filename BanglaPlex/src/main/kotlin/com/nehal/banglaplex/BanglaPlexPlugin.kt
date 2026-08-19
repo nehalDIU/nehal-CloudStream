@@ -10,5 +10,6 @@ class BanglaPlexPlugin : Plugin() {
         registerMainAPI(BanglaPlexProvider())
         registerExtractorAPI(HubCloud())
         registerExtractorAPI(GDFlix())
+        registerExtractorAPI(StreamTapeCustom())
     }
 }

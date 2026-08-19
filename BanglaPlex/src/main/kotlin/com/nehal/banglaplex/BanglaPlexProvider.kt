@@ -53,16 +53,26 @@ class BanglaPlexProvider : MainAPI() {
             else -> return null
         }
 
-        val doc = app.get(targetUrl, referer = mainUrl).document
-        val items = parseCards(doc, request.data)
+        val doc = try {
+            app.get(targetUrl, referer = mainUrl).document
+        } catch (e: Exception) {
+            Log.e("BanglaPlex", "Failed to get main page: ${e.message}")
+            return null
+        }
 
+        val items = parseCards(doc, request.data)
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
-        val encoded = URLEncoder.encode(query, "UTF-8")
+        val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/search?q=$encoded"
-        val doc = app.get(url, referer = mainUrl).document
+        val doc = try {
+            app.get(url, referer = mainUrl).document
+        } catch (e: Exception) {
+            Log.e("BanglaPlex", "Failed to search: ${e.message}")
+            return emptyList()
+        }
         return parseCards(doc, "search")
     }
 
@@ -70,7 +80,6 @@ class BanglaPlexProvider : MainAPI() {
         val items = mutableListOf<SearchResponse>()
         val seen = mutableSetOf<String>()
 
-        // Look for cards
         doc.select(".col-md-2, .col-sm-3, .col-xs-6, .movie-opt, .movie-container, .latest-movie").forEach { container ->
             val linkEl = container.selectFirst("a[href*=\"/watch/\"]") ?: return@forEach
             val href = linkEl.attr("href").trim()
@@ -109,7 +118,8 @@ class BanglaPlexProvider : MainAPI() {
             val isTv = context.contains("series", ignoreCase = true) ||
                     cleanUrl.contains("series", ignoreCase = true) ||
                     title.contains("season", ignoreCase = true) ||
-                    title.contains("s0", ignoreCase = true)
+                    title.contains("s0", ignoreCase = true) ||
+                    title.contains("web-dl", ignoreCase = true) && title.contains("complete", ignoreCase = true)
 
             if (isTv) {
                 items.add(
@@ -150,8 +160,15 @@ class BanglaPlexProvider : MainAPI() {
         val cleanUrl = fixUrl(url)
         val doc = app.get(cleanUrl, referer = mainUrl).document
 
-        val title = doc.selectFirst("h1.movie-title, h1, .movie-details h1")?.text()?.trim()
-            ?: doc.title().substringBefore(" |").substringBefore(" -").trim()
+        // Clean title extraction
+        val rawTitle = doc.selectFirst("h1.movie-title, h1, .movie-details h1")?.text()?.trim()
+            ?: doc.title().trim()
+
+        val cleanTitle = rawTitle
+            .substringBefore(" |")
+            .substringBefore(" –")
+            .substringBefore(" -")
+            .trim()
 
         val posterStyle = doc.selectFirst(".latest-movie-img-container")?.attr("style") ?: ""
         val bgPoster = Regex("""url\(['"]?(.*?)['"]?\)""").find(posterStyle)?.groupValues?.get(1)
@@ -165,68 +182,98 @@ class BanglaPlexProvider : MainAPI() {
             ?: doc.selectFirst("p.text-slate-100, .movie-details p, .synopsis, .description")?.text()?.trim()
 
         val yearText = doc.selectFirst(".video_year_movie, .label-year, .badge")?.text()?.trim()
-        val year = yearText?.toIntOrNull() ?: Regex("""\b(19|20)\d{2}\b""").find(title)?.value?.toIntOrNull()
+        val year = yearText?.toIntOrNull()
+            ?: Regex("""\b(19|20)\d{2}\b""").find(doc.title())?.value?.toIntOrNull()
+            ?: Regex("""\b(19|20)\d{2}\b""").find(rawTitle)?.value?.toIntOrNull()
 
-        val tags = doc.select("a[href*=\"/genre/\"], .genre-badge").map { it.text().trim() }.filter { it.isNotBlank() }
+        val tags = doc.select("a[href*=\"/genre/\"], .genre-badge").map { it.text().trim() }.filter { it.isNotBlank() && !it.equals("Home", true) }
         val rating = doc.selectFirst(".imdb-rating .label-imdb, .label-imdb")?.text()?.replace(Regex("(?i)imdb"), "")?.trim()
         val actors = doc.select("a[href*=\"/star/\"], .stars a").map { it.text().trim() }.filter { it.isNotBlank() }
 
-        // Check for TV series seasons / episodes
+        // Check for Season buttons (?key=...) and PasteURL download buttons
         val seasonLinks = doc.select("a[href*=\"?key=\"]")
         val pasteLinks = doc.select("a[href*=\"pasteurl.net/view/\"]")
 
         val isSeries = seasonLinks.isNotEmpty() ||
-                pasteLinks.any { it.text().contains("s0", ignoreCase = true) || it.text().contains("season", ignoreCase = true) || it.text().contains("ep", ignoreCase = true) } ||
-                cleanUrl.contains("series", ignoreCase = true)
+                pasteLinks.any { it.text().contains("s0", ignoreCase = true) || it.text().contains("season", ignoreCase = true) || it.text().contains("complete", ignoreCase = true) } ||
+                cleanUrl.contains("series", ignoreCase = true) ||
+                rawTitle.contains("s0", ignoreCase = true) ||
+                rawTitle.contains("season", ignoreCase = true) ||
+                rawTitle.contains("complete", ignoreCase = true)
 
         if (isSeries) {
             val episodes = mutableListOf<Episode>()
 
             if (seasonLinks.isNotEmpty()) {
-                seasonLinks.forEachIndexed { index, link ->
+                // Parse and sort seasons
+                val parsedSeasons = seasonLinks.mapIndexed { index, link ->
                     val epUrl = fixUrl(link.attr("href"))
                     val linkText = link.text().trim()
-                    val sNum = Regex("""(?i)season\s*(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull() ?: (index + 1)
-                    val epNum = Regex("""(?i)ep(?:isode)?\s*(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                    val sNum = Regex("""(?i)s(?:eason)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: (index + 1)
+                    val epNum = Regex("""(?i)ep(?:isode)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: 1
 
+                    val epName = if (linkText.equals("web series", ignoreCase = true)) {
+                        "Season $sNum Complete"
+                    } else {
+                        linkText.ifBlank { "Season $sNum" }
+                    }
+
+                    Triple(sNum, epNum, Pair(epName, epUrl))
+                }.sortedWith(compareBy({ it.first }, { it.second }))
+
+                parsedSeasons.forEach { (sNum, epNum, data) ->
+                    val (epName, epUrl) = data
                     episodes.add(
                         newEpisode(epUrl) {
-                            this.name = linkText.ifBlank { "Episode ${index + 1}" }
+                            this.name = epName
                             this.season = sNum
                             this.episode = epNum
                             this.posterUrl = poster
                         }
                     )
                 }
-            } else {
-                // If only pasteurl download links with Season tags exist
+            } else if (pasteLinks.isNotEmpty()) {
+                // Map download links to seasons
                 pasteLinks.forEachIndexed { index, link ->
                     val linkText = link.text().trim()
-                    val sNum = Regex("""(?i)s(?:eason)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                    val sNum = Regex("""(?i)s(?:eason)?\s*0?(\d+)""").find(linkText)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: (index + 1)
+                    val epName = linkText.replace(Regex("^[-\\s]+"), "").ifBlank { "Season $sNum Complete" }
+
                     episodes.add(
                         newEpisode(cleanUrl) {
-                            this.name = linkText.ifBlank { "Season $sNum" }
+                            this.name = epName
                             this.season = sNum
-                            this.episode = index + 1
+                            this.episode = 1
                             this.posterUrl = poster
                         }
                     )
                 }
+            } else {
+                // Single season complete web series without key buttons
+                episodes.add(
+                    newEpisode(cleanUrl) {
+                        this.name = "Full Series (Complete)"
+                        this.season = 1
+                        this.episode = 1
+                        this.posterUrl = poster
+                    }
+                )
             }
 
-            if (episodes.isNotEmpty()) {
-                return newTvSeriesLoadResponse(title, cleanUrl, TvType.TvSeries, episodes) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    this.tags = tags
-                    addActors(actors)
-                    if (!rating.isNullOrBlank()) this.score = Score.from10(rating)
-                }
+            return newTvSeriesLoadResponse(cleanTitle, cleanUrl, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
+                this.year = year
+                this.plot = plot
+                this.tags = tags
+                addActors(actors)
+                if (!rating.isNullOrBlank()) this.score = Score.from10(rating)
             }
         }
 
-        return newMovieLoadResponse(title, cleanUrl, TvType.Movie, cleanUrl) {
+        return newMovieLoadResponse(cleanTitle, cleanUrl, TvType.Movie, cleanUrl) {
             this.posterUrl = poster
             this.year = year
             this.plot = plot
@@ -346,11 +393,14 @@ class BanglaPlexProvider : MainAPI() {
 
             unlockedUrls.forEach { targetUrl ->
                 when {
-                    targetUrl.contains("hubcloud") || targetUrl.contains("hgcloud") -> {
+                    targetUrl.contains("hubcloud") || targetUrl.contains("hgcloud") || targetUrl.contains("hglink") || targetUrl.contains("sportverse") -> {
                         HubCloud().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
                     }
                     targetUrl.contains("gdflix") || targetUrl.contains("gdlink") -> {
                         GDFlix().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
+                    }
+                    targetUrl.contains("streamtape") -> {
+                        StreamTapeCustom().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
                     }
                     else -> {
                         loadExtractor(targetUrl, pasteUrl, subtitleCallback, callback)
