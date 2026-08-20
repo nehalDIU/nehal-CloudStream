@@ -60,8 +60,8 @@ open class StreamTapeCustom : ExtractorApi() {
             val scripts = doc.select("script").map { it.html() }
 
             for (script in scripts) {
-                if (script.contains("link')") || script.contains("captchalink") || script.contains("norobotlink") || script.contains("ideoooolink")) {
-                    val match = Regex("""innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
+                if (script.contains("innerHTML") && (script.contains("captchalink") || script.contains("norobotlink") || script.contains("ideoooolink") || script.contains("robotlink"))) {
+                    val match = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|ideoooolink|robotlink)['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
                     if (match != null) {
                         val prefix = match.groupValues[1]
                         val rawStr = match.groupValues[2]
@@ -87,6 +87,7 @@ open class StreamTapeCustom : ExtractorApi() {
                                 ExtractorLinkType.VIDEO
                             ) {
                                 this.referer = "https://streamtape.com/"
+                                this.headers = mapOf("Referer" to "https://streamtape.com/")
                                 this.quality = Qualities.Unknown.value
                             }
                         )
@@ -113,6 +114,7 @@ open class StreamTapeCustom : ExtractorApi() {
                                     ExtractorLinkType.VIDEO
                                 ) {
                                     this.referer = "https://streamtape.com/"
+                                    this.headers = mapOf("Referer" to "https://streamtape.com/")
                                     this.quality = Qualities.Unknown.value
                                 }
                             )
