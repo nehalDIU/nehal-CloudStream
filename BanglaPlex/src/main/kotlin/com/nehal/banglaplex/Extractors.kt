@@ -14,6 +14,15 @@ fun getBaseUrl(url: String): String {
     }
 }
 
+fun fixMediaUrl(url: String, defaultExt: String = "mp4"): String {
+    val clean = url.trim()
+    val lower = clean.lowercase()
+    if (lower.contains(".mp4") || lower.contains(".mkv") || lower.contains(".m3u8") || lower.contains(".webm")) {
+        return clean
+    }
+    return if (clean.contains("#")) clean else "$clean#.$defaultExt"
+}
+
 fun getIndexQuality(str: String?): Int {
     if (str.isNullOrBlank()) return Qualities.Unknown.value
 
@@ -67,13 +76,14 @@ open class StreamTapeCustom : ExtractorApi() {
                         else if (full.startsWith("/")) full = "https:/$full"
                         else if (!full.startsWith("http")) full = "https://$full"
 
-                        val streamUrl = if (full.contains("?")) "$full&stream=1" else "$full?stream=1"
+                        val baseStream = if (full.contains("?")) "$full&stream=1" else "$full?stream=1"
+                        val finalStreamUrl = fixMediaUrl(baseStream, "mp4")
 
                         callback(
                             newExtractorLink(
                                 name,
                                 name,
-                                streamUrl,
+                                finalStreamUrl,
                                 ExtractorLinkType.VIDEO
                             ) {
                                 this.referer = "https://streamtape.com/"
@@ -89,16 +99,17 @@ open class StreamTapeCustom : ExtractorApi() {
                         val expr = jsMatch.groupValues[1]
                         val evaluated = evalJs("var url = $expr", "url")?.toString()
                         if (!evaluated.isNullOrBlank()) {
-                            val fixedUrl = when {
+                            val fixed = when {
                                 evaluated.startsWith("//") -> "https:$evaluated&stream=1"
                                 evaluated.startsWith("http") -> "$evaluated&stream=1"
                                 else -> "https://$evaluated&stream=1"
                             }
+                            val finalStreamUrl = fixMediaUrl(fixed, "mp4")
                             callback(
                                 newExtractorLink(
                                     name,
                                     name,
-                                    fixedUrl,
+                                    finalStreamUrl,
                                     ExtractorLinkType.VIDEO
                                 ) {
                                     this.referer = "https://streamtape.com/"
@@ -187,7 +198,7 @@ open class HubCloud : ExtractorApi() {
                         newExtractorLink(
                             "$ref [FSL Server]",
                             "$ref [FSL Server]$labelExtras",
-                            link,
+                            fixMediaUrl(link, "mkv"),
                             ExtractorLinkType.VIDEO
                         ) { this.quality = quality }
                     )
@@ -198,7 +209,7 @@ open class HubCloud : ExtractorApi() {
                         newExtractorLink(
                             "$ref [10Gbps Fast]",
                             "$ref [10Gbps Fast]$labelExtras",
-                            link,
+                            fixMediaUrl(link, "mkv"),
                             ExtractorLinkType.VIDEO
                         ) { this.quality = quality }
                     )
@@ -209,7 +220,7 @@ open class HubCloud : ExtractorApi() {
                         newExtractorLink(
                             "$ref [Direct Cloud]",
                             "$ref [Direct Cloud]$labelExtras",
-                            link,
+                            fixMediaUrl(link, "mkv"),
                             ExtractorLinkType.VIDEO
                         ) { this.quality = quality }
                     )
@@ -226,7 +237,7 @@ open class HubCloud : ExtractorApi() {
                                 newExtractorLink(
                                     "$ref [BuzzServer]",
                                     "$ref [BuzzServer]$labelExtras",
-                                    dlink,
+                                    fixMediaUrl(dlink, "mkv"),
                                     ExtractorLinkType.VIDEO
                                 ) { this.quality = quality }
                             )
@@ -243,7 +254,7 @@ open class HubCloud : ExtractorApi() {
                         newExtractorLink(
                             "$ref [PixelDrain]",
                             "$ref [PixelDrain]$labelExtras",
-                            finalUrl,
+                            fixMediaUrl(finalUrl, "mkv"),
                             ExtractorLinkType.VIDEO
                         ) { this.quality = quality }
                     )
@@ -290,7 +301,7 @@ open class GDFlix : ExtractorApi() {
                                 newExtractorLink(
                                     "GDFlix [Direct]",
                                     "GDFlix [Direct]$labelExtras",
-                                    href,
+                                    fixMediaUrl(href, "mkv"),
                                     ExtractorLinkType.VIDEO
                                 ) { this.quality = quality }
                             )
@@ -304,7 +315,7 @@ open class GDFlix : ExtractorApi() {
                                 newExtractorLink(
                                     "GDFlix [PixelDrain]",
                                     "GDFlix [PixelDrain]$labelExtras",
-                                    finalUrl,
+                                    fixMediaUrl(finalUrl, "mkv"),
                                     ExtractorLinkType.VIDEO
                                 ) { this.quality = quality }
                             )
