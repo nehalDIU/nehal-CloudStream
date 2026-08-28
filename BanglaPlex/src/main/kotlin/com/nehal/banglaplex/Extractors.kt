@@ -55,21 +55,26 @@ open class StreamTapeCustom : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         try {
-            val res = app.get(url)
+            val fixedUrl = when {
+                url.contains("/e/") -> url.replace("/e/", "/v/")
+                else -> url
+            }
+            val res = app.get(fixedUrl, referer = referer ?: "https://streamtape.com/")
             val doc = res.document
             val scripts = doc.select("script").map { it.html() }
 
             for (script in scripts) {
-                if (script.contains("innerHTML") && (script.contains("captchalink") || script.contains("norobotlink") || script.contains("ideoooolink") || script.contains("robotlink"))) {
-                    val match = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|ideoooolink|robotlink)['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
+                // Must match captchalink, norobotlink, or robotlink (and IGNORE decoy honeypots like ideoooolink)
+                if (script.contains("innerHTML") && (script.contains("captchalink") || script.contains("norobotlink") || script.contains("robotlink"))) {
+                    val match = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|robotlink)['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
                     if (match != null) {
                         val prefix = match.groupValues[1]
                         val rawStr = match.groupValues[2]
                         val sub1 = match.groupValues[3].toIntOrNull() ?: 0
                         val sub2 = match.groupValues[4].toIntOrNull() ?: 0
 
-                        var body = rawStr.substring(sub1)
-                        if (sub2 > 0) body = body.substring(sub2)
+                        var body = if (sub1 < rawStr.length) rawStr.substring(sub1) else ""
+                        if (sub2 > 0 && sub2 < body.length) body = body.substring(sub2)
 
                         var full = prefix + body
                         if (full.startsWith("//")) full = "https:$full"
@@ -95,17 +100,18 @@ open class StreamTapeCustom : ExtractorApi() {
                     }
 
                     // Fallback to evaluating JS if pattern differs
-                    val jsMatch = Regex("""document\.getElementById\(['"][^'"]*link['"]\)\.innerHTML\s*=\s*(.*?);""").find(script)
+                    val jsMatch = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|robotlink)['"]\)\.innerHTML\s*=\s*(.*?);""").find(script)
                     if (jsMatch != null) {
                         val expr = jsMatch.groupValues[1]
                         val evaluated = evalJs("var url = $expr", "url")?.toString()
                         if (!evaluated.isNullOrBlank()) {
                             val fixed = when {
-                                evaluated.startsWith("//") -> "https:$evaluated&stream=1"
-                                evaluated.startsWith("http") -> "$evaluated&stream=1"
-                                else -> "https://$evaluated&stream=1"
+                                evaluated.startsWith("//") -> "https:$evaluated"
+                                evaluated.startsWith("http") -> evaluated
+                                else -> "https://$evaluated"
                             }
-                            val finalStreamUrl = fixMediaUrl(fixed, "mp4")
+                            val baseStream = if (fixed.contains("?")) "$fixed&stream=1" else "$fixed?stream=1"
+                            val finalStreamUrl = fixMediaUrl(baseStream, "mp4")
                             callback(
                                 newExtractorLink(
                                     name,

@@ -363,8 +363,36 @@ class BanglaPlexProvider : MainAPI() {
         }
 
         // 2. Process PasteURL Links
-        doc.select("a[href*=\"pasteurl.net/view/\"]").forEach { pasteA ->
-            val pasteUrl = fixUrl(pasteA.attr("href"))
+        val pasteLinks = doc.select("a[href*=\"pasteurl.net/view/\"]").map { fixUrl(it.attr("href")) }.toMutableSet()
+
+        // Also check any key buttons on movie/episode watch pages
+        doc.select("a[href*=\"?key=\"]").forEach { keyA ->
+            val keyUrl = fixUrl(keyA.attr("href"))
+            if (keyUrl != cleanUrl) {
+                try {
+                    val keyDoc = app.get(keyUrl, referer = cleanUrl).document
+                    keyDoc.select("a[href*=\"pasteurl.net/view/\"]").forEach {
+                        pasteLinks.add(fixUrl(it.attr("href")))
+                    }
+                    keyDoc.select("iframe[src]").forEach { iframe ->
+                        val iframeSrc = fixUrl(iframe.attr("src"))
+                        if (iframeSrc.contains("plextream.work") || iframeSrc.contains("embed.php")) {
+                            val plextreamDoc = app.get(iframeSrc, referer = keyUrl).document
+                            Regex("""changeServer\(['"]([^'"]+)['"]""").findAll(plextreamDoc.html()).forEach { m ->
+                                val serverUrl = m.groupValues[1]
+                                if (serverUrl.isNotBlank() && serverUrl.startsWith("http")) {
+                                    loadExtractor(serverUrl, iframeSrc, subtitleCallback, callback)
+                                }
+                            }
+                        } else if (iframeSrc.startsWith("http")) {
+                            loadExtractor(iframeSrc, keyUrl, subtitleCallback, callback)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        pasteLinks.forEach { pasteUrl ->
             unlockAndExtractPasteUrl(pasteUrl, cleanUrl, subtitleCallback, callback)
         }
 
@@ -382,7 +410,7 @@ class BanglaPlexProvider : MainAPI() {
             val cookies = getRes.cookies
             val getDoc = getRes.document
 
-            val csrfInput = getDoc.selectFirst("input[name^=\"_csrf_token_\"]") ?: return
+            val csrfInput = getDoc.selectFirst("input[name^=\"_csrf_token_\"], input[name*=\"csrf\"], input[name*=\"token\"]") ?: return
             val csrfName = csrfInput.attr("name")
             val csrfVal = csrfInput.attr("value")
 
@@ -415,14 +443,14 @@ class BanglaPlexProvider : MainAPI() {
 
             unlockedUrls.forEach { targetUrl ->
                 when {
+                    targetUrl.contains("streamtape") || targetUrl.contains("streamta.pe") -> {
+                        StreamTapeCustom().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
+                    }
                     targetUrl.contains("hubcloud") || targetUrl.contains("hgcloud") || targetUrl.contains("hglink") || targetUrl.contains("sportverse") -> {
                         HubCloud().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
                     }
                     targetUrl.contains("gdflix") || targetUrl.contains("gdlink") -> {
                         GDFlix().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
-                    }
-                    targetUrl.contains("streamtape") -> {
-                        StreamTapeCustom().getUrl(targetUrl, pasteUrl, subtitleCallback, callback)
                     }
                     else -> {
                         loadExtractor(targetUrl, pasteUrl, subtitleCallback, callback)
@@ -438,12 +466,18 @@ class BanglaPlexProvider : MainAPI() {
         if (!url.startsWith("http")) return false
         val lower = url.lowercase()
         return !lower.contains("pasteurl.net") &&
-                !lower.contains("cloudflare.com") &&
+                !lower.contains("cloudflare") &&
                 !lower.contains("fontawesome") &&
                 !lower.contains("bootstrap") &&
+                !lower.contains("googletagmanager") &&
+                !lower.contains("google-analytics") &&
                 !lower.endsWith(".css") &&
                 !lower.endsWith(".js") &&
                 !lower.endsWith(".png") &&
-                !lower.endsWith(".jpg")
+                !lower.endsWith(".jpg") &&
+                !lower.endsWith(".jpeg") &&
+                !lower.endsWith(".svg") &&
+                !lower.endsWith(".woff") &&
+                !lower.endsWith(".woff2")
     }
 }
