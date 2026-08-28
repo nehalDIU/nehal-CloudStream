@@ -260,8 +260,9 @@ open class CineplexBDProvider : MainAPI() {
                         ?: doc.selectFirst("iframe")?.attr("src")
                 }
 
-                if (!videoSrc.isNullOrBlank() && (videoSrc!!.contains(".m3u8") || videoSrc!!.contains(".mp4"))) {
-                    val fixedVideoUrl = fixUrl(videoSrc!!)
+                val finalVideoSrc = videoSrc
+                if (!finalVideoSrc.isNullOrBlank() && (finalVideoSrc.contains(".m3u8") || finalVideoSrc.contains(".mp4"))) {
+                    val fixedVideoUrl = fixUrl(finalVideoSrc)
                     val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     
                     // Create headers map with required Referer and Cookie
@@ -276,9 +277,11 @@ open class CineplexBDProvider : MainAPI() {
                             name = "Player Stream",
                             source = this.name,
                             url = fixedVideoUrl,
-                            type = type,
-                            headers = headers
-                        )
+                            type = type
+                        ) {
+                            this.headers = headers
+                            this.referer = fullUrl
+                        }
                     )
                     found = true
                 }
