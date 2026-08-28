@@ -173,7 +173,7 @@ open class CineplexBDProvider : MainAPI() {
                 
                 metaResponse.episodes?.values?.forEach { ep ->
                     val epPath = ep.path
-                    val epData = if (!epPath.isNullOrBlank()) fixUrl(epPath) else "$mainUrl/player.php?id=$id&season=$seasonNum&ep=${ep.episode_number}"
+                    val epData = "$mainUrl/watch.php?id=$id&season=$seasonNum&ep=${ep.episode_number}"
                     episodes.add(
                         newEpisode(epData) {
                             this.name = ep.title?.substringBefore(".mp4")?.substringBefore(".mkv")?.trim()
@@ -226,62 +226,64 @@ open class CineplexBDProvider : MainAPI() {
         if (fullUrl.contains("player.php") || fullUrl.contains("download.php") || fullUrl.contains("view.php") || fullUrl.contains("watch.php")) {
             var found = false
             
-            // Extract subtitles from player page if playerUrl or fullUrl is available
             try {
-                val playerUrl = if (fullUrl.contains("player.php")) fullUrl else if (!movieId.isNullOrBlank()) "$mainUrl/player.php?id=$movieId" else null
-                if (playerUrl != null) {
-                    val doc = app.get(playerUrl).document
-                    doc.select("track[kind=\"captions\"], track[kind=\"subtitles\"]").forEach { track ->
-                        val label = track.attr("label").takeIf { it.isNotBlank() } ?: "English"
-                        val src = track.attr("src")
-                        if (src.isNotBlank()) {
-                            subtitleCallback(
-                                newSubtitleFile(label, fixUrl(src))
-                            )
-                        }
-                    }
-
-                    // Check iframe or direct video source in player HTML if present
-                    val videoSrc = doc.selectFirst("video source")?.attr("src")
-                        ?: doc.selectFirst("video")?.attr("src")
-                        ?: doc.selectFirst("iframe")?.attr("src")
-
-                    if (!videoSrc.isNullOrBlank() && (videoSrc.contains(".m3u8") || videoSrc.contains(".mp4"))) {
-                        val fixedVideoUrl = fixUrl(videoSrc)
-                        val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                        callback.invoke(
-                            newExtractorLink(
-                                name = "Player Stream",
-                                source = this.name,
-                                url = fixedVideoUrl,
-                                type = type
-                            )
+                // Fetch the page to get the script tags containing videoSrc and extract cookies for the HLS stream
+                val response = app.get(fullUrl)
+                val doc = response.document
+                val cookies = response.cookies
+                
+                // Extract subtitles
+                doc.select("track[kind=\"captions\"], track[kind=\"subtitles\"]").forEach { track ->
+                    val label = track.attr("label").takeIf { it.isNotBlank() } ?: "English"
+                    val src = track.attr("src")
+                    if (src.isNotBlank()) {
+                        subtitleCallback(
+                            newSubtitleFile(label, fixUrl(src))
                         )
-                        found = true
                     }
                 }
-            } catch (_: Exception) {}
-
-            // Resolve redirected stream URL via download.php
-            if (!movieId.isNullOrBlank()) {
-                try {
-                    val downloadUrl = "$mainUrl/download.php?id=$movieId"
-                    val res = app.get(downloadUrl)
-                    val streamUrl = res.url
-                    if (streamUrl.isNotBlank() && !streamUrl.contains("download.php")) {
-                        val isM3u8 = streamUrl.contains(".m3u8") || 
-                                     res.headers["Content-Type"]?.contains("mpegurl", ignoreCase = true) == true
-                        callback.invoke(
-                            newExtractorLink(
-                                name = "Cineplex Stream",
-                                source = this.name,
-                                url = streamUrl,
-                                type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                            )
-                        )
-                        found = true
+                
+                // Extract videoSrc from JavaScript variables in script tags
+                var videoSrc: String? = null
+                doc.select("script").forEach { script ->
+                    val html = script.html()
+                    val matcher = Regex("var\\s+videoSrc\\s*=\\s*['\"]([^'\"]+)['\"]").find(html)
+                    if (matcher != null) {
+                        videoSrc = matcher.groupValues[1]
                     }
-                } catch (_: Exception) {}
+                }
+
+                // Fallback to checking iframe or direct video source in player HTML
+                if (videoSrc.isNullOrBlank()) {
+                    videoSrc = doc.selectFirst("video source")?.attr("src")
+                        ?: doc.selectFirst("video")?.attr("src")
+                        ?: doc.selectFirst("iframe")?.attr("src")
+                }
+
+                if (!videoSrc.isNullOrBlank() && (videoSrc!!.contains(".m3u8") || videoSrc!!.contains(".mp4"))) {
+                    val fixedVideoUrl = fixUrl(videoSrc!!)
+                    val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    
+                    // Create headers map with required Referer and Cookie
+                    val cookieString = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                    val headers = mapOf(
+                        "Referer" to fullUrl,
+                        "Cookie" to cookieString
+                    )
+                    
+                    callback.invoke(
+                        newExtractorLink(
+                            name = "Player Stream",
+                            source = this.name,
+                            url = fixedVideoUrl,
+                            type = type,
+                            headers = headers
+                        )
+                    )
+                    found = true
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
 
             return found
