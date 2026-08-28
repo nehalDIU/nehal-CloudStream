@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
@@ -289,7 +290,7 @@ class MovieLinkBDProvider : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = fullPlot.takeIf { it.isNotEmpty() }
-                this.rating = rating?.let { (it * 1000).toInt() }
+                if (rating != null) this.score = Score.from10(rating)
             }
         }
 
@@ -361,7 +362,7 @@ class MovieLinkBDProvider : MainAPI() {
             this.posterUrl = poster
             this.year = year
             this.plot = fullPlot.takeIf { it.isNotEmpty() }
-            this.rating = rating?.let { (it * 1000).toInt() }
+            if (rating != null) this.score = Score.from10(rating)
         }
     }
 

@@ -20,7 +20,6 @@ import org.json.JSONObject
 import java.util.UUID
 import okhttp3.Request
 import java.util.Base64
-import com.cncverse.BuildConfig
 
 val JSONParser = object : ResponseParser {
     val mapper: ObjectMapper = jacksonObjectMapper().configure(
@@ -261,7 +260,7 @@ data class NewTvPlayerResponse(
 // return one. Resolve it by title/year against TMDB's public search API,
 // cached in memory to avoid repeat lookups.
 
-private val TMDB_READ_TOKEN = BuildConfig.TMDB_READ_TOKEN
+private const val TMDB_API_KEY = "1865f43a0549ca50d341dd9ab8b29f49"
 private val tmdbIdCache = mutableMapOf<String, String?>()
 
 suspend fun resolveTmdbId(title: String, year: String?, isMovie: Boolean): String? {
@@ -271,12 +270,11 @@ suspend fun resolveTmdbId(title: String, year: String?, isMovie: Boolean): Strin
     val mediaType = if (isMovie) "movie" else "tv"
     val result = try {
         val url = "https://api.themoviedb.org/3/search/$mediaType" +
-            "?query=${java.net.URLEncoder.encode(title, "UTF-8")}"
+            "?api_key=$TMDB_API_KEY&query=${java.net.URLEncoder.encode(title, "UTF-8")}"
 
         val rawText = app.get(
             url,
             headers = mapOf(
-                "Authorization" to "Bearer $TMDB_READ_TOKEN",
                 "Accept" to "application/json"
             )
         ).text
