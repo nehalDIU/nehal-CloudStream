@@ -324,3 +324,111 @@ data class TmdbSearchResult(
     val release_date: String? = null,
     val first_air_date: String? = null
 )
+
+data class TmdbTvDetails(
+    val name: String? = null,
+    val overview: String? = null,
+    val poster_path: String? = null,
+    val seasons: List<TmdbSeason>? = null
+)
+
+data class TmdbSeason(
+    val id: Int? = null,
+    val name: String? = null,
+    val season_number: Int? = null,
+    val episode_count: Int? = null,
+    val poster_path: String? = null
+)
+
+suspend fun fetchTmdbTvDetails(tmdbId: String): TmdbTvDetails? {
+    return try {
+        val url = "https://api.themoviedb.org/3/tv/$tmdbId?api_key=$TMDB_API_KEY"
+        val rawText = app.get(url, headers = mapOf("Accept" to "application/json")).text
+        tryParseJson<TmdbTvDetails>(rawText)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private const val net27Url = "https://net27.cc"
+private const val net27Referer = "https://videodownloader.site/"
+private val net27Headers = mapOf(
+    "Accept" to "application/json",
+    "Referer" to net27Referer,
+    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
+)
+
+data class Net27Response(
+    val ok: Boolean? = null,
+    val mp4: String? = null,
+    val resolution: String? = null,
+    val streams: List<Net27Stream>? = null,
+    val captions: List<Net27Caption>? = null,
+    val noSource: Boolean? = null,
+    val error: String? = null
+)
+
+data class Net27Stream(
+    val url: String,
+    val resolution: Int
+)
+
+data class Net27Caption(
+    val lang: String,
+    val name: String,
+    val url: String
+)
+
+suspend fun loadNet27Fallback(
+    providerName: String,
+    title: String,
+    tmdbId: String? = null,
+    season: Int? = null,
+    episode: Int? = null,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    val isMovie = season == null
+    val targetTmdbId = tmdbId ?: resolveTmdbId(title, null, isMovie) ?: return false
+    val embedUrl = if (isMovie) {
+        "$net27Url/api/embed-tmdb/$targetTmdbId"
+    } else {
+        "$net27Url/api/embed-tmdb/$targetTmdbId?type=tv&s=$season&e=${episode ?: 1}"
+    }
+
+    val response = try {
+        app.get(embedUrl, headers = net27Headers).parsed<Net27Response>()
+    } catch (_: Exception) {
+        null
+    } ?: return false
+
+    if (response.ok != true) return false
+
+    var found = false
+
+    response.streams?.forEach { stream ->
+        callback.invoke(
+            newExtractorLink(providerName, "$providerName ${stream.resolution}p", stream.url, type = ExtractorLinkType.VIDEO) {
+                this.referer = net27Referer
+                this.quality = stream.resolution
+            }
+        )
+        found = true
+    }
+
+    if (response.streams.isNullOrEmpty() && !response.mp4.isNullOrBlank()) {
+        callback.invoke(
+            newExtractorLink(providerName, providerName, response.mp4, type = ExtractorLinkType.VIDEO) {
+                this.referer = net27Referer
+                this.quality = response.resolution?.toIntOrNull() ?: Qualities.Unknown.value
+            }
+        )
+        found = true
+    }
+
+    response.captions?.forEach { caption ->
+        subtitleCallback.invoke(newSubtitleFile(caption.name, caption.url))
+    }
+
+    return found
+}

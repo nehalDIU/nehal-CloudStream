@@ -222,23 +222,27 @@ class DisneyPlusProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-     val apiBase = resolveApiUrl()
-        val id = parseJson<LoadData>(data).id
-        val response = app.get(
-            "$apiBase/newtv/player.php?id=$id",
-            headers = buildNewTvHeaders("hs", mapOf("Usertoken" to ""))
-        ).parsed<NewTvPlayerResponse>()
+        val loadData = parseJson<LoadData>(data)
+        val id = loadData.id
+        try {
+            val apiBase = resolveApiUrl()
+            val response = app.get(
+                "$apiBase/newtv/player.php?id=$id",
+                headers = buildNewTvHeaders("dp", mapOf("Usertoken" to ""))
+            ).parsed<NewTvPlayerResponse>()
 
-        if (response.status != "ok" || response.video_link.isNullOrBlank()) return false
-
-        callback.invoke(
-            newExtractorLink(name, name, response.video_link, type = ExtractorLinkType.M3U8) {
-                this.referer = response.referer ?: apiBase
+            if (response.status == "ok" && !response.video_link.isNullOrBlank()) {
+                callback.invoke(
+                    newExtractorLink(name, name, response.video_link, type = ExtractorLinkType.M3U8) {
+                        this.referer = response.referer ?: apiBase
+                    }
+                )
+                return true
             }
-        )
+        } catch (_: Exception) {}
 
-        return true
-}
+        return loadNet27Fallback(name, loadData.title, subtitleCallback = subtitleCallback, callback = callback)
+    }
 
 
 data class Id(

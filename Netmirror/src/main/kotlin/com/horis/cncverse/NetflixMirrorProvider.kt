@@ -80,7 +80,8 @@ class NetflixMirrorProvider : MainAPI() {
   private fun Element.toSearchResult(): SearchResponse? {
     val id = selectFirst("a")?.attr("data-post") ?: attr("data-post")
     if (id.isNullOrBlank()) return null
-    return newAnimeSearchResponse("", Id(id).toJson()) {
+    val title = selectFirst(".title, h3, h2, span, p")?.text()?.trim() ?: ""
+    return newAnimeSearchResponse(title, Id(id, title).toJson()) {
       posterUrl = "https://imgcdn.kim/poster/v/$id.jpg"
       posterHeaders = mapOf("Referer" to "$mainUrl/home")
     }
@@ -95,7 +96,7 @@ class NetflixMirrorProvider : MainAPI() {
       cookies = cookies
     ).parsed<SearchData>()
     return data.searchResult.map {
-      newAnimeSearchResponse(it.t, Id(it.id).toJson()) {
+      newAnimeSearchResponse(it.t, Id(it.id, it.t).toJson()) {
         posterUrl = "https://imgcdn.kim/poster/v/${it.id}.jpg"
         posterHeaders = mapOf("Referer" to "$mainUrl/home")
       }
@@ -104,26 +105,28 @@ class NetflixMirrorProvider : MainAPI() {
 
   override suspend fun load(url: String): LoadResponse? {
     cookie_value = if (cookie_value.isEmpty()) bypass(newUrl) else cookie_value
-    val id = parseJson<Id>(url).id
+    val urlData = tryParseJson<Id>(url) ?: Id(url)
+    val id = urlData.id
     val cookies = mapOf("t_hash_t" to cookie_value, "hd" to "on", "ott" to "nf")
-    val data = app.get(
-      "$mainUrl/mobile/post.php?id=$id&t=$unixTime",
-      headers,
-      referer = "$mainUrl/home",
-      cookies = cookies
-    ).parsed<PostData>()
+    val postData = try {
+      app.get(
+        "$mainUrl/mobile/post.php?id=$id&t=$unixTime",
+        headers,
+        referer = "$mainUrl/home",
+        cookies = cookies
+      ).parsed<PostData>()
+    } catch (_: Exception) {
+      null
+    }
 
-    val title = data.title
+    val title = postData?.title?.takeIf { it.isNotBlank() } ?: urlData.title ?: "Unknown"
     val episodes = arrayListOf<Episode>()
-    val isMovie = data.episodes.isEmpty() || data.episodes.first() == null
-    val tmdbId = data.tmdb_id ?: resolveTmdbId(title, data.year, isMovie)
+    val hasServerEpisodes = postData?.episodes?.any { it != null } == true
+    val isMovie = postData != null && (postData.episodes.isEmpty() || postData.episodes.first() == null) && !hasServerEpisodes
+    val tmdbId = postData?.tmdb_id ?: resolveTmdbId(title, postData?.year, isMovie)
 
-    if (isMovie) {
-      episodes.add(newEpisode(LoadData(title, id, tmdbId)) {
-        name = title
-      })
-    } else {
-      data.episodes.filterNotNull().mapTo(episodes) {
+    if (hasServerEpisodes) {
+      postData!!.episodes.filterNotNull().mapTo(episodes) {
         newEpisode(LoadData(
           title, it.id, tmdbId,
           it.s.replace("S", "").toIntOrNull(),
@@ -136,15 +139,39 @@ class NetflixMirrorProvider : MainAPI() {
           this.runTime = it.time.replace("m", "").toIntOrNull()
         }
       }
-      if (data.nextPageShow == 1) {
-        episodes.addAll(getEpisodes(title, url, data.nextPageSeason!!, 2, tmdbId))
+      if (postData.nextPageShow == 1) {
+        episodes.addAll(getEpisodes(title, url, postData.nextPageSeason!!, 2, tmdbId))
       }
-      data.season?.dropLast(1)?.amap {
+      postData.season?.dropLast(1)?.amap {
         episodes.addAll(getEpisodes(title, url, it.id, 1, tmdbId))
+      }
+    } else if (tmdbId != null && !isMovie) {
+      val tmdbDetails = fetchTmdbTvDetails(tmdbId)
+      tmdbDetails?.seasons?.filter { (it.season_number ?: 0) > 0 }?.forEach { s ->
+        val sNum = s.season_number ?: 1
+        val epCount = s.episode_count ?: 0
+        for (epNum in 1..epCount) {
+          episodes.add(
+            newEpisode(LoadData(title, id, tmdbId, sNum, epNum)) {
+              this.name = "Episode $epNum"
+              this.season = sNum
+              this.episode = epNum
+              if (!s.poster_path.isNullOrBlank()) {
+                this.posterUrl = "https://image.tmdb.org/t/p/w500${s.poster_path}"
+              }
+            }
+          )
+        }
       }
     }
 
-    val cast = data.cast?.split(",")?.map {
+    if (episodes.isEmpty()) {
+      episodes.add(newEpisode(LoadData(title, id, tmdbId)) {
+        this.name = title
+      })
+    }
+
+    val cast = postData?.cast?.split(",")?.map {
       it.trim()
     }
     ?.filter {
@@ -152,24 +179,24 @@ class NetflixMirrorProvider : MainAPI() {
     }?.map {
       ActorData(Actor(it))
     }
-    val genre = data.genre?.split(",")?.map {
+    val genre = postData?.genre?.split(",")?.map {
       it.trim()
     }?.filter {
       it.isNotEmpty()
     }
-    val type = if (isMovie) TvType.Movie else TvType.TvSeries
+    val type = if (episodes.size <= 1 && isMovie) TvType.Movie else TvType.TvSeries
 
     return newTvSeriesLoadResponse(title, url, type, episodes) {
       posterUrl = "https://imgcdn.kim/poster/v/$id.jpg"
       backgroundPosterUrl = "https://imgcdn.kim/poster/v/$id.jpg"
       posterHeaders = mapOf("Referer" to "$mainUrl/home")
-      plot = data.desc
-      year = data.year.toIntOrNull()
+      plot = postData?.desc
+      year = postData?.year?.toIntOrNull()
       tags = genre
       actors = cast
-      this.score = Score.from10(data.match?.replace("IMDb ", ""))
-      this.duration = convertRuntimeToMinutes(data.runtime.toString())
-      this.contentRating = data.ua
+      this.score = Score.from10(postData?.match?.replace("IMDb ", ""))
+      this.duration = postData?.runtime?.let { convertRuntimeToMinutes(it.toString()) }
+      this.contentRating = postData?.ua
     }
   }
 
@@ -227,7 +254,9 @@ class NetflixMirrorProvider : MainAPI() {
         headers = buildNewTvHeaders("nf")
       ).parsed<NewTvPlayerResponse>()
 
-      if (!newTvResp.video_link.isNullOrBlank()) {
+      // Only accept if status is "ok" and video_link is present.
+      // If status is "otp" or anything else, the server returned an anti-abuse/warning video.
+      if (newTvResp.status == "ok" && !newTvResp.video_link.isNullOrBlank()) {
         Log.i("NetflixMirror", "NewTV flow ok for id=$id")
         callback.invoke(
           newExtractorLink(name, name, newTvResp.video_link, type = ExtractorLinkType.M3U8) {
@@ -236,7 +265,7 @@ class NetflixMirrorProvider : MainAPI() {
         )
         return true
       }
-      Log.w("NetflixMirror", "NewTV flow empty for id=$id, falling back")
+      Log.w("NetflixMirror", "NewTV flow returned status='${newTvResp.status}' for id=$id, falling back")
     } catch (e: Exception) {
       Log.w("NetflixMirror", "NewTV flow failed for id=$id: ${e.message}")
     }
@@ -388,11 +417,11 @@ class NetflixMirrorProvider : MainAPI() {
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
   ): Boolean {
-    val tmdbId = loadData.tmdbId ?: run {
+    val isMovie = loadData.season == null
+    val tmdbId = loadData.tmdbId ?: resolveTmdbId(loadData.title, null, isMovie) ?: run {
       Log.e("NetflixMirror", "Fallback aborted: no tmdbId for '${loadData.title}'")
       return false
     }
-    val isMovie = loadData.season == null
 
     val embedUrl = if (isMovie) {
       "$net27Url/api/embed-tmdb/$tmdbId"
@@ -529,7 +558,7 @@ class NetflixMirrorProvider : MainAPI() {
 
 
   // Data classes
-  data class Id(val id: String)
+  data class Id(val id: String, val title: String? = null)
 
   data class LoadData(
     val title: String,
