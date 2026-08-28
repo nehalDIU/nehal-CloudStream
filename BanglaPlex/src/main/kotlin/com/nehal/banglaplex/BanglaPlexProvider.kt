@@ -80,16 +80,19 @@ class BanglaPlexProvider : MainAPI() {
         val items = mutableListOf<SearchResponse>()
         val seen = mutableSetOf<String>()
 
-        doc.select(".col-md-2, .col-sm-3, .col-xs-6, .movie-opt, .movie-container, .latest-movie").forEach { container ->
+        doc.select(".col-md-2, .col-sm-3, .col-xs-6, .movie-opt, .latest-movie").forEach { container ->
             val linkEl = container.selectFirst("a[href*=\"/watch/\"]") ?: return@forEach
             val href = linkEl.attr("href").trim()
             val cleanUrl = fixUrl(href)
             if (!cleanUrl.contains("/watch/") || !seen.add(cleanUrl)) return@forEach
 
-            val titleEl = container.selectFirst(".movie-title h3 a, .movie-title a, .popup")
+            val titleEl = container.selectFirst(".movie-title h3 a, .movie-title h3, .movie-title a, .movie-title, .video-title, h3 a, h3")
             var title = titleEl?.attr("title")?.takeIf { it.isNotBlank() }
                 ?: titleEl?.text()?.trim()
+                ?: linkEl.attr("title").takeIf { it.isNotBlank() }
                 ?: linkEl.text().trim()
+
+            title = cleanMediaTitle(title)
 
             if (title.isBlank()) {
                 title = cleanUrl.substringAfterLast("/").substringBefore(".html").replace("-", " ")
@@ -144,6 +147,15 @@ class BanglaPlexProvider : MainAPI() {
         return items
     }
 
+    private fun cleanMediaTitle(raw: String): String {
+        val singleLine = raw.replace(Regex("""[\r\n\t]+"""), " ").replace(Regex("""\s+"""), " ").trim()
+        val cleaned = singleLine.replace(
+            Regex("""^(?:TRENDING\s+|HD(?:TC)?\s+|CAM\s+|UHD\s+|\d{4}\s+|IMDB\s*[\d.]*\s+|SERIES\s+)+""", RegexOption.IGNORE_CASE),
+            ""
+        ).trim()
+        return cleaned.ifBlank { singleLine }
+    }
+
     private fun getSearchQuality(str: String?): SearchQuality? {
         if (str.isNullOrBlank()) return null
         val lower = str.lowercase()
@@ -163,11 +175,13 @@ class BanglaPlexProvider : MainAPI() {
         val rawTitle = doc.selectFirst("h1.movie-title, h1, .movie-details h1")?.text()?.trim()
             ?: doc.title().trim()
 
-        val cleanTitle = rawTitle
-            .substringBefore(" |")
-            .substringBefore(" –")
-            .substringBefore(" -")
-            .trim()
+        val cleanTitle = cleanMediaTitle(
+            rawTitle
+                .substringBefore(" |")
+                .substringBefore(" –")
+                .substringBefore(" -")
+                .trim()
+        )
 
         val posterStyle = doc.selectFirst(".latest-movie-img-container")?.attr("style") ?: ""
         val bgPoster = Regex("""url\(['"]?(.*?)['"]?\)""").find(posterStyle)?.groupValues?.get(1)
