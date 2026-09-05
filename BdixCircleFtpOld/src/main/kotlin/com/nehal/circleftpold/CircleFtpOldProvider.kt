@@ -23,6 +23,9 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
+import com.lagradost.cloudstream3.newAnimeSearchResponse
+import com.lagradost.cloudstream3.DubStatus
+import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -113,8 +116,16 @@ class CircleFtpOldProvider : MainAPI() {
                 article.hasClass("genre-tv-series")
 
         val quality = getSearchQuality(title)
+        val (isDub, isSub) = getAudioStatus(title)
+        val tvType = if (isTv) TvType.TvSeries else TvType.Movie
 
-        return if (isTv) {
+        return if (isDub || isSub) {
+            newAnimeSearchResponse(title, href, tvType) {
+                this.posterUrl = poster
+                this.quality = quality
+                addDubStatus(dubExist = isDub, subExist = isSub)
+            }
+        } else if (isTv) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = poster
                 this.quality = quality
@@ -169,8 +180,16 @@ class CircleFtpOldProvider : MainAPI() {
             val loadUrl = "$mainApiUrl/api/posts/${post.id}"
             val posterUrl = post.imageSm?.let { "$mainApiUrl/uploads/$it" }
             val quality = getSearchQuality(title)
+            val (isDub, isSub) = getAudioStatus(title)
+            val tvType = if (isTv) TvType.TvSeries else TvType.Movie
 
-            return if (isTv) {
+            return if (isDub || isSub) {
+                newAnimeSearchResponse(title, loadUrl, tvType) {
+                    this.posterUrl = posterUrl
+                    this.quality = quality
+                    addDubStatus(dubExist = isDub, subExist = isSub)
+                }
+            } else if (isTv) {
                 newTvSeriesSearchResponse(title, loadUrl, TvType.TvSeries) {
                     this.posterUrl = posterUrl
                     this.quality = quality
@@ -455,6 +474,30 @@ class CircleFtpOldProvider : MainAPI() {
             lowercase.contains("telecine") -> SearchQuality.Telecine
             else -> null
         }
+    }
+
+    private fun getAudioStatus(title: String?): Pair<Boolean, Boolean> {
+        val lower = title?.lowercase() ?: return Pair(false, false)
+        val isDub = lower.contains("dual audio") ||
+                lower.contains("multi audio") ||
+                lower.contains("dubbed") ||
+                lower.contains("hindi dub") ||
+                lower.contains("bengali dub") ||
+                lower.contains("bangla dub") ||
+                lower.contains("tamil dub") ||
+                lower.contains("telugu dub") ||
+                lower.contains("[dub]") ||
+                lower.contains("(dub)") ||
+                lower.contains("dual")
+
+        val isSub = lower.contains("subbed") ||
+                lower.contains("esub") ||
+                lower.contains("msub") ||
+                lower.contains("eng sub") ||
+                lower.contains("[sub]") ||
+                lower.contains("(sub)")
+
+        return Pair(isDub, isSub)
     }
 
     data class PageData(
