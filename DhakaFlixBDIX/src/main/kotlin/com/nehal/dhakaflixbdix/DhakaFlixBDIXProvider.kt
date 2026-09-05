@@ -25,6 +25,7 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
 import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLDecoder
@@ -49,6 +50,10 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
     override val hasMainPage = true
     override val hasDownloadSupport = true
+    override val hasQuickSearch = true
+    override val instantLinkLoading = true
+    override var sequentialMainPage = true
+    override var sequentialMainPageDelay = 150L
 
     private val host12 = "http://172.16.50.12"
     private val host14 = "http://172.16.50.14"
@@ -111,7 +116,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
 
         // Remove media/subtitle extensions if present
-        name = Regex("""\.(mp4|mkv|avi|m4v|webm|flv|srt|sub|txt)$""", RegexOption.IGNORE_CASE).replace(name, "")
+        name = Regex("""\.(mp4|mkv|avi|m4v|webm|flv|ts|m3u8|srt|sub|vtt|txt)$""", RegexOption.IGNORE_CASE).replace(name, "")
 
         // Replace separator dots/underscores with spaces if dots are used as word separators
         if (name.contains(".") && !name.contains(" ")) {
@@ -283,7 +288,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     private suspend fun fetchDirectoryListing(url: String): List<DirectoryEntry> {
         return try {
             val responseHtml = getSemaphoreForHost(url).withPermit {
-                app.get(url, timeout = 4).text
+                app.get(url, timeout = 25, cacheTime = 60).text
             }
             val doc = Jsoup.parse(responseHtml)
             val baseUri = URI(url)
@@ -295,7 +300,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                 trs.forEach { tr ->
                     val a = tr.selectFirst("a[href]") ?: return@forEach
                     val href = a.attr("href")
-                    if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
+                    if (href.isBlank() || href == ".." || href == "." || (href.startsWith("/") && href.length == 1)) return@forEach
                     if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
 
                     val cleanedName = cleanTitle(href)
@@ -321,7 +326,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             if (entries.isEmpty()) {
                 doc.select("a[href]").forEach { a ->
                     val href = a.attr("href")
-                    if (href.isBlank() || href == ".." || href == "." || href.startsWith("/") && href.length == 1) return@forEach
+                    if (href.isBlank() || href == ".." || href == "." || (href.startsWith("/") && href.length == 1)) return@forEach
                     if (href.contains("_h5ai") || href.contains("larsjung.de") || href.contains("browsehappy.com")) return@forEach
 
                     val cleanedName = cleanTitle(href)
@@ -339,7 +344,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
     }
 
-    private suspend fun fetchCategoryEntries(cat: BDIXCategory, maxContainers: Int = 1): List<DirectoryEntry> {
+    private suspend fun fetchCategoryEntries(cat: BDIXCategory, maxContainers: Int = 2): List<DirectoryEntry> {
         val rootUrl = fixUrl(cat.path, cat.host)
         val topEntries = fetchDirectoryListingCached(rootUrl)
 
@@ -355,7 +360,6 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             Regex("""\d{4}""").find(container.name)?.value?.toIntOrNull() ?: 0
         }
 
-        // Fetch top recent year container(s) in parallel with caching to maximize performance
         val expandedMovies = coroutineScope {
             sortedContainers.take(maxContainers).map { container ->
                 async {
@@ -372,9 +376,44 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         val cat = categories.find { it.path == request.data }
             ?: categories.first()
 
-        val entries = fetchCategoryEntries(cat, maxContainers = 1)
+        val rootUrl = fixUrl(cat.path, cat.host)
+        val topEntries = fetchDirectoryListingCached(rootUrl)
 
-        val items = entries.map { entry ->
+        val directMovies = topEntries.filter { !isContainerFolder(it.name) }
+        val containers = topEntries.filter { isContainerFolder(it.name) && it.isDirectory }
+
+        val items: List<DirectoryEntry>
+        val hasNext: Boolean
+
+        if (containers.isNotEmpty()) {
+            val sortedContainers = containers.sortedByDescending { container ->
+                Regex("""\d{4}""").find(container.name)?.value?.toIntOrNull() ?: 0
+            }
+
+            if (page <= 1) {
+                val firstContainer = sortedContainers.firstOrNull()
+                val containerItems = firstContainer?.let { container ->
+                    fetchDirectoryListingCached(container.fullUrl).filter { it.isDirectory && !isContainerFolder(it.name) }
+                } ?: emptyList()
+                items = (directMovies + containerItems).distinctBy { it.fullUrl }.sortedByDescending { it.modifiedTimeMs }
+                hasNext = sortedContainers.size > 1
+            } else {
+                val containerIndex = page - 1
+                val targetContainer = sortedContainers.getOrNull(containerIndex)
+                items = targetContainer?.let { container ->
+                    fetchDirectoryListingCached(container.fullUrl).filter { it.isDirectory && !isContainerFolder(it.name) }.sortedByDescending { it.modifiedTimeMs }
+                } ?: emptyList()
+                hasNext = containerIndex + 1 < sortedContainers.size
+            }
+        } else {
+            val pageSize = 30
+            val startIndex = (page - 1) * pageSize
+            val sortedDirect = directMovies.sortedByDescending { it.modifiedTimeMs }
+            items = sortedDirect.drop(startIndex).take(pageSize)
+            hasNext = (startIndex + pageSize) < sortedDirect.size
+        }
+
+        val searchResponses = items.map { entry ->
             val formattedName = formatCardName(entry.name, cat, entry.href)
             val itemUrl = entry.fullUrl
             val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(itemUrl) else null
@@ -384,23 +423,29 @@ open class DhakaFlixBDIXProvider : MainAPI() {
             }
         }
 
-        return newHomePageResponse(request.name, items)
+        return newHomePageResponse(request.name, searchResponses, hasNext = hasNext)
     }
+
+    override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim().lowercase()
-        if (cleanQuery.isBlank()) return emptyList()
+        if (cleanQuery.isBlank() || cleanQuery.length < 2) return emptyList()
 
         return coroutineScope {
             val tasks = categories.map { cat ->
                 async {
-                    val entries = fetchCategoryEntries(cat, maxContainers = 3)
-                    entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
-                        val formattedName = formatCardName(entry.name, cat, entry.href)
-                        val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
-                        newAnimeSearchResponse(formattedName, entry.fullUrl, cat.type) {
-                            populateItemMetadata(this, entry, cat, posterUrl)
+                    try {
+                        val entries = fetchCategoryEntries(cat, maxContainers = 2)
+                        entries.filter { it.name.lowercase().contains(cleanQuery) }.map { entry ->
+                            val formattedName = formatCardName(entry.name, cat, entry.href)
+                            val posterUrl = if (entry.isDirectory) getOptimizedPosterUrl(entry.fullUrl) else null
+                            newAnimeSearchResponse(formattedName, entry.fullUrl, cat.type) {
+                                populateItemMetadata(this, entry, cat, posterUrl)
+                            }
                         }
+                    } catch (_: Exception) {
+                        emptyList()
                     }
                 }
             }
@@ -408,14 +453,40 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         }
     }
 
+    private fun extractTags(text: String): List<String> {
+        val lower = text.lowercase()
+        val tags = mutableListOf<String>()
+        if (lower.contains("2160p") || lower.contains("4k") || lower.contains("uhd")) tags.add("4K UHD")
+        if (lower.contains("1080p") || lower.contains("fhd")) tags.add("1080p FHD")
+        if (lower.contains("720p") || lower.contains("hd")) tags.add("720p HD")
+        if (lower.contains("3d")) tags.add("3D")
+        if (lower.contains("hindi")) tags.add("Hindi")
+        if (lower.contains("bangla") || lower.contains("kolkata")) tags.add("Bangla")
+        if (lower.contains("korean")) tags.add("Korean")
+        if (lower.contains("animation") || lower.contains("anime")) tags.add("Animation")
+        if (lower.contains("imdb") || lower.contains("top-250") || lower.contains("top 250")) tags.add("IMDb Top 250")
+        if (lower.contains("dual") || lower.contains("multi")) tags.add("Dual Audio")
+        if (lower.contains("dubbed")) tags.add("Dubbed")
+        if (lower.contains("sub") || lower.contains("esub")) tags.add("Subtitled")
+        return tags.distinct()
+    }
+
     override suspend fun load(url: String): LoadResponse {
         val serverTag = getServerTagFromUrl(url)
         val decodedTitle = cleanTitle(url, serverTag)
         val isVideoFile = isMediaFile(url)
         val extractedYear = extractYear(url)
+        val tags = extractTags(url)
 
         if (isVideoFile) {
+            val parentFolder = url.substringBeforeLast('/') + "/"
+            val folderEntries = fetchDirectoryListingCached(parentFolder)
+            val posterUrl = pickPosterFromEntries(folderEntries) ?: getOptimizedPosterUrl(parentFolder)
             return newMovieLoadResponse(decodedTitle, url, TvType.Movie, url) {
+                this.posterUrl = posterUrl
+                this.backgroundPosterUrl = posterUrl
+                this.tags = tags
+                this.plot = "Server: $serverTag (DhakaFlix BDIX)"
                 if (extractedYear != null && extractedYear in 1900..2030) this.year = extractedYear
             }
         }
@@ -459,16 +530,73 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
             return newTvSeriesLoadResponse(decodedTitle, url, TvType.TvSeries, episodes) {
                 this.posterUrl = posterUrl
+                this.backgroundPosterUrl = posterUrl
+                this.tags = tags
+                this.plot = "Server: $serverTag (DhakaFlix BDIX) | ${episodes.size} Episodes available"
                 if (extractedYear != null && extractedYear in 1900..2030) this.year = extractedYear
             }
         }
 
-        // Direct movie folder with media files inside
-        val mainVideoUrl = videoFiles.firstOrNull()?.fullUrl ?: url
-        return newMovieLoadResponse(decodedTitle, url, TvType.Movie, mainVideoUrl) {
+        // Direct movie folder: pass folder url as data so loadLinks can discover all qualities and subtitles!
+        return newMovieLoadResponse(decodedTitle, url, TvType.Movie, url) {
             this.posterUrl = posterUrl
+            this.backgroundPosterUrl = posterUrl
+            this.tags = tags
+            this.plot = "Server: $serverTag (DhakaFlix BDIX)"
             if (extractedYear != null && extractedYear in 1900..2030) this.year = extractedYear
         }
+    }
+
+    private suspend fun emitSubtitles(
+        entries: List<DirectoryEntry>,
+        mediaTitle: String?,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        val directSubs = entries.filter { isSubtitleFile(it.fullUrl) }
+        val subFolders = entries.filter { it.isDirectory && (it.name.contains("sub", ignoreCase = true) || it.name.contains("srt", ignoreCase = true)) }
+        val allSubs = directSubs.toMutableList()
+
+        for (sFolder in subFolders) {
+            val sEntries = fetchDirectoryListingCached(sFolder.fullUrl)
+            allSubs.addAll(sEntries.filter { isSubtitleFile(it.fullUrl) })
+        }
+
+        val targetSubs = if (!mediaTitle.isNullOrBlank() && allSubs.size > 1) {
+            val titleLower = mediaTitle.lowercase()
+            val epTag = extractEpisodeTag(mediaTitle)
+            val matched = allSubs.filter { sub ->
+                val subLower = sub.name.lowercase()
+                subLower.contains(titleLower) || (epTag != null && subLower.contains(epTag))
+            }
+            if (matched.isNotEmpty()) matched else allSubs
+        } else {
+            allSubs
+        }
+
+        for (sub in targetSubs) {
+            val lang = cleanSubtitleName(sub.name)
+            subtitleCallback.invoke(
+                SubtitleFile(
+                    lang = lang,
+                    url = sub.fullUrl
+                )
+            )
+        }
+    }
+
+    private fun cleanSubtitleName(name: String): String {
+        val lower = name.lowercase()
+        return when {
+            lower.contains("bangla") || lower.contains("bengali") || lower.contains(".bn.") -> "Bangla"
+            lower.contains("hindi") || lower.contains(".hi.") -> "Hindi"
+            lower.contains("english") || lower.contains(".en.") -> "English"
+            else -> cleanTitle(name).ifBlank { "Subtitle" }
+        }
+    }
+
+    private fun extractEpisodeTag(name: String): String? {
+        val match = Regex("""(s\d+e\d+|e\d+|episode\s*\d+)""", RegexOption.IGNORE_CASE).find(name)
+        return match?.value?.lowercase()
     }
 
     override suspend fun loadLinks(
@@ -479,16 +607,22 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     ): Boolean {
         if (isMediaFile(data)) {
             val quality = getQualityFromName(data)
+            val cleanName = cleanTitle(data)
             callback.invoke(
                 newExtractorLink(
-                    this.name,
-                    this.name,
-                    data,
-                    type = ExtractorLinkType.VIDEO
+                    source = this.name,
+                    name = cleanName.ifBlank { this.name },
+                    url = data,
+                    type = if (data.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
                     this.quality = quality
                 }
             )
+
+            // Discover subtitles in parent directory
+            val parentFolder = data.substringBeforeLast('/') + "/"
+            val folderEntries = fetchDirectoryListingCached(parentFolder)
+            emitSubtitles(folderEntries, cleanName, subtitleCallback)
             return true
         }
 
@@ -497,17 +631,21 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
         for (file in mediaFiles) {
             val quality = getQualityFromName(file.name)
+            val cleanName = cleanTitle(file.name)
             callback.invoke(
                 newExtractorLink(
-                    this.name,
-                    file.name,
-                    file.fullUrl,
-                    type = ExtractorLinkType.VIDEO
+                    source = this.name,
+                    name = "${this.name} - $cleanName",
+                    url = file.fullUrl,
+                    type = if (file.fullUrl.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
                     this.quality = quality
                 }
             )
         }
+
+        // Discover subtitles in directory
+        emitSubtitles(entries, null, subtitleCallback)
 
         return mediaFiles.isNotEmpty()
     }
@@ -515,7 +653,13 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     private fun isMediaFile(url: String): Boolean {
         val lower = url.lowercase()
         return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".avi") ||
-               lower.endsWith(".m4v") || lower.endsWith(".webm") || lower.endsWith(".flv")
+               lower.endsWith(".m4v") || lower.endsWith(".webm") || lower.endsWith(".flv") ||
+               lower.endsWith(".ts") || lower.endsWith(".m3u8")
+    }
+
+    private fun isSubtitleFile(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.endsWith(".srt") || lower.endsWith(".vtt") || lower.endsWith(".sub")
     }
 
     private fun isImageFile(url: String): Boolean {
@@ -524,13 +668,14 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     }
 
     private fun getQualityFromName(name: String): Int {
+        val lower = name.lowercase()
         return when {
-            name.contains("2160p", true) || name.contains("4k", true) -> 2160
-            name.contains("1080p", true) -> 1080
-            name.contains("720p", true) -> 720
-            name.contains("480p", true) -> 480
-            name.contains("360p", true) -> 360
-            else -> 1080
+            lower.contains("2160p") || lower.contains("4k") || lower.contains("uhd") -> Qualities.P2160.value
+            lower.contains("1080p") || lower.contains("fhd") -> Qualities.P1080.value
+            lower.contains("720p") || lower.contains("hd") -> Qualities.P720.value
+            lower.contains("480p") || lower.contains("sd") -> Qualities.P480.value
+            lower.contains("360p") -> Qualities.P360.value
+            else -> Qualities.P1080.value
         }
     }
 
