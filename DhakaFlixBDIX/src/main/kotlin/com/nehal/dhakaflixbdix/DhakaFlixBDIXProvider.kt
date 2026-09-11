@@ -287,13 +287,20 @@ open class DhakaFlixBDIXProvider : MainAPI() {
 
     private suspend fun fetchDirectoryListing(url: String): List<DirectoryEntry> {
         return try {
-            val responseHtml = getSemaphoreForHost(url).withPermit {
-                app.get(url, timeout = 25, cacheTime = 60).text
+            val safeUrl = url.replace(" ", "%20")
+            val responseHtml = getSemaphoreForHost(safeUrl).withPermit {
+                app.get(safeUrl, timeout = 25, cacheTime = 60).text
             }
             val doc = Jsoup.parse(responseHtml)
-            val baseUri = URI(url)
             val entries = mutableListOf<DirectoryEntry>()
             val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+
+            val origin = if (safeUrl.contains("://")) {
+                val scheme = safeUrl.substringBefore("://")
+                val rest = safeUrl.substringAfter("://")
+                val host = rest.substringBefore("/")
+                "$scheme://$host"
+            } else ""
 
             val trs = doc.select("tr")
             if (trs.isNotEmpty()) {
@@ -307,7 +314,14 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                     if (cleanedName.isBlank()) return@forEach
 
                     val isDir = href.endsWith("/")
-                    val fullUrl = baseUri.resolve(href).toString()
+                    val fullUrl = if (href.startsWith("http://") || href.startsWith("https://")) {
+                        href.replace(" ", "%20")
+                    } else if (href.startsWith("/")) {
+                        (origin + href).replace(" ", "%20")
+                    } else {
+                        val baseFolder = if (safeUrl.endsWith("/")) safeUrl else safeUrl.substringBeforeLast('/') + "/"
+                        (baseFolder + href).replace(" ", "%20")
+                    }
 
                     var modifiedMs = 0L
                     tr.select("td").forEach { td ->
@@ -333,13 +347,21 @@ open class DhakaFlixBDIXProvider : MainAPI() {
                     if (cleanedName.isBlank()) return@forEach
 
                     val isDir = href.endsWith("/")
-                    val fullUrl = baseUri.resolve(href).toString()
+                    val fullUrl = if (href.startsWith("http://") || href.startsWith("https://")) {
+                        href.replace(" ", "%20")
+                    } else if (href.startsWith("/")) {
+                        (origin + href).replace(" ", "%20")
+                    } else {
+                        val baseFolder = if (safeUrl.endsWith("/")) safeUrl else safeUrl.substringBeforeLast('/') + "/"
+                        (baseFolder + href).replace(" ", "%20")
+                    }
                     entries.add(DirectoryEntry(cleanedName, href, fullUrl, isDir, 0L))
                 }
             }
 
             entries
         } catch (e: Exception) {
+            println("[DhakaFlixBDIX] Error fetching directory $url: ${e.message}")
             emptyList()
         }
     }
@@ -605,29 +627,32 @@ open class DhakaFlixBDIXProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        if (isMediaFile(data)) {
-            val quality = getQualityFromName(data)
-            val cleanName = cleanTitle(data)
+        val safeData = data.replace(" ", "%20")
+        println("[DhakaFlixBDIX] loadLinks called with: $safeData")
+        if (isMediaFile(safeData)) {
+            val quality = getQualityFromName(safeData)
+            val cleanName = cleanTitle(safeData)
             callback.invoke(
                 newExtractorLink(
                     source = this.name,
                     name = cleanName.ifBlank { this.name },
-                    url = data,
-                    type = if (data.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    url = safeData,
+                    type = if (safeData.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
                     this.quality = quality
                 }
             )
 
             // Discover subtitles in parent directory
-            val parentFolder = data.substringBeforeLast('/') + "/"
+            val parentFolder = safeData.substringBeforeLast('/') + "/"
             val folderEntries = fetchDirectoryListingCached(parentFolder)
             emitSubtitles(folderEntries, cleanName, subtitleCallback)
             return true
         }
 
-        val entries = fetchDirectoryListingCached(data)
+        val entries = fetchDirectoryListingCached(safeData)
         val mediaFiles = entries.filter { isMediaFile(it.fullUrl) }
+        println("[DhakaFlixBDIX] Found ${mediaFiles.size} media files in directory")
 
         for (file in mediaFiles) {
             val quality = getQualityFromName(file.name)
