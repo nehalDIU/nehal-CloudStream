@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="icon.png" width="160" height="160" alt="Nehal's CloudStream Repository Mascot" />
+<img src="icon.webp" width="160" height="160" alt="Nehal's CloudStream Repository Mascot" />
 
 # 🎬 Nehal's Server — CloudStream Repository
 

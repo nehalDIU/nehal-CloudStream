@@ -2,7 +2,7 @@
   "name": "Nehal's Server",
   "description": "High-speed domestic BDIX gigabit FTPs, CineplexBD, Live TV, MovieBox, VegaMovies, Anime, and global streaming extensions for CloudStream.",
   "manifestVersion": 1,
-  "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/icon.png",
+  "iconUrl": "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/icon.webp",
   "shortcode": "nehal",
   "shortcodes": [
     "nehal",
