@@ -19,6 +19,6 @@ cloudstream {
         "TvSeries"
     )
     language = "bn"
-    iconUrl = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/JellyfinBD/icon.png"
+    iconUrl = "https://pub-66c415049e354d59968472f8a48aff3d.r2.dev/icon%20(2).png"
 }
 
