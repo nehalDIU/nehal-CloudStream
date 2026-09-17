@@ -24,6 +24,7 @@ import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
 import org.jsoup.nodes.Element
 
 open class CineplexBDProvider : MainAPI() {
@@ -172,8 +173,8 @@ open class CineplexBDProvider : MainAPI() {
                 if (rating == null) rating = metaResponse.rating
                 
                 metaResponse.episodes?.values?.forEach { ep ->
-                    val epPath = ep.path
-                    val epData = "$mainUrl/watch.php?id=$id&season=$seasonNum&ep=${ep.episode_number}"
+                    val epStream = ep.path?.takeIf { it.isNotBlank() }
+                    val epData = epStream ?: "$mainUrl/watch.php?id=$id&season=$seasonNum&ep=${ep.episode_number}"
                     episodes.add(
                         newEpisode(epData) {
                             this.name = ep.title?.substringBefore(".mp4")?.substringBefore(".mkv")?.trim()
@@ -210,13 +211,23 @@ open class CineplexBDProvider : MainAPI() {
         val fullUrl = fixUrl(data)
         if (fullUrl.contains(".mp4") || fullUrl.contains(".mkv") || fullUrl.contains(".m3u8")) {
             val type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+            val quality = when {
+                fullUrl.contains("4k", ignoreCase = true) || fullUrl.contains("2160p", ignoreCase = true) -> Qualities.P2160.value
+                fullUrl.contains("1080p", ignoreCase = true) || fullUrl.contains("fhd", ignoreCase = true) -> Qualities.P1080.value
+                fullUrl.contains("720p", ignoreCase = true) || fullUrl.contains("hd", ignoreCase = true) -> Qualities.P720.value
+                fullUrl.contains("480p", ignoreCase = true) -> Qualities.P480.value
+                fullUrl.contains("360p", ignoreCase = true) -> Qualities.P360.value
+                else -> Qualities.Unknown.value
+            }
             callback.invoke(
                 newExtractorLink(
                     name = "Direct Stream",
                     source = this.name,
                     url = fullUrl,
                     type = type
-                )
+                ) {
+                    this.quality = quality
+                }
             )
             return true
         }
@@ -227,8 +238,15 @@ open class CineplexBDProvider : MainAPI() {
             var found = false
             
             try {
+                // If it's a view.php link, resolve directly to player.php?id=$movieId
+                val targetUrl = if (fullUrl.contains("view.php") && !fullUrl.contains("player.php") && movieId != null) {
+                    "$mainUrl/player.php?id=$movieId"
+                } else {
+                    fullUrl
+                }
+
                 // Fetch the page to get the script tags containing videoSrc and extract cookies for the HLS stream
-                val response = app.get(fullUrl)
+                val response = app.get(targetUrl)
                 val doc = response.document
                 val cookies = response.cookies
                 
@@ -243,34 +261,45 @@ open class CineplexBDProvider : MainAPI() {
                     }
                 }
                 
-                // Extract videoSrc from JavaScript variables in script tags
+                // Extract videoSrc from JavaScript variables in script tags (handles const, let, var, or bare assignment)
                 var videoSrc: String? = null
                 doc.select("script").forEach { script ->
                     val html = script.html()
-                    val matcher = Regex("var\\s+videoSrc\\s*=\\s*['\"]([^'\"]+)['\"]").find(html)
+                    val matcher = Regex("""(?:var|let|const)?\s*videoSrc\s*=\s*['"]([^'"]+)['"]""").find(html)
                     if (matcher != null) {
                         videoSrc = matcher.groupValues[1]
                     }
                 }
 
-                // Fallback to checking iframe or direct video source in player HTML
+                // Fallback to checking video / source / iframe in player HTML
                 if (videoSrc.isNullOrBlank()) {
                     videoSrc = doc.selectFirst("video source")?.attr("src")
+                        ?: doc.selectFirst("video[src]")?.attr("src")
                         ?: doc.selectFirst("video")?.attr("src")
                         ?: doc.selectFirst("iframe")?.attr("src")
                 }
 
                 val finalVideoSrc = videoSrc
-                if (!finalVideoSrc.isNullOrBlank() && (finalVideoSrc.contains(".m3u8") || finalVideoSrc.contains(".mp4"))) {
+                if (!finalVideoSrc.isNullOrBlank() && (finalVideoSrc.contains(".m3u8") || finalVideoSrc.contains(".mp4") || finalVideoSrc.contains(".mkv"))) {
                     val fixedVideoUrl = fixUrl(finalVideoSrc)
                     val type = if (fixedVideoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     
+                    val quality = when {
+                        fixedVideoUrl.contains("4k", ignoreCase = true) || fixedVideoUrl.contains("2160p", ignoreCase = true) -> Qualities.P2160.value
+                        fixedVideoUrl.contains("1080p", ignoreCase = true) || fixedVideoUrl.contains("fhd", ignoreCase = true) -> Qualities.P1080.value
+                        fixedVideoUrl.contains("720p", ignoreCase = true) || fixedVideoUrl.contains("hd", ignoreCase = true) -> Qualities.P720.value
+                        fixedVideoUrl.contains("480p", ignoreCase = true) -> Qualities.P480.value
+                        fixedVideoUrl.contains("360p", ignoreCase = true) -> Qualities.P360.value
+                        else -> Qualities.Unknown.value
+                    }
+
                     // Create headers map with required Referer and Cookie
                     val cookieString = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                    val headers = mapOf(
-                        "Referer" to fullUrl,
-                        "Cookie" to cookieString
-                    )
+                    val headers = mutableMapOf<String, String>()
+                    headers["Referer"] = targetUrl
+                    if (cookieString.isNotBlank()) {
+                        headers["Cookie"] = cookieString
+                    }
                     
                     callback.invoke(
                         newExtractorLink(
@@ -280,7 +309,8 @@ open class CineplexBDProvider : MainAPI() {
                             type = type
                         ) {
                             this.headers = headers
-                            this.referer = fullUrl
+                            this.referer = targetUrl
+                            this.quality = quality
                         }
                     )
                     found = true
