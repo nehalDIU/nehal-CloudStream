@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withPermit
 import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLDecoder
+import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -100,6 +101,40 @@ open class FTPBDProvider : MainAPI() {
     private val keyLocks = ConcurrentHashMap<String, Mutex>()
     private val hostSemaphores = ConcurrentHashMap<String, Semaphore>()
     private val posterCache = ConcurrentHashMap<String, String?>()
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private data class TmdbSearchResponse(
+        val results: List<TmdbItem>? = null
+    )
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private data class TmdbItem(
+        val title: String? = null,
+        val name: String? = null,
+        val poster_path: String? = null,
+        val backdrop_path: String? = null,
+        val overview: String? = null,
+        val vote_average: Double? = null,
+        val release_date: String? = null,
+        val first_air_date: String? = null
+    )
+
+    private data class TmdbMetadata(
+        val posterUrl: String? = null,
+        val backgroundUrl: String? = null,
+        val plot: String? = null,
+        val rating: Double? = null,
+        val year: Int? = null
+    )
+
+    private data class TmdbQuery(
+        val title: String,
+        val year: Int?
+    )
+
+    private val tmdbApiKey = "1865f43a0549ca50d341dd9ab8b29f49"
+    private val tmdbSemaphore = Semaphore(8)
+    private val tmdbCache = ConcurrentHashMap<String, TmdbMetadata?>()
 
     private fun getSemaphoreForHost(host: String): Semaphore {
         val cleanHost = try { URI(host).host ?: host } catch (_: Exception) { host }
@@ -305,16 +340,20 @@ open class FTPBDProvider : MainAPI() {
             fetchDirectSeries(cat.host, cat.path, page, pageSize)
         }
 
-        val responses = items.mapNotNull { item ->
-            val rawName = decodeName(item.href)
-            val title = cleanTitle(rawName)
-            if (title.isBlank()) return@mapNotNull null
+        val responses = coroutineScope {
+            items.map { item ->
+                async {
+                    val rawName = decodeName(item.href)
+                    val title = cleanTitle(rawName)
+                    if (title.isBlank()) return@async null
 
-            val fullItemUrl = absoluteUrl(cat.host, item.href)
-            val posterUrl = guessPosterUrl(cat.host, item.href)
-            val formattedTitle = formatCardTitle(title, cat.name, item.href)
+                    val fullItemUrl = absoluteUrl(cat.host, item.href)
+                    val posterUrl = resolvePosterUrl(cat.host, item.href, title, cat.type)
+                    val formattedTitle = formatCardTitle(title, cat.name, item.href)
 
-            buildSearchResponse(formattedTitle, fullItemUrl, cat.type, posterUrl, title, item.href, cat.name)
+                    buildSearchResponse(formattedTitle, fullItemUrl, cat.type, posterUrl, title, item.href, cat.name)
+                }
+            }.awaitAll().filterNotNull()
         }
 
         return newHomePageResponse(request.name, responses, hasNext = hasNext)
@@ -355,27 +394,39 @@ open class FTPBDProvider : MainAPI() {
                             async { fetchDirectChildren(cat.host, yf.href).filter { it.isFolder } }
                         }
                         val items = movieDeferreds.awaitAll().flatten()
-                        items.filter { item ->
+                        val matched = items.filter { item ->
                             val name = cleanTitle(decodeName(item.href)).lowercase()
                             (queryLower.isBlank() || name.contains(queryLower)) &&
                                     (queryYear == null || name.contains(queryYear.toString()) || item.href.contains(queryYear.toString()))
-                        }.map { item ->
-                            val title = cleanTitle(decodeName(item.href))
-                            val fullUrl = absoluteUrl(cat.host, item.href)
-                            val posterUrl = guessPosterUrl(cat.host, item.href)
-                            buildSearchResponse(title, fullUrl, cat.type, posterUrl, title, item.href, cat.name)
+                        }.take(20)
+
+                        coroutineScope {
+                            matched.map { item ->
+                                async {
+                                    val title = cleanTitle(decodeName(item.href))
+                                    val fullUrl = absoluteUrl(cat.host, item.href)
+                                    val posterUrl = resolvePosterUrl(cat.host, item.href, title, cat.type)
+                                    buildSearchResponse(title, fullUrl, cat.type, posterUrl, title, item.href, cat.name)
+                                }
+                            }.awaitAll()
                         }
                     } else {
                         val items = fetchDirectChildren(cat.host, cat.path).filter { it.isFolder }
-                        items.filter { item ->
+                        val matched = items.filter { item ->
                             val name = cleanTitle(decodeName(item.href)).lowercase()
                             (queryLower.isBlank() || name.contains(queryLower)) &&
                                     (queryYear == null || name.contains(queryYear.toString()) || item.href.contains(queryYear.toString()))
-                        }.take(20).map { item ->
-                            val title = cleanTitle(decodeName(item.href))
-                            val fullUrl = absoluteUrl(cat.host, item.href)
-                            val posterUrl = guessPosterUrl(cat.host, item.href)
-                            buildSearchResponse(title, fullUrl, cat.type, posterUrl, title, item.href, cat.name)
+                        }.take(20)
+
+                        coroutineScope {
+                            matched.map { item ->
+                                async {
+                                    val title = cleanTitle(decodeName(item.href))
+                                    val fullUrl = absoluteUrl(cat.host, item.href)
+                                    val posterUrl = resolvePosterUrl(cat.host, item.href, title, cat.type)
+                                    buildSearchResponse(title, fullUrl, cat.type, posterUrl, title, item.href, cat.name)
+                                }
+                            }.awaitAll()
                         }
                     }
                 } catch (_: Exception) {
@@ -401,25 +452,48 @@ open class FTPBDProvider : MainAPI() {
         if (isVideoFile(url)) {
             val parentFolder = url.substringBeforeLast('/') + "/"
             val folderItems = fetchDirectChildren(host, pathFromUrl(parentFolder))
-            val posterUrl = pickPoster(host, folderItems)
-            rememberPoster(host, pathFromUrl(parentFolder), posterUrl)
+            val localPoster = pickPoster(host, folderItems)
+
+            val tmdbQuery = parseTitleAndYearForTmdb(url)
+            val searchTitle = if (tmdbQuery.title.isNotBlank()) tmdbQuery.title else decodedTitle
+            val searchYear = tmdbQuery.year ?: extractedYear
+            val tmdbMeta = fetchTmdbMetadata(searchTitle, searchYear, false)
+
+            val finalPoster = tmdbMeta?.posterUrl ?: localPoster
+            val finalBackdrop = tmdbMeta?.backgroundUrl ?: finalPoster
+            val finalPlot = tmdbMeta?.plot ?: "Server: $serverTag (FTPBD)"
+            val finalYear = tmdbMeta?.year ?: extractedYear
+
+            rememberPoster(host, pathFromUrl(parentFolder), finalPoster)
 
             return newMovieLoadResponse(decodedTitle, url, TvType.Movie, url) {
-                this.posterUrl = posterUrl
-                this.backgroundPosterUrl = posterUrl
+                this.posterUrl = finalPoster
+                this.backgroundPosterUrl = finalBackdrop
                 this.tags = tags
-                this.plot = "Server: $serverTag (FTPBD)"
-                if (extractedYear != null && extractedYear in 1900..2035) this.year = extractedYear
+                this.plot = finalPlot
+                if (finalYear != null && finalYear in 1900..2035) this.year = finalYear
             }
         }
 
         val folderPath = pathFromUrl(url)
         val entries = fetchDirectChildren(host, folderPath)
-        val posterUrl = pickPoster(host, entries)
-        rememberPoster(host, folderPath, posterUrl)
+        val localPoster = pickPoster(host, entries)
 
         val subDirs = entries.filter { it.isFolder }
         val videoFiles = entries.filter { isVideoFile(it.href) }
+        val isTv = subDirs.isNotEmpty() || videoFiles.size > 1
+
+        val tmdbQuery = parseTitleAndYearForTmdb(url)
+        val searchTitle = if (tmdbQuery.title.isNotBlank()) tmdbQuery.title else decodedTitle
+        val searchYear = tmdbQuery.year ?: extractedYear
+        val tmdbMeta = fetchTmdbMetadata(searchTitle, searchYear, isTv)
+
+        val finalPoster = tmdbMeta?.posterUrl ?: localPoster
+        val finalBackdrop = tmdbMeta?.backgroundUrl ?: finalPoster
+        val finalPlot = tmdbMeta?.plot ?: "Server: $serverTag (FTPBD)"
+        val finalYear = tmdbMeta?.year ?: extractedYear
+
+        rememberPoster(host, folderPath, finalPoster)
 
         if (subDirs.isNotEmpty()) {
             val episodes = mutableListOf<Episode>()
@@ -457,11 +531,11 @@ open class FTPBDProvider : MainAPI() {
             }
 
             return newTvSeriesLoadResponse(decodedTitle, url, TvType.TvSeries, episodes) {
-                this.posterUrl = posterUrl
-                this.backgroundPosterUrl = posterUrl
+                this.posterUrl = finalPoster
+                this.backgroundPosterUrl = finalBackdrop
                 this.tags = tags
-                this.plot = "Server: $serverTag (FTPBD)"
-                if (extractedYear != null && extractedYear in 1900..2035) this.year = extractedYear
+                this.plot = finalPlot
+                if (finalYear != null && finalYear in 1900..2035) this.year = finalYear
             }
         }
 
@@ -476,21 +550,21 @@ open class FTPBDProvider : MainAPI() {
                 }
             }
             return newTvSeriesLoadResponse(decodedTitle, url, TvType.TvSeries, episodes) {
-                this.posterUrl = posterUrl
-                this.backgroundPosterUrl = posterUrl
+                this.posterUrl = finalPoster
+                this.backgroundPosterUrl = finalBackdrop
                 this.tags = tags
-                this.plot = "Server: $serverTag (FTPBD)"
-                if (extractedYear != null && extractedYear in 1900..2035) this.year = extractedYear
+                this.plot = finalPlot
+                if (finalYear != null && finalYear in 1900..2035) this.year = finalYear
             }
         }
 
         val targetVideoUrl = videoFiles.firstOrNull()?.let { absoluteUrl(host, it.href) } ?: url
         return newMovieLoadResponse(decodedTitle, url, TvType.Movie, targetVideoUrl) {
-            this.posterUrl = posterUrl
-            this.backgroundPosterUrl = posterUrl
+            this.posterUrl = finalPoster
+            this.backgroundPosterUrl = finalBackdrop
             this.tags = tags
-            this.plot = "Server: $serverTag (FTPBD)"
-            if (extractedYear != null && extractedYear in 1900..2035) this.year = extractedYear
+            this.plot = finalPlot
+            if (finalYear != null && finalYear in 1900..2035) this.year = finalYear
         }
     }
 
@@ -707,6 +781,117 @@ open class FTPBDProvider : MainAPI() {
         if (posterUrl.isNullOrBlank()) return
         val cacheKey = "${host.trimEnd('/')}|${normalizePath(folderPath)}"
         posterCache[cacheKey] = posterUrl
+    }
+
+    private fun parseTitleAndYearForTmdb(rawPathOrHref: String): TmdbQuery {
+        val decoded = decodeName(rawPathOrHref)
+        val year = extractYear(decoded)
+        var clean = decoded
+            .replace(Regex("""\.(mp4|mkv|avi|m4v|webm|flv|ts|m3u8|srt|sub|vtt|txt)$""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""_reencoded$""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\[[^]]*]"""), " ")
+            .replace(Regex("""\((?:19\d{2}|20\d{2})\)"""), " ")
+            .replace(
+                Regex(
+                    """\b(2160p|1080p|720p|480p|360p|4k|uhd|fhd|hd|bluray|bdrip|webrip|web-dl|webdl|dvdrip|hdrip|hdtv|x264|x265|hevc|10bit|aac|dts|yify|dual\s*audio|multi\s*audio|dubbed|subbed|hindi|english|bengali|bangla|complete)\b""",
+                    RegexOption.IGNORE_CASE
+                ),
+                " "
+            )
+
+        if (year != null) {
+            clean = clean.replace(Regex("""\b$year\b"""), " ")
+        }
+
+        clean = clean.replace(Regex("""\b(?:season|s)\s*[-_]?\s*\d+\b""", RegexOption.IGNORE_CASE), " ")
+        clean = clean.replace(Regex("""\b(?:episode|ep|e)\s*[-_]?\s*\d+\b""", RegexOption.IGNORE_CASE), " ")
+        clean = clean.replace(Regex("""[._\-\+–—/()]"""), " ")
+        clean = clean.replace(Regex("""\s+"""), " ").trim()
+        return TmdbQuery(clean, year)
+    }
+
+    private suspend fun fetchTmdbMetadata(title: String, year: Int?, isTv: Boolean): TmdbMetadata? {
+        if (title.isBlank()) return null
+        val cacheKey = "${title.lowercase()}|$year|$isTv"
+        if (tmdbCache.containsKey(cacheKey)) {
+            return tmdbCache[cacheKey]
+        }
+
+        return tmdbSemaphore.withPermit {
+            if (tmdbCache.containsKey(cacheKey)) {
+                return@withPermit tmdbCache[cacheKey]
+            }
+
+            try {
+                val endpoint = if (isTv) "tv" else "movie"
+                val encodedTitle = URLEncoder.encode(title, StandardCharsets.UTF_8.name())
+                val yearParam = if (year != null) {
+                    if (isTv) "&first_air_date_year=$year" else "&year=$year"
+                } else ""
+                val url = "https://api.themoviedb.org/3/search/$endpoint?api_key=$tmdbApiKey&query=$encodedTitle$yearParam"
+
+                val response = app.get(url, timeout = 5).text
+                var results = if (response.startsWith("{")) {
+                    mapper.readValue<TmdbSearchResponse>(response).results
+                } else null
+
+                var first = results?.firstOrNull()
+
+                if (first == null && year != null) {
+                    val fallbackUrl = "https://api.themoviedb.org/3/search/$endpoint?api_key=$tmdbApiKey&query=$encodedTitle"
+                    val fbResponse = app.get(fallbackUrl, timeout = 5).text
+                    if (fbResponse.startsWith("{")) {
+                        first = mapper.readValue<TmdbSearchResponse>(fbResponse).results?.firstOrNull()
+                    }
+                }
+
+                val meta = if (first != null) {
+                    val posterPath = first.poster_path
+                    val backdropPath = first.backdrop_path
+                    val overview = first.overview
+                    val voteAvg = first.vote_average
+                    val releaseDate = if (isTv) first.first_air_date else first.release_date
+                    val parsedYear = releaseDate?.take(4)?.toIntOrNull() ?: year
+
+                    TmdbMetadata(
+                        posterUrl = if (!posterPath.isNullOrBlank()) "https://image.tmdb.org/t/p/w500$posterPath" else null,
+                        backgroundUrl = if (!backdropPath.isNullOrBlank()) "https://image.tmdb.org/t/p/original$backdropPath" else null,
+                        plot = if (!overview.isNullOrBlank()) overview else null,
+                        rating = if (voteAvg != null && voteAvg > 0.0) voteAvg else null,
+                        year = parsedYear
+                    )
+                } else {
+                    null
+                }
+
+                tmdbCache[cacheKey] = meta
+                meta
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    private suspend fun resolvePosterUrl(
+        host: String,
+        folderHref: String,
+        title: String,
+        type: TvType
+    ): String? {
+        val folderPath = pathFromUrl(folderHref)
+        val localPoster = guessPosterUrl(host, folderPath)
+        if (!localPoster.isNullOrBlank()) return localPoster
+
+        val tmdbQuery = parseTitleAndYearForTmdb(folderHref)
+        val searchTitle = if (tmdbQuery.title.isNotBlank()) tmdbQuery.title else title
+        val isTv = type == TvType.TvSeries || type == TvType.Anime
+
+        val meta = fetchTmdbMetadata(searchTitle, tmdbQuery.year, isTv)
+        val poster = meta?.posterUrl
+        if (!poster.isNullOrBlank()) {
+            rememberPoster(host, folderPath, poster)
+        }
+        return poster
     }
 
     private fun getServerTagFromUrl(url: String): String {
