@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 1
+version = 2
 
 cloudstream {
     description = "FTPBD provider"
@@ -16,7 +16,8 @@ cloudstream {
 
     tvTypes = listOf(
         "Movie",
-        "TvSeries"
+        "TvSeries",
+        "Anime"
     )
     language = "bn"
 
