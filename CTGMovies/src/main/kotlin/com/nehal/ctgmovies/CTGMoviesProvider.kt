@@ -2,6 +2,8 @@ package com.nehal.ctgmovies
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.lagradost.cloudstream3.Actor
+import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageResponse
@@ -31,6 +33,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -47,18 +50,26 @@ class CTGMoviesProvider : MainAPI() {
         TvType.Others
     )
     override val hasMainPage = true
-    override val hasQuickSearch = false
+    override val hasQuickSearch = true
     override val hasDownloadSupport = true
 
     override val mainPage = mainPageOf(
         "" to "Featured",
+        "/movies" to "All Movies",
         "/movies?collection=6a0cf22a21249bf80a0464ff&collectionName=English%20Movies" to "English Movies",
         "/movies?collection=6a0c75de4d24c52d35da61fb&collectionName=Hindi%20Movies" to "Hindi Movies",
         "/movies?collection=6a0c75de4d24c52d35da61fa&collectionName=South%20Indian" to "South Indian Movies",
         "/movies?collection=6a0c75de4d24c52d35da61fc&collectionName=Asian" to "Asian Movies",
         "/movies?collection=6a0cf22a21249bf80a046500&collectionName=European" to "European Movies",
         "/tv" to "TV Shows",
-        "/anime" to "Anime"
+        "/anime" to "Anime",
+        "/genre/action" to "Action",
+        "/genre/animation" to "Animation",
+        "/genre/comedy" to "Comedy",
+        "/genre/crime" to "Crime",
+        "/genre/horror" to "Horror",
+        "/genre/science-fiction" to "Sci-Fi",
+        "/genre/thriller" to "Thriller"
     )
 
     private val mapper = jacksonObjectMapper().apply {
@@ -67,46 +78,75 @@ class CTGMoviesProvider : MainAPI() {
         configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true)
     }
 
+    private fun fixUrlNull(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        val trimmed = url.trim()
+        return when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            trimmed.startsWith("//") -> "https:$trimmed"
+            trimmed.startsWith("/") -> "$mainUrl$trimmed"
+            else -> "$mainUrl/$trimmed"
+        }
+    }
+
+    private fun extractPoster(element: Element): String? {
+        val img = element.selectFirst("img") ?: element.parent()?.selectFirst("img")
+        var poster = img?.attr("data-fallback")?.takeIf { it.isNotBlank() }
+            ?: img?.attr("data-src")?.takeIf { it.isNotBlank() }
+            ?: img?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: img?.attr("srcset")?.substringBefore(" ")?.takeIf { it.isNotBlank() }
+
+        if (poster != null && poster.contains("url=")) {
+            poster = poster.substringAfter("url=").substringBefore("&")
+            poster = try {
+                URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
+            } catch (_: Exception) {
+                poster
+            }
+        }
+        return fixUrlNull(poster)
+    }
+
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse? {
         val targetUrl = if (request.data.isEmpty()) {
-            if (page > 1) return null
-            mainUrl
+            if (page > 1) "$mainUrl/?page=$page" else mainUrl
         } else {
-            val pageParam = if (page > 1) "&page=$page" else ""
-            "$mainUrl${request.data}$pageParam"
+            val sep = if (request.data.contains("?")) "&" else "?"
+            if (page > 1) "$mainUrl${request.data}${sep}page=$page" else "$mainUrl${request.data}"
         }
 
-        val res = app.get(targetUrl).text
+        val res = app.get(targetUrl, cacheTime = 60, timeout = 30L).text
         val doc = Jsoup.parse(res)
 
         val items = mutableListOf<SearchResponse>()
         val seenUrls = mutableSetOf<String>()
 
         doc.select("a[href^=\"/movies/\"], a[href^=\"/tv/\"], a[href^=\"/anime/\"]").forEach { a ->
+            val cardText = a.text().trim()
+            if (cardText.equals("Watch Now", true) ||
+                cardText.equals("Details", true) ||
+                cardText.equals("Play", true) ||
+                cardText.startsWith("▶") ||
+                cardText.startsWith("ⓘ")
+            ) return@forEach
+
             val href = a.attr("href").trim()
             if (href.contains("/page-") || href.contains("/watch/")) return@forEach
             val cleanUrl = if (href.startsWith("http")) href else "$mainUrl$href"
             if (!seenUrls.add(cleanUrl)) return@forEach
 
-            val cardText = a.text().trim()
-            if (cardText == "Watch Now" || cardText == "Details" || cardText == "Play") return@forEach
-
             val isAnimeSection = request.data == "/anime" || cleanUrl.contains("/anime/")
             val isTv = cleanUrl.contains("/tv/")
-            val img = a.selectFirst("img")
-            var poster = img?.attr("src") ?: img?.attr("srcset") ?: ""
-            if (poster.contains("url=")) {
-                poster = poster.substringAfter("url=").substringBefore("&")
-                poster = URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
-            }
+            val poster = extractPoster(a)
 
             val yearMatch = Regex("""\b(19\d{2}|20\d{2})\b""").find(cardText)
             val yearVal = yearMatch?.value?.toIntOrNull()
             val qualityEnum = getSearchQuality(cardText)
 
+            val img = a.selectFirst("img") ?: a.parent()?.selectFirst("img")
             var rawTitle = img?.attr("alt")?.trim()?.takeIf { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
                 ?: a.attr("title")?.trim()?.takeIf { it.isNotBlank() }
                 ?: a.selectFirst("h1, h2, h3, h4, .title, .entry-title")?.text()?.trim()
@@ -125,67 +165,73 @@ class CTGMoviesProvider : MainAPI() {
                 else -> TvType.Movie
             }
 
-            if (tvType == TvType.Anime) {
-                items.add(newAnimeSearchResponse(finalTitle, cleanUrl, TvType.Anime) {
-                    this.posterUrl = poster.ifEmpty { null }
-                    if (yearVal != null) this.year = yearVal
-                    this.quality = qualityEnum
-                    this.addDubStatus(dubExist = true, subExist = true)
-                })
-            } else if (tvType == TvType.TvSeries) {
-                items.add(newTvSeriesSearchResponse(finalTitle, cleanUrl, TvType.TvSeries) {
-                    this.posterUrl = poster.ifEmpty { null }
-                    if (yearVal != null) this.year = yearVal
-                    this.quality = qualityEnum
-                })
-            } else {
-                items.add(newMovieSearchResponse(finalTitle, cleanUrl, TvType.Movie) {
-                    this.posterUrl = poster.ifEmpty { null }
-                    if (yearVal != null) this.year = yearVal
-                    this.quality = qualityEnum
-                })
+            when (tvType) {
+                TvType.Anime -> {
+                    items.add(newAnimeSearchResponse(finalTitle, cleanUrl, TvType.Anime) {
+                        this.posterUrl = poster
+                        if (yearVal != null) this.year = yearVal
+                        this.quality = qualityEnum
+                        this.addDubStatus(dubExist = true, subExist = true)
+                    })
+                }
+                TvType.TvSeries -> {
+                    items.add(newTvSeriesSearchResponse(finalTitle, cleanUrl, TvType.TvSeries) {
+                        this.posterUrl = poster
+                        if (yearVal != null) this.year = yearVal
+                        this.quality = qualityEnum
+                    })
+                }
+                else -> {
+                    items.add(newMovieSearchResponse(finalTitle, cleanUrl, TvType.Movie) {
+                        this.posterUrl = poster
+                        if (yearVal != null) this.year = yearVal
+                        this.quality = qualityEnum
+                    })
+                }
             }
         }
 
-        return newHomePageResponse(request.name, items, true)
+        val hasNext = doc.select("a[href*=\"page=\"]:matches((?i)next|›)").isNotEmpty() || items.size >= 20
+        return newHomePageResponse(request.name, items, hasNext)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/search?q=${URLEncoder.encode(query, StandardCharsets.UTF_8.name())}"
-        val res = app.get(searchUrl).text
+        val res = app.get(searchUrl, timeout = 30L).text
         val doc = Jsoup.parse(res)
 
         val results = mutableListOf<SearchResponse>()
         val seen = mutableSetOf<String>()
 
         doc.select("a[href^=\"/movies/\"], a[href^=\"/tv/\"], a[href^=\"/anime/\"]").forEach { a ->
+            val cardText = a.text().trim()
+            if (cardText.equals("Watch Now", true) ||
+                cardText.equals("Details", true) ||
+                cardText.equals("Play", true) ||
+                cardText.startsWith("▶") ||
+                cardText.startsWith("ⓘ")
+            ) return@forEach
+
             val href = a.attr("href").trim()
-            if (href.contains("/page-")) return@forEach
+            if (href.contains("/page-") || href.contains("/watch/")) return@forEach
             val fullUrl = if (href.startsWith("http")) href else "$mainUrl$href"
             if (!seen.add(fullUrl)) return@forEach
 
-            val cardText = a.text().trim()
-            if (cardText == "Watch Now" || cardText == "Details" || cardText == "Play") return@forEach
-
             val isTv = fullUrl.contains("/tv/")
             val isAnime = fullUrl.contains("/anime/")
-            val img = a.selectFirst("img")
-            var poster = img?.attr("src") ?: img?.attr("srcset") ?: ""
-            if (poster.contains("url=")) {
-                poster = poster.substringAfter("url=").substringBefore("&")
-                poster = URLDecoder.decode(poster, StandardCharsets.UTF_8.name())
-            }
+            val poster = extractPoster(a)
 
             val yearMatch = Regex("""\b(19\d{2}|20\d{2})\b""").find(cardText)
             val yearVal = yearMatch?.value?.toIntOrNull()
             val qualityEnum = getSearchQuality(cardText)
 
+            val img = a.selectFirst("img") ?: a.parent()?.selectFirst("img")
             var rawTitle = img?.attr("alt")?.trim()?.takeIf { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
                 ?: a.attr("title")?.trim()?.takeIf { it.isNotBlank() }
                 ?: a.selectFirst("h1, h2, h3, h4, .title, .entry-title")?.text()?.trim()
                 ?: href.substringAfterLast("/").replace("-", " ")
 
-            var finalTitle = rawTitle.replace(Regex("""\d{3,4}p\s+\w+"""), "").trim()
+            var finalTitle = rawTitle.replace(Regex("""^\d{3,4}p.*?\s"""), "").trim()
             finalTitle = finalTitle.replace(Regex("""\b(4K|2160p|1080p|720p|WEBRip|WebRip|HDTS|BluRay|WEB-DL)\b""", RegexOption.IGNORE_CASE), "").trim()
             finalTitle = finalTitle.replace(Regex("""\b(19\d{2}|20\d{2})\b$"""), "").trim()
             if (finalTitle.isEmpty() || finalTitle.contains(Regex("""(Drama|Action|Comedy|Crime|Mystery|Romance|Thriller|Horror|Sci-Fi),\s"""))) {
@@ -198,30 +244,36 @@ class CTGMoviesProvider : MainAPI() {
                 else -> TvType.Movie
             }
 
-            if (tvType == TvType.Anime) {
-                results.add(newAnimeSearchResponse(finalTitle, fullUrl, TvType.Anime) {
-                    this.posterUrl = poster.ifEmpty { null }
-                    if (yearVal != null) this.year = yearVal
-                    this.quality = qualityEnum
-                    this.addDubStatus(dubExist = true, subExist = true)
-                })
-            } else if (tvType == TvType.TvSeries) {
-                results.add(newTvSeriesSearchResponse(finalTitle, fullUrl, TvType.TvSeries) {
-                    this.posterUrl = poster.ifEmpty { null }
-                    if (yearVal != null) this.year = yearVal
-                    this.quality = qualityEnum
-                })
-            } else {
-                results.add(newMovieSearchResponse(finalTitle, fullUrl, TvType.Movie) {
-                    this.posterUrl = poster.ifEmpty { null }
-                    if (yearVal != null) this.year = yearVal
-                    this.quality = qualityEnum
-                })
+            when (tvType) {
+                TvType.Anime -> {
+                    results.add(newAnimeSearchResponse(finalTitle, fullUrl, TvType.Anime) {
+                        this.posterUrl = poster
+                        if (yearVal != null) this.year = yearVal
+                        this.quality = qualityEnum
+                        this.addDubStatus(dubExist = true, subExist = true)
+                    })
+                }
+                TvType.TvSeries -> {
+                    results.add(newTvSeriesSearchResponse(finalTitle, fullUrl, TvType.TvSeries) {
+                        this.posterUrl = poster
+                        if (yearVal != null) this.year = yearVal
+                        this.quality = qualityEnum
+                    })
+                }
+                else -> {
+                    results.add(newMovieSearchResponse(finalTitle, fullUrl, TvType.Movie) {
+                        this.posterUrl = poster
+                        if (yearVal != null) this.year = yearVal
+                        this.quality = qualityEnum
+                    })
+                }
             }
         }
 
         return results
     }
+
+    override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
         var targetUrl = url
@@ -230,7 +282,7 @@ class CTGMoviesProvider : MainAPI() {
             if (!seriesSlug.isNullOrEmpty()) {
                 targetUrl = "$mainUrl/tv/$seriesSlug"
             } else {
-                val watchRes = app.get(targetUrl).text
+                val watchRes = app.get(targetUrl, timeout = 30L).text
                 val docWatch = Jsoup.parse(watchRes)
                 val canonical = docWatch.selectFirst("a[href^=\"/tv/\"], a[href^=\"/anime/\"], a[href^=\"/movies/\"]")?.attr("href")
                 if (!canonical.isNullOrEmpty()) {
@@ -239,7 +291,7 @@ class CTGMoviesProvider : MainAPI() {
             }
         }
 
-        val html = app.get(targetUrl).text
+        val html = app.get(targetUrl, cacheTime = 60, timeout = 30L).text
         val doc = Jsoup.parse(html)
         val payload = decodeNextPayload(html)
 
@@ -248,36 +300,56 @@ class CTGMoviesProvider : MainAPI() {
             ?: targetUrl.substringAfterLast("/").replace("-", " ").capitalizeWords()
 
         var poster: String? = null
-        val posterMatch = Regex(""""(?:poster_path|poster_url)"\s*:\s*"([^"]+)"""").find(payload)
+        val posterMatch = Regex(""""(?:poster_path|poster_url|poster)"\s*:\s*"([^"]+)"""").find(payload)
         if (posterMatch != null) {
-            poster = posterMatch.groupValues[1]
-            if (poster.startsWith("/")) {
-                poster = "https://image.tmdb.org/t/p/w500$poster"
-            }
+            val p = posterMatch.groupValues[1].replace("\\/", "/")
+            poster = if (p.startsWith("/")) "https://image.tmdb.org/t/p/w500$p" else p
         }
         if (poster.isNullOrEmpty()) {
-            val img = doc.selectFirst("img[src*=\"tmdb.org\"]")
-            poster = img?.attr("src")
+            poster = doc.selectFirst("img[data-fallback*=\"tmdb.org\"]")?.attr("data-fallback")
+                ?: doc.selectFirst("img[data-fallback]")?.attr("data-fallback")
+                ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
+                ?: doc.selectFirst("meta[name=twitter:image]")?.attr("content")
+                ?: doc.selectFirst("img")?.attr("src")
         }
+        poster = fixUrlNull(poster)
 
         var backdrop: String? = null
-        val backdropMatch = Regex(""""(?:backdrop_path|backdrop_url)"\s*:\s*"([^"]+)"""").find(payload)
+        val backdropMatch = Regex(""""(?:backdrop_path|backdrop_url|backdrop)"\s*:\s*"([^"]+)"""").find(payload)
         if (backdropMatch != null) {
-            backdrop = backdropMatch.groupValues[1]
-            if (backdrop.startsWith("/")) {
-                backdrop = "https://image.tmdb.org/t/p/w1280$backdrop"
-            }
+            val b = backdropMatch.groupValues[1].replace("\\/", "/")
+            backdrop = if (b.startsWith("/")) "https://image.tmdb.org/t/p/w1280$b" else b
         }
+        if (backdrop.isNullOrEmpty()) {
+            backdrop = doc.selectFirst("img[data-fallback*=\"w1280\"]")?.attr("data-fallback")
+                ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
+        }
+        backdrop = fixUrlNull(backdrop)
 
         val overviewMatch = Regex(""""(?:overview)"\s*:\s*"([^"]+)"""").find(payload)
-        val plot = overviewMatch?.groupValues?.get(1) ?: doc.selectFirst("p")?.text()?.trim()
+        val plot = overviewMatch?.groupValues?.get(1)?.replace("\\\"", "\"")
+            ?: doc.selectFirst("meta[name=description]")?.attr("content")
+            ?: doc.selectFirst("p")?.text()?.trim()
 
-        val yearMatch = Regex(""""(?:release_date|first_air_date)"\s*:\s*"(\d{4})""").find(payload)
-            ?: Regex(""""(?:year)"\s*:\s*(\d{4})""").find(payload)
+        val yearMatch = Regex(""""(?:release_date|first_air_date)"\s*:\s*"(\d{4})"""").find(payload)
+            ?: Regex(""""(?:year)"\s*:\s*(\d{4})"""").find(payload)
         val year = yearMatch?.groupValues?.get(1)?.toIntOrNull()
 
-        val ratingMatch = Regex(""""(?:vote_average|rating)"\s*:\s*(\d+(?:\.\d+)?)""").find(payload)
+        val ratingMatch = Regex(""""(?:vote_average|rating)"\s*:\s*(\d+(?:\.\d+)?)"""").find(payload)
         val rating = ratingMatch?.groupValues?.get(1)?.toFloatOrNull()
+
+        val durationMatch = Regex(""""runtime"\s*:\s*(\d+)""").find(payload)
+        val duration = durationMatch?.groupValues?.get(1)?.toIntOrNull()
+
+        val actorsList = mutableListOf<ActorData>()
+        val castObjects = extractJsonArray(payload, "cast")
+        castObjects.forEach { castObj ->
+            val actorName = castObj["name"]?.toString()
+            val profileUrl = fixUrlNull(castObj["profile_url"]?.toString()?.replace("\\/", "/"))
+            if (!actorName.isNullOrBlank()) {
+                actorsList.add(ActorData(Actor(actorName, profileUrl)))
+            }
+        }
 
         val subtitleTracks = extractSubtitles(payload, html)
         val audioTracks = extractAudioUrls(payload, html)
@@ -294,7 +366,7 @@ class CTGMoviesProvider : MainAPI() {
                         val sNum = epObj["season_number"]?.toString()?.toIntOrNull() ?: 1
                         val epName = epObj["name"]?.toString() ?: "Episode $epNum"
                         val epOverview = epObj["overview"]?.toString()
-                        val stillUrl = epObj["still_url"]?.toString()
+                        val stillUrl = fixUrlNull(epObj["still_url"]?.toString()?.replace("\\/", "/"))
 
                         val p1 = Regex("""s0*${sNum}e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
                         val p2 = Regex("""[._\-\s/]e0*${epNum}(?!\d)""", RegexOption.IGNORE_CASE)
@@ -382,6 +454,8 @@ class CTGMoviesProvider : MainAPI() {
                     this.backgroundPosterUrl = backdrop
                     this.plot = plot
                     this.year = year
+                    this.duration = duration
+                    if (actorsList.isNotEmpty()) this.actors = actorsList
                     if (rating != null) {
                         this.score = Score.from10(rating)
                     }
@@ -398,6 +472,8 @@ class CTGMoviesProvider : MainAPI() {
                     this.backgroundPosterUrl = backdrop
                     this.plot = plot
                     this.year = year
+                    this.duration = duration
+                    if (actorsList.isNotEmpty()) this.actors = actorsList
                     if (rating != null) {
                         this.score = Score.from10(rating)
                     }
@@ -417,6 +493,8 @@ class CTGMoviesProvider : MainAPI() {
                 this.backgroundPosterUrl = backdrop
                 this.plot = plot
                 this.year = year
+                this.duration = duration
+                if (actorsList.isNotEmpty()) this.actors = actorsList
                 if (rating != null) {
                     this.score = Score.from10(rating)
                 }
@@ -516,7 +594,9 @@ class CTGMoviesProvider : MainAPI() {
             val uLower = u.lowercase()
             if (isAudioOrSubtitleUrl(uLower)) return@forEach
 
-            if (uLower.endsWith(".mp4") || uLower.endsWith(".mkv") || uLower.endsWith(".m3u8") || uLower.contains("ctgfun.com")) {
+            if (uLower.endsWith(".mp4") || uLower.endsWith(".mkv") || uLower.endsWith(".m3u8") ||
+                uLower.endsWith(".avi") || uLower.endsWith(".webm") ||
+                uLower.contains(".m3u8?") || uLower.contains(".mp4?") || uLower.contains(".mkv?")) {
                 if (uLower.contains("/.hls/") && !uLower.endsWith(".m3u8") && !uLower.endsWith(".mp4") && !uLower.endsWith(".mkv")) {
                     return@forEach
                 }
@@ -624,7 +704,11 @@ class CTGMoviesProvider : MainAPI() {
                 val unescaped = mapper.readValue<String>("\"$inner\"")
                 sb.append(unescaped)
             } catch (_: Exception) {
-                sb.append(inner)
+                val simpleUnescaped = inner
+                    .replace("\\\"", "\"")
+                    .replace("\\/", "/")
+                    .replace("\\\\", "\\")
+                sb.append(simpleUnescaped)
             }
         }
         return sb.toString()
