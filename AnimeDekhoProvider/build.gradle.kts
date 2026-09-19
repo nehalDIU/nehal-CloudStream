@@ -1,8 +1,8 @@
-version = 71
+version = 72
 
 cloudstream {
     language = "hi"
-    description = "AnimeDekho and HindiSubAnime Provider (Clean & Ad-Free)"
+    description = "AnimeDekho Provider (Clean & Ad-Free)"
     authors = listOf("Nehal")
     status = 1
     tvTypes = listOf(
@@ -10,5 +10,5 @@ cloudstream {
         "Anime",
         "Cartoon"
     )
-    iconUrl = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/builds/AnimeDekhoProvider/icon.png"
+    iconUrl = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/AnimeDekhoProvider/icon.png"
 }

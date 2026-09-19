@@ -1,11 +1,6 @@
 package com.nehal.animedekho
 
 import android.content.Context
-import com.lagradost.cloudstream3.extractors.FileMoon
-import com.lagradost.cloudstream3.extractors.FilemoonV2
-import com.lagradost.cloudstream3.extractors.Krakenfiles
-import com.lagradost.cloudstream3.extractors.StreamTape
-import com.lagradost.cloudstream3.extractors.Voe
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
@@ -13,8 +8,6 @@ import com.lagradost.cloudstream3.plugins.Plugin
 class AnimeDekhoPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(AnimeDekhoProvider())
-        registerMainAPI(HindiSubAnime())
-        registerMainAPI(OnepaceProvider())
         registerExtractorAPI(StreamRuby())
         registerExtractorAPI(Rubystm())
         registerExtractorAPI(Vidmolynet())
@@ -23,12 +16,7 @@ class AnimeDekhoPlugin : Plugin() {
         registerExtractorAPI(Techinmind())
         registerExtractorAPI(Cdnwish())
         registerExtractorAPI(Multimovies())
-        registerExtractorAPI(FileMoon())
         registerExtractorAPI(FileMoonNL())
-        registerExtractorAPI(Krakenfiles())
-        registerExtractorAPI(Voe())
-        registerExtractorAPI(StreamTape())
-        registerExtractorAPI(FilemoonV2())
         registerExtractorAPI(Animezia())
         registerExtractorAPI(Cloudy())
         registerExtractorAPI(vidcloudupns())
@@ -37,6 +25,7 @@ class AnimeDekhoPlugin : Plugin() {
         registerExtractorAPI(Blakiteapi())
         registerExtractorAPI(ascdn21())
         registerExtractorAPI(Abyass())
+        registerExtractorAPI(AWSStream())
     }
 }
 
