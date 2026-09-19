@@ -64,9 +64,9 @@ open class StreamTapeCustom : ExtractorApi() {
             val scripts = doc.select("script").map { it.html() }
 
             for (script in scripts) {
-                // Must match captchalink, norobotlink, or robotlink (and IGNORE decoy honeypots like ideoooolink)
-                if (script.contains("innerHTML") && (script.contains("captchalink") || script.contains("norobotlink") || script.contains("robotlink"))) {
-                    val match = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|robotlink)['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
+                // Must match captchalink, norobotlink, robotlink, botlink, or crypted (and IGNORE decoy honeypots like ideoooolink)
+                if (script.contains("innerHTML") && (script.contains("captchalink") || script.contains("norobotlink") || script.contains("robotlink") || script.contains("botlink") || script.contains("crypted"))) {
+                    val match = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|robotlink|botlink|crypted)['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"](?:\s*\+\s*['"][^'"]*['"])?\s*\+\s*\(['"]([^'"]+)['"]\)\.substring\((\d+)\)(?:\.substring\((\d+)\))?""").find(script)
                     if (match != null) {
                         val prefix = match.groupValues[1]
                         val rawStr = match.groupValues[2]
@@ -100,7 +100,7 @@ open class StreamTapeCustom : ExtractorApi() {
                     }
 
                     // Fallback to evaluating JS if pattern differs
-                    val jsMatch = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|robotlink)['"]\)\.innerHTML\s*=\s*(.*?);""").find(script)
+                    val jsMatch = Regex("""document\.getElementById\(['"](?:captchalink|norobotlink|robotlink|botlink|crypted)['"]\)\.innerHTML\s*=\s*(.*?);""").find(script)
                     if (jsMatch != null) {
                         val expr = jsMatch.groupValues[1]
                         val evaluated = evalJs("var url = $expr", "url")?.toString()
@@ -161,7 +161,7 @@ open class HubCloud : ExtractorApi() {
             if ("hubcloud.php" in realUrl) {
                 realUrl
             } else {
-                val doc = app.get(realUrl).document
+                val doc = app.get(realUrl, timeout = 20L).document
                 val raw = doc.selectFirst("#download")?.attr("href")
                     ?: doc.select("a[href]").firstOrNull { el ->
                         val h = el.attr("href")
@@ -181,7 +181,7 @@ open class HubCloud : ExtractorApi() {
 
         val targetHref = if (href.isNotBlank()) href else realUrl
         val document = try {
-            app.get(targetHref, referer = realUrl).document
+            app.get(targetHref, referer = realUrl, timeout = 20L).document
         } catch (e: Exception) {
             return
         }
@@ -195,7 +195,7 @@ open class HubCloud : ExtractorApi() {
             if (size.isNotBlank()) append(" [$size]")
         }
 
-        document.select("a.btn[href], a[href*=\"gpdl\"], a[href*=\"workers.dev\"], a[href*=\"fsl\"], a[href*=\"download\"]").forEach { element ->
+        document.select("a.btn[href], a[href*=\"gpdl\"], a[href*=\"workers.dev\"], a[href*=\"fsl\"], a[href*=\"download\"]").amap { element ->
             val link = element.attr("href")
             val text = element.text()
             val label = text.lowercase()
@@ -208,7 +208,11 @@ open class HubCloud : ExtractorApi() {
                             "$ref [FSL Server]$labelExtras",
                             fixMediaUrl(link, "mkv"),
                             ExtractorLinkType.VIDEO
-                        ) { this.quality = quality }
+                        ) {
+                            this.referer = targetHref
+                            this.headers = mapOf("Referer" to targetHref)
+                            this.quality = quality
+                        }
                     )
                 }
 
@@ -219,7 +223,11 @@ open class HubCloud : ExtractorApi() {
                             "$ref [10Gbps Fast]$labelExtras",
                             fixMediaUrl(link, "mkv"),
                             ExtractorLinkType.VIDEO
-                        ) { this.quality = quality }
+                        ) {
+                            this.referer = targetHref
+                            this.headers = mapOf("Referer" to targetHref)
+                            this.quality = quality
+                        }
                     )
                 }
 
@@ -230,13 +238,17 @@ open class HubCloud : ExtractorApi() {
                             "$ref [Direct Cloud]$labelExtras",
                             fixMediaUrl(link, "mkv"),
                             ExtractorLinkType.VIDEO
-                        ) { this.quality = quality }
+                        ) {
+                            this.referer = targetHref
+                            this.headers = mapOf("Referer" to targetHref)
+                            this.quality = quality
+                        }
                     )
                 }
 
                 "buzzserver" in label -> {
                     try {
-                        val resp = app.get("$link/download", referer = link, allowRedirects = false)
+                        val resp = app.get("$link/download", referer = link, allowRedirects = false, timeout = 15L)
                         val dlink = resp.headers["hx-redirect"]
                             ?: resp.headers["HX-Redirect"].orEmpty()
 
@@ -247,7 +259,11 @@ open class HubCloud : ExtractorApi() {
                                     "$ref [BuzzServer]$labelExtras",
                                     fixMediaUrl(dlink, "mkv"),
                                     ExtractorLinkType.VIDEO
-                                ) { this.quality = quality }
+                                ) {
+                                    this.referer = link
+                                    this.headers = mapOf("Referer" to link)
+                                    this.quality = quality
+                                }
                             )
                         }
                     } catch (_: Exception) {}
@@ -255,8 +271,9 @@ open class HubCloud : ExtractorApi() {
 
                 "pixeldra" in label || "pixelserver" in label || "pixel server" in label || "pixeldrain" in label || link.contains("pixeldrain") -> {
                     val base = getBaseUrl(link)
+                    val fileId = link.substringBefore("?").trimEnd('/').substringAfterLast("/")
                     val finalUrl = if (link.contains("download", true)) link
-                    else "$base/api/file/${link.substringAfterLast("/")}?download"
+                    else "$base/api/file/$fileId?download"
 
                     callback(
                         newExtractorLink(
@@ -269,7 +286,13 @@ open class HubCloud : ExtractorApi() {
                 }
 
                 "gofile" in label || link.contains("gofile") -> {
-                    loadExtractor(link, "", subtitleCallback, callback)
+                    loadExtractor(link, targetHref, subtitleCallback, callback)
+                }
+
+                else -> {
+                    if (link.isNotBlank() && link.startsWith("http")) {
+                        loadExtractor(link, targetHref, subtitleCallback, callback)
+                    }
                 }
             }
         }
@@ -277,8 +300,8 @@ open class HubCloud : ExtractorApi() {
 }
 
 open class GDFlix : ExtractorApi() {
-    override val name: String = "GDFlix"
-    override val mainUrl: String = "https://gdflix.io"
+    override val name = "GDFlix"
+    override val mainUrl = "https://gdflix.io"
     override val requiresReferer = false
 
     override suspend fun getUrl(
@@ -288,7 +311,7 @@ open class GDFlix : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         try {
-            val doc = app.get(url).document
+            val doc = app.get(url, referer = referer ?: mainUrl, timeout = 20L).document
             val header = doc.selectFirst("h5, .card-header, title")?.text().orEmpty()
             val size = doc.selectFirst("i#size, .file-size")?.text().orEmpty()
             val quality = getIndexQuality(header)
@@ -298,7 +321,7 @@ open class GDFlix : ExtractorApi() {
                 if (size.isNotBlank()) append(" [$size]")
             }
 
-            doc.select("a.btn[href], a[href*=\"drive.google.com\"], a[href*=\"pixeldrain\"], a[href*=\"download\"], a[href*=\"file\"]").forEach { a ->
+            doc.select("a.btn[href], a[href*=\"drive.google.com\"], a[href*=\"pixeldrain\"], a[href*=\"download\"], a[href*=\"file\"]").amap { a ->
                 val href = a.attr("href")
                 val text = a.text().lowercase()
 
@@ -311,13 +334,18 @@ open class GDFlix : ExtractorApi() {
                                     "GDFlix [Direct]$labelExtras",
                                     fixMediaUrl(href, "mkv"),
                                     ExtractorLinkType.VIDEO
-                                ) { this.quality = quality }
+                                ) {
+                                    this.referer = url
+                                    this.headers = mapOf("Referer" to url)
+                                    this.quality = quality
+                                }
                             )
                         }
                         "pixeldrain" in text || "pixeldra" in href -> {
                             val base = getBaseUrl(href)
+                            val fileId = href.substringBefore("?").trimEnd('/').substringAfterLast("/")
                             val finalUrl = if (href.contains("download", true)) href
-                            else "$base/api/file/${href.substringAfterLast("/")}?download"
+                            else "$base/api/file/$fileId?download"
 
                             callback(
                                 newExtractorLink(
@@ -329,7 +357,7 @@ open class GDFlix : ExtractorApi() {
                             )
                         }
                         else -> {
-                            loadExtractor(href, subtitleCallback, callback)
+                            loadExtractor(href, url, subtitleCallback, callback)
                         }
                     }
                 }

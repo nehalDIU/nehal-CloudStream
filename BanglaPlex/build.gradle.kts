@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "BanglaPlex Provider"
@@ -11,5 +11,6 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "https://banglaplex.lat/uploads/system_logo/favicon_61916a9838d38.png"
+    iconUrl = "https://banglaplex.biz/uploads/system_logo/favicon_61916a9838d38.png"
 }
+
