@@ -15,8 +15,12 @@ object MojaLossStorage {
     }
 
     fun saveCookie(cookie: String) {
+        val clean = cookie.trim()
+            .removePrefix("Cookie:")
+            .removePrefix("cookie:")
+            .trim()
         prefs?.edit()
-            ?.putString("session_cookie", cookie.trim())
+            ?.putString("session_cookie", clean)
             ?.putLong("cookie_timestamp", System.currentTimeMillis())
             ?.apply()
     }
@@ -31,6 +35,23 @@ object MojaLossStorage {
             ?.remove("session_cookie")
             ?.remove("cookie_timestamp")
             ?.apply()
+    }
+
+    suspend fun verifySession(cookie: String): Boolean {
+        if (cookie.isBlank()) return false
+        return try {
+            val response = app.get(
+                "https://www.mojaloss.stream/wp-json/wp/v2/users/me",
+                headers = mapOf(
+                    "Cookie" to cookie.trim(),
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                ),
+                timeout = 15L
+            )
+            response.code == 200
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun saveCredentials(user: String, pass: String) {
@@ -70,7 +91,8 @@ object MojaLossStorage {
                     "rememberme" to "forever",
                     "wp-submit" to "Sign in",
                     "testcookie" to "1"
-                )
+                ),
+                allowRedirects = false
             )
 
             val setCookieHeaders = response.headers.values("Set-Cookie")

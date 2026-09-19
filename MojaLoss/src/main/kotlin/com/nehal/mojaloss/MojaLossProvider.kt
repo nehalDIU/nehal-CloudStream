@@ -12,6 +12,7 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.nodes.Element
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -79,6 +80,31 @@ data class CastTrack(
     @JsonProperty("content_type") val contentType: String? = null,
     @JsonProperty("name") val name: String? = null,
     @JsonProperty("language") val language: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PlyrTvConfig(
+    @JsonProperty("baseUrl") val baseUrl: String? = null,
+    @JsonProperty("base_url") val base_url: String? = null,
+    @JsonProperty("showFolder") val showFolder: String? = null,
+    @JsonProperty("show_name") val showName: String? = null,
+    @JsonProperty("filenameBase") val filenameBase: String? = null,
+    @JsonProperty("filename_pattern") val filenamePattern: String? = null,
+    @JsonProperty("year") val year: String? = null,
+    @JsonProperty("includeYear") val includeYear: Boolean? = null,
+    @JsonProperty("mediaToken") val mediaToken: String? = null,
+    @JsonProperty("seasons") val seasons: List<PlyrSeason>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PlyrSeason(
+    @JsonProperty("num") val num: Int? = null,
+    @JsonProperty("folder") val folder: String? = null,
+    @JsonProperty("episodes") val episodes: Int? = null,
+    @JsonProperty("episode_files") val episodeFiles: Map<String, String>? = null,
+    @JsonProperty("dash_manifests") val dashManifests: Map<String, String>? = null,
+    @JsonProperty("subtitle_files") val subtitleFiles: Map<String, String>? = null,
+    @JsonProperty("has_subs") val hasSubs: Boolean? = null
 )
 
 class MojaLossProvider : MainAPI() {
@@ -391,6 +417,13 @@ class MojaLossProvider : MainAPI() {
         }
     }
 
+    private fun isMediaStream(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val clean = url.trim().lowercase().substringBefore("?").substringBefore("#")
+        return clean.endsWith(".mp4") || clean.endsWith(".mkv") || clean.endsWith(".m3u8") ||
+                clean.endsWith(".mpd") || clean.endsWith(".webm") || clean.endsWith(".ts")
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -404,13 +437,17 @@ class MojaLossProvider : MainAPI() {
         }
 
         val cookie = MojaLossStorage.getOrRefreshCookie()
+        if (cookie.isNullOrEmpty()) {
+            throw ErrorLoadingException(
+                "MojaLoss requires a session cookie to stream. Please open Plugin Settings and configure your MojaLoss Session Cookie."
+            )
+        }
+
         val headers = mutableMapOf(
             "Referer" to "$mainUrl/",
-            "User-Agent" to USER_AGENT
+            "User-Agent" to USER_AGENT,
+            "Cookie" to cookie
         )
-        if (!cookie.isNullOrEmpty()) {
-            headers["Cookie"] = cookie
-        }
 
         var foundLinks = false
         val postId = mediaData.postId
@@ -451,15 +488,26 @@ class MojaLossProvider : MainAPI() {
                     ).parsedSafe<CastResponse>()
 
                     val streamUrl = res?.mediaUrl
-                    if (!streamUrl.isNullOrEmpty()) {
-                        val is4k = q == "4k"
+                    if (!streamUrl.isNullOrEmpty() && (isMediaStream(streamUrl) || streamUrl.startsWith("http"))) {
                         val fullStreamUrl = fixUrl(streamUrl)
+                        val is4k = q == "4k" || fullStreamUrl.contains("4k", ignoreCase = true)
+                        val isM3u8 = fullStreamUrl.contains(".m3u8", ignoreCase = true) ||
+                                res.contentType?.contains("mpegurl", ignoreCase = true) == true
+                        val isMpd = fullStreamUrl.contains(".mpd", ignoreCase = true) ||
+                                res.contentType?.contains("dash", ignoreCase = true) == true
+
+                        val linkType = when {
+                            isM3u8 -> ExtractorLinkType.M3U8
+                            isMpd -> ExtractorLinkType.DASH
+                            else -> ExtractorLinkType.VIDEO
+                        }
+
                         callback(
                             newExtractorLink(
                                 name = this.name,
                                 source = if (is4k) "$name 4K" else "$name HD",
                                 url = fullStreamUrl,
-                                type = ExtractorLinkType.VIDEO
+                                type = linkType
                             ) {
                                 this.referer = "$mainUrl/"
                                 this.quality = if (is4k) Qualities.P2160.value else Qualities.P1080.value
@@ -486,26 +534,114 @@ class MojaLossProvider : MainAPI() {
             }
         }
 
-        // 2. Scrape page HTML for player element sources (<video data-default-src>, <video data-4k-src>)
+        // 2. Scrape page HTML for TV plyr config or video player sources
         if (mediaData.url.isNotEmpty()) {
             try {
                 val doc = app.get(mediaData.url, headers = headers, timeout = 30L).document
 
-                // Video player element
-                val videoEl = doc.selectFirst("#movie-video, video")
-                if (videoEl != null) {
+                // Check for Plyr TV script config
+                val configScript = doc.selectFirst("script#plyr-tv-scanned, script#plyr-config, script#plyr-tv-config")
+                val scriptData = configScript?.data() ?: configScript?.html()
+                if (!scriptData.isNullOrBlank()) {
+                    try {
+                        val plyrConfig = AppUtils.parseJson<PlyrTvConfig>(scriptData)
+                        val rawBaseUrl = plyrConfig.baseUrl ?: plyrConfig.base_url
+                        if (!rawBaseUrl.isNullOrBlank()) {
+                            var baseUrl = rawBaseUrl.trimEnd('/')
+                            var showFolder = plyrConfig.showFolder ?: plyrConfig.showName
+                            if (showFolder.isNullOrBlank()) {
+                                val parts = baseUrl.split('/')
+                                showFolder = URLDecoder.decode(parts.last(), "UTF-8")
+                                baseUrl = parts.dropLast(1).joinToString("/")
+                            }
+                            val seasonNum = mediaData.season ?: 1
+                            val epNum = mediaData.episode ?: 1
+                            val season = plyrConfig.seasons?.firstOrNull { it.num == seasonNum }
+
+                            val seasonNumPadded = String.format("%02d", seasonNum)
+                            val epNumPadded = String.format("%02d", epNum)
+                            val showFolderEncoded = URLEncoder.encode(showFolder, "UTF-8").replace("+", "%20")
+                            val seasonFolder = season?.folder?.let { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+                                ?: "Season%20$seasonNum"
+
+                            val actualFilename = season?.episodeFiles?.get(epNum.toString())
+                            val videoUrl = if (!actualFilename.isNullOrBlank()) {
+                                val encodedFile = URLEncoder.encode(actualFilename, "UTF-8").replace("+", "%20")
+                                "$baseUrl/$showFolderEncoded/$seasonFolder/$encodedFile"
+                            } else {
+                                var baseName = plyrConfig.filenameBase ?: showFolder.replace(Regex("\\s*\\(\\d{4}\\)\\s*$"), "").replace(" ", ".")
+                                if (plyrConfig.includeYear == true && !plyrConfig.year.isNullOrBlank()) {
+                                    baseName += ".${plyrConfig.year}"
+                                }
+                                "$baseUrl/$showFolderEncoded/$seasonFolder/$baseName.S${seasonNumPadded}E${epNumPadded}.mp4"
+                            }
+
+                            callback(
+                                newExtractorLink(
+                                    name = this.name,
+                                    source = "$name Episode",
+                                    url = videoUrl,
+                                    type = ExtractorLinkType.VIDEO
+                                ) {
+                                    this.referer = "$mainUrl/"
+                                    this.quality = Qualities.P1080.value
+                                    this.headers = headers
+                                }
+                            )
+                            foundLinks = true
+
+                            // DASH manifest if present
+                            val dashPath = season?.dashManifests?.get(epNum.toString())
+                            if (!dashPath.isNullOrBlank()) {
+                                val manifestUrl = "$baseUrl/$showFolderEncoded/$seasonFolder/" + dashPath.split("/").joinToString("/") {
+                                    URLEncoder.encode(it, "UTF-8").replace("+", "%20")
+                                }
+                                callback(
+                                    newExtractorLink(
+                                        name = this.name,
+                                        source = "$name DASH",
+                                        url = manifestUrl,
+                                        type = ExtractorLinkType.DASH
+                                    ) {
+                                        this.referer = "$mainUrl/"
+                                        this.quality = Qualities.P1080.value
+                                        this.headers = headers
+                                    }
+                                )
+                            }
+
+                            // Subtitles if present
+                            val subFile = season?.subtitleFiles?.get(epNum.toString())
+                            if (!subFile.isNullOrBlank()) {
+                                val subUrl = "$baseUrl/$showFolderEncoded/$seasonFolder/Subs/" + URLEncoder.encode(subFile, "UTF-8").replace("+", "%20")
+                                subtitleCallback(SubtitleFile("en", subUrl))
+                            } else if (season?.hasSubs == true) {
+                                val defaultSub = "$baseUrl/$showFolderEncoded/$seasonFolder/Subs/$showFolder.S${seasonNumPadded}E${epNumPadded}.vtt"
+                                subtitleCallback(SubtitleFile("en", defaultSub))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MojaLoss", "Error parsing Plyr config: ${e.message}")
+                    }
+                }
+
+                // Video player elements (#movie-video, #plyr-video, video)
+                val videoEls = doc.select("#movie-video, #plyr-video, video")
+                for (videoEl in videoEls) {
                     val defaultSrc = videoEl.attr("data-default-src").ifBlank { null }
                         ?: videoEl.attr("src").ifBlank { null }
                     val fourkSrc = videoEl.attr("data-4k-src").ifBlank { null }
 
-                    if (!defaultSrc.isNullOrEmpty()) {
+                    if (!defaultSrc.isNullOrEmpty() && isMediaStream(defaultSrc)) {
                         val fullUrl = fixUrl(defaultSrc)
+                        val isM3u8 = fullUrl.contains(".m3u8", ignoreCase = true)
+                        val isMpd = fullUrl.contains(".mpd", ignoreCase = true)
                         callback(
                             newExtractorLink(
                                 name = this.name,
                                 source = "$name 1080p",
                                 url = fullUrl,
-                                type = ExtractorLinkType.VIDEO
+                                type = if (isM3u8) ExtractorLinkType.M3U8 else if (isMpd) ExtractorLinkType.DASH else ExtractorLinkType.VIDEO
                             ) {
                                 this.referer = "$mainUrl/"
                                 this.quality = Qualities.P1080.value
@@ -515,7 +651,7 @@ class MojaLossProvider : MainAPI() {
                         foundLinks = true
                     }
 
-                    if (!fourkSrc.isNullOrEmpty()) {
+                    if (!fourkSrc.isNullOrEmpty() && isMediaStream(fourkSrc)) {
                         val fullUrl = fixUrl(fourkSrc)
                         callback(
                             newExtractorLink(
@@ -540,31 +676,34 @@ class MojaLossProvider : MainAPI() {
                     }
                 }
 
-                // Directlink anchors if available
-                doc.select("a[href*='directlink']").forEach { dl ->
-                    val dlHref = fixUrlNull(dl.attr("href")) ?: return@forEach
-                    callback(
-                        newExtractorLink(
-                            name = this.name,
-                            source = "$name Direct",
-                            url = dlHref,
-                            type = ExtractorLinkType.VIDEO
-                        ) {
-                            this.referer = "$mainUrl/"
-                            this.quality = Qualities.P1080.value
-                            this.headers = headers
-                        }
-                    )
-                    foundLinks = true
+                // Explicit media links ONLY (must end with media extensions, NEVER match navigation pages like /directlink/)
+                doc.select("a[href]").forEach { dl ->
+                    val dlHref = dl.attr("href")
+                    if (isMediaStream(dlHref)) {
+                        val fullUrl = fixUrl(dlHref)
+                        callback(
+                            newExtractorLink(
+                                name = this.name,
+                                source = "$name Media",
+                                url = fullUrl,
+                                type = if (fullUrl.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                            ) {
+                                this.referer = "$mainUrl/"
+                                this.quality = Qualities.P1080.value
+                                this.headers = headers
+                            }
+                        )
+                        foundLinks = true
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("MojaLoss", "Error scraping page for links: ${e.message}")
             }
         }
 
-        if (!foundLinks && cookie.isNullOrEmpty()) {
+        if (!foundLinks) {
             throw ErrorLoadingException(
-                "MojaLoss requires authentication to stream. Please open Plugin Settings and configure your MojaLoss account or Session Cookie."
+                "No stream link found. Your MojaLoss session cookie may have expired or this title requires an active subscription."
             )
         }
 
