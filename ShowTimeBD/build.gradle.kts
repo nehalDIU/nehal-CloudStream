@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 1
+version = 2
 
 cloudstream {
     // All of these properties are optional, you can safely remove them
@@ -22,5 +22,5 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "http://showtimebd.com/kachajal/images/show-time.png"
+    iconUrl = "http://10.100.100.10/kachajal/images/show-time.png"
 }
