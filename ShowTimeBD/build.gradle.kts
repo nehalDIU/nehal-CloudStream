@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 2
+version = 3
 
 cloudstream {
     // All of these properties are optional, you can safely remove them
@@ -22,5 +22,5 @@ cloudstream {
     )
     language = "bn"
 
-    iconUrl = "http://10.100.100.10/kachajal/images/show-time.png"
+    iconUrl = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/ShowTimeBD/icon.png"
 }
