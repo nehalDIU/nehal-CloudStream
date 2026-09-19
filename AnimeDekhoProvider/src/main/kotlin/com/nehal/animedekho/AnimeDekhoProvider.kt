@@ -68,10 +68,29 @@ open class AnimeDekhoProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val media = parseJson<Media>(url)
         val document = app.get(media.url).document
-        val title = document.selectFirst("h1.entry-title")?.text()?.trim()?.substringAfter("Watch Online ")
-            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.substringAfter("Watch Online ")?.substringBefore(" Movie in Hindi Dubbed Free")
+        val rawTitle = document.selectFirst("h1.entry-title, h1")?.text()?.trim()
+            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
+            ?: document.selectFirst("title")?.text()?.trim()
             ?: "No Title"
-        val poster = fixUrlNull(document.selectFirst("div.post-thumbnail figure img")?.attr("src") ?: media.poster)
+
+        val title = rawTitle
+            .substringBefore(" – Watch Online")
+            .substringBefore(" - Watch Online")
+            .substringBefore(" Watch Online")
+            .substringBefore(" | AnimeDekho")
+            .substringBefore(" Movie (Hindi Dubbed)")
+            .substringBefore(" (Hindi Dubbed)")
+            .substringBefore(" (Hindi")
+            .substringBefore(" Movie in Hindi Dubbed Free")
+            .substringAfter("Watch Online ")
+            .trim()
+            .ifBlank { rawTitle }
+
+        val poster = fixUrlNull(
+            document.selectFirst("div.post-thumbnail figure img")?.attr("src")
+                ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+                ?: media.poster
+        )
         val plot = document.selectFirst("div.entry-content p")?.text()?.trim()
             ?: document.selectFirst("meta[name=twitter:description]")?.attr("content")
         val year = (document.selectFirst("span.year")?.text()?.trim()
@@ -230,13 +249,14 @@ open class AnimeDekhoProvider : MainAPI() {
             Log.e("AnimeDekho", "Error loading direct server iframe: $e")
         }
 
+        val mediaType = media.mediaType ?: 2
         try {
             val bodyClass = app.get(media.url).document.selectFirst("body")?.attr("class") ?: ""
             val term = Regex("""(?:term|postid)-(\d+)""").find(bodyClass)?.groupValues?.getOrNull(1)
             if (term != null) {
                 (0..4).toList().amap { i ->
                     try {
-                        val iframeUrl = app.get("$mainUrl/?trdekho=$i&trid=$term&trtype=${media.mediaType}")
+                        val iframeUrl = app.get("$mainUrl/?trdekho=$i&trid=$term&trtype=$mediaType")
                             .document.selectFirst("iframe")?.attr("src")
                         if (!iframeUrl.isNullOrBlank()) {
                             loadExtractor(iframeUrl, subtitleCallback, callback)

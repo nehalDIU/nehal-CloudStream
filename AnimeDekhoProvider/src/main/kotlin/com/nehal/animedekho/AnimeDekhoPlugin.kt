@@ -16,7 +16,9 @@ class AnimeDekhoPlugin : Plugin() {
         registerMainAPI(HindiSubAnime())
         registerMainAPI(OnepaceProvider())
         registerExtractorAPI(StreamRuby())
+        registerExtractorAPI(Rubystm())
         registerExtractorAPI(Vidmolynet())
+        registerExtractorAPI(VidmolyBiz())
         registerExtractorAPI(GDMirrorbot())
         registerExtractorAPI(Techinmind())
         registerExtractorAPI(Cdnwish())
@@ -31,8 +33,10 @@ class AnimeDekhoPlugin : Plugin() {
         registerExtractorAPI(Cloudy())
         registerExtractorAPI(vidcloudupns())
         registerExtractorAPI(Animedekhoco())
+        registerExtractorAPI(AnimedekhoPixel())
         registerExtractorAPI(Blakiteapi())
         registerExtractorAPI(ascdn21())
         registerExtractorAPI(Abyass())
     }
 }
+

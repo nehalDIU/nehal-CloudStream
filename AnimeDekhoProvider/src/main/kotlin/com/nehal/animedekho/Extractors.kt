@@ -31,34 +31,69 @@ open class StreamRuby : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val cleanedUrl = url.replace("/e", "")
-        val headers = mapOf(
-            "X-Requested-With" to "XMLHttpRequest",
-            "Accept" to "*/*",
-            "Connection" to "keep-alive",
-            "Sec-Fetch-Dest" to "empty",
-            "Sec-Fetch-Mode" to "cors",
-            "Sec-Fetch-Site" to "cross-site",
-            "Origin" to cleanedUrl
+        val host = Regex("""https?://([^/]+)""").find(url)?.groupValues?.getOrNull(1) ?: mainUrl
+        val code = url.trimEnd('/').substringAfterLast("/").substringBefore(".").substringBefore("?")
+        val postUrl = "https://$host/dl"
+        val postHeaders = mapOf(
+            "Content-Type" to "application/x-www-form-urlencoded",
+            "Referer" to url,
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
-        val doc = app.get(cleanedUrl, headers = headers, referer = cleanedUrl).document
-        val scriptData = doc.selectFirst("script:containsData(vplayer)")?.data() ?: ""
-        val link = Regex("""file:\s*"([^"]+)"""").find(scriptData)?.groupValues?.getOrNull(1)
-            ?: Regex("""file:\s*'([^']+)'""").find(scriptData)?.groupValues?.getOrNull(1)
-        if (!link.isNullOrBlank()) {
+        val formData = mapOf(
+            "op" to "embed",
+            "file_code" to code,
+            "auto" to "1",
+            "referer" to (referer ?: "")
+        )
+
+        var streamUrl: String? = null
+        try {
+            val responseText = app.post(postUrl, headers = postHeaders, data = formData).text
+            val packed = Regex("""eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\('\|'\)\)\)""").find(responseText)?.value
+            val unpacked = packed?.let { JsUnpacker(it).unpack() } ?: responseText
+            streamUrl = Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""").find(unpacked)?.groupValues?.getOrNull(1)
+                ?: Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']""").find(unpacked)?.groupValues?.getOrNull(1)
+        } catch (_: Throwable) {
+        }
+
+        if (streamUrl.isNullOrBlank()) {
+            val cleanedUrl = url.replace("/e", "")
+            val headers = mapOf(
+                "X-Requested-With" to "XMLHttpRequest",
+                "Accept" to "*/*",
+                "Connection" to "keep-alive",
+                "Sec-Fetch-Dest" to "empty",
+                "Sec-Fetch-Mode" to "cors",
+                "Sec-Fetch-Site" to "cross-site",
+                "Origin" to cleanedUrl
+            )
+            try {
+                val doc = app.get(cleanedUrl, headers = headers, referer = cleanedUrl).document
+                val scriptData = doc.selectFirst("script:containsData(vplayer)")?.data() ?: ""
+                streamUrl = Regex("""file:\s*"([^"]+)"""").find(scriptData)?.groupValues?.getOrNull(1)
+                    ?: Regex("""file:\s*'([^']+)'""").find(scriptData)?.groupValues?.getOrNull(1)
+            } catch (_: Throwable) {
+            }
+        }
+
+        if (!streamUrl.isNullOrBlank()) {
             callback.invoke(
                 newExtractorLink(
                     name = this.name,
                     source = this.name,
-                    url = link,
-                    type = INFER_TYPE
+                    url = streamUrl,
+                    type = if (streamUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
                 ) {
-                    this.referer = cleanedUrl
-                    this.headers = headers
+                    this.referer = "https://$host/"
                 }
             )
         }
     }
+}
+
+open class Rubystm : StreamRuby() {
+    override var name = "Rubystm"
+    override var mainUrl = "rubystm.com"
 }
 
 open class AWSStream : ExtractorApi() {
@@ -177,6 +212,10 @@ open class Vidmolynet : Vidmoly() {
     override var mainUrl = "https://vidmoly.net"
 }
 
+open class VidmolyBiz : Vidmoly() {
+    override var mainUrl = "https://vidmoly.biz"
+}
+
 open class GDMirrorbot : ExtractorApi() {
     override var name = "GDMirrorbot"
     override var mainUrl = "https://gdmirrorbot.nl"
@@ -245,6 +284,35 @@ open class Animedekhoco : ExtractorApi() {
     }
 }
 
+open class AnimedekhoPixel : ExtractorApi() {
+    override var name = "PixelDrain"
+    override var mainUrl = "https://animedekho.app/aaa/pixel"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val slug = Regex("""slug=([a-zA-Z0-9_-]+)""").find(url)?.groupValues?.getOrNull(1)
+            ?: url.substringAfterLast("slug=").substringBefore("&")
+        if (slug.isNotBlank()) {
+            val streamUrl = "https://pixeldrain.net/api/file/$slug"
+            callback.invoke(
+                newExtractorLink(
+                    name,
+                    name,
+                    streamUrl,
+                    INFER_TYPE
+                ) {
+                    this.quality = Qualities.P720.value
+                }
+            )
+        }
+    }
+}
+
 open class Abyass : ExtractorApi() {
     override var name = "Abyass"
     override var mainUrl = "https://abyssplayer.com"
@@ -268,10 +336,20 @@ open class Abyass : ExtractorApi() {
             .parsedSafe<AbyssResponse>()?.result ?: return
 
         decrypted.sources?.forEach { source ->
-            val sourceUrl = source.file ?: return@forEach
-            val label = source.label ?: "Abyss"
+            val sourceUrl = source.url ?: source.file ?: return@forEach
+            val label = source.type ?: source.label ?: "Abyss"
+            val quality = when {
+                label.contains("1080") -> Qualities.P1080.value
+                label.contains("720") -> Qualities.P720.value
+                label.contains("480") -> Qualities.P480.value
+                label.contains("360") -> Qualities.P360.value
+                else -> Qualities.Unknown.value
+            }
             callback.invoke(
-                newExtractorLink(name, "$name $label", sourceUrl, ExtractorLinkType.M3U8)
+                newExtractorLink(name, "$name $label", sourceUrl, INFER_TYPE) {
+                    this.quality = quality
+                    this.referer = url
+                }
             )
         }
     }
@@ -286,8 +364,13 @@ open class Abyass : ExtractorApi() {
     )
 
     data class AbyssSource(
+        @JsonProperty("url") val url: String? = null,
         @JsonProperty("file") val file: String? = null,
         @JsonProperty("label") val label: String? = null,
-        @JsonProperty("type") val type: String? = null
+        @JsonProperty("type") val type: String? = null,
+        @JsonProperty("size") val size: Long? = null,
+        @JsonProperty("codec") val codec: String? = null,
+        @JsonProperty("status") val status: Boolean? = null
     )
 }
+

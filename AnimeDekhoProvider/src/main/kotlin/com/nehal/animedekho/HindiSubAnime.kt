@@ -39,9 +39,10 @@ class HindiSubAnime : AnimeDekhoProvider() {
         val term = Regex("""(?:term|postid)-(\d+)""").find(body)?.groupValues?.getOrNull(1)
             ?: return false
 
+        val mediaType = media.mediaType ?: 2
         (0..4).toList().amap { i ->
             try {
-                val link = app.get("$mainUrl/?trdekho=$i&trid=$term&trtype=${media.mediaType}")
+                val link = app.get("$mainUrl/?trdekho=$i&trid=$term&trtype=$mediaType")
                     .document.selectFirst("iframe")?.attr("src")
                 if (!link.isNullOrBlank()) {
                     loadExtractor(link, subtitleCallback, callback)
