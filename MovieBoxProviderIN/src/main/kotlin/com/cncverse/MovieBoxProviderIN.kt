@@ -297,6 +297,7 @@ class MovieBoxProviderIN : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query, "page" to page))
         var token = getOrFetchToken()
         val url = "$mainUrl/wefeed-mobile-bff/subject-api/search/v2"
         val mapper = jacksonObjectMapper()
@@ -436,6 +437,7 @@ class MovieBoxProviderIN : MainAPI() {
         val data = root["data"] ?: throw ErrorLoadingException("No data")
 
         val title = data["title"]?.asText()?.substringBefore("[") ?: throw ErrorLoadingException("No title found")
+        AnalyticsTracker.track(name, "view", mapOf("title" to title, "url" to url))
         val description = data["description"]?.asText()
         val releaseDate = data["releaseDate"]?.asText()
         val duration = data["duration"]?.asText()
@@ -639,6 +641,7 @@ class MovieBoxProviderIN : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        AnalyticsTracker.track(name, "play", mapOf("data" to data))
         val (brand, model) = randomBrandModel()
 
         try {
