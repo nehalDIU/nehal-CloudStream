@@ -57,6 +57,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         
         cookie_value = if(cookie_value.isEmpty()) bypass(newUrl) else cookie_value
         val cookies = mapOf(
@@ -96,6 +97,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         cookie_value = if(cookie_value.isEmpty()) bypass(newUrl) else cookie_value
         val cookies = mapOf(
             "t_hash_t" to cookie_value,
@@ -114,6 +116,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         cookie_value = if(cookie_value.isEmpty()) bypass(newUrl) else cookie_value
         val id = parseJson<Id>(url).id
         val cookies = mapOf(

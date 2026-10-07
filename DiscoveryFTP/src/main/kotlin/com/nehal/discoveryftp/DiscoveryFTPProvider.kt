@@ -66,6 +66,7 @@ open class DiscoveryFTPProvider : MainAPI() {
     private val cacheTtl = 5 * 60 * 1000L // 5 minutes cache TTL
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val cacheKey = "${request.data}|$page"
         homePageCache[cacheKey]?.let { cached ->
             if (System.currentTimeMillis() - cached.timestamp < cacheTtl) {
@@ -267,6 +268,7 @@ open class DiscoveryFTPProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         return if (url.contains("/s/view/")) {
             loadTvSeries(url)
         } else {

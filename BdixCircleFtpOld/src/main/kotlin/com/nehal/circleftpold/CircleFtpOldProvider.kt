@@ -75,6 +75,7 @@ class CircleFtpOldProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val cleanPath = request.data.trim('/')
         val url = if (page <= 1) {
             "$mainUrl/$cleanPath/"
@@ -141,6 +142,7 @@ class CircleFtpOldProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val res = try {
             app.get(
                 "$mainApiUrl/api/posts?searchTerm=$query&order=desc",
@@ -205,6 +207,7 @@ class CircleFtpOldProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         return if (url.contains("/api/posts/")) {
             loadFromApi(url)
         } else {

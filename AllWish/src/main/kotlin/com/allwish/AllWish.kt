@@ -65,15 +65,18 @@ class AllWish : MainAPI() {
     }
 
     override suspend fun search(query: String): List<AnimeSearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         return search(query, 1).items.filterIsInstance<AnimeSearchResponse>()
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val res = app.get("$mainUrl/filter?keyword=$query&page=$page").document
         return searchResponseBuilder(res).toNewSearchResponseList()
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val res = app.get(request.data + page.toString(), xmlHeader).parsedSafe<APIResponse>()
         return if (res?.status == 200) {
             val searchRes = searchResponseBuilder(res.html)
@@ -82,6 +85,7 @@ class AllWish : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val res = app.get(url).document
         val id = res.select("main > div.container").attr("data-id")
 

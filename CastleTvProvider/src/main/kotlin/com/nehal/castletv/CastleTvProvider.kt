@@ -303,6 +303,7 @@ class CastleTvProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         return try {
             val securityKey = getSecurityKey() ?: return newHomePageResponse(emptyList())
             val url = "$mainUrl/film-api/v0.1/category/home?channel=IndiaA&clientType=1&clientType=1&lang=en-US&locationId=1001&mode=1&packageName=com.external.castle&page=$page&size=17"
@@ -358,6 +359,7 @@ class CastleTvProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         return try {
             if (query.isBlank()) return emptyList()
             val securityKey = getSecurityKey() ?: return emptyList()
@@ -404,6 +406,7 @@ class CastleTvProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         return try {
             val movieId = url.substringAfterLast('/')
 

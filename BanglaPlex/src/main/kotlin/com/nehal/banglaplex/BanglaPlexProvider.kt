@@ -46,6 +46,7 @@ class BanglaPlexProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val targetUrl = when {
             request.data == "latest" -> {
                 if (page == 1) "$mainUrl/" else "$mainUrl/genre/bengali-movies/${(page - 1) * 24}.html"
@@ -68,6 +69,7 @@ class BanglaPlexProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "$mainUrl/search?q=$encoded"
         val doc = try {
@@ -174,6 +176,7 @@ class BanglaPlexProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val cleanUrl = fixUrl(url)
         val doc = app.get(cleanUrl, referer = mainUrl, timeout = 25L, cacheTime = 60).document
 

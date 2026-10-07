@@ -330,6 +330,7 @@ open class FTPBDProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val pageSize = 30
         val cat = categories.find { it.fullUrl == request.data || it.path == request.data }
             ?: categories.first()
@@ -443,6 +444,7 @@ open class FTPBDProvider : MainAPI() {
     // ==========================================
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val host = hostForUrl(url)
         val serverTag = getServerTagFromUrl(url)
         val decodedTitle = cleanTitle(decodeName(url))

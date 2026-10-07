@@ -66,6 +66,7 @@ open class VegaMoviesProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val document = app.get(request.data.format(page)).document
         val home = document.select("div.movies-grid > a").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, home)
@@ -86,6 +87,7 @@ open class VegaMoviesProvider : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val json = app.get("$mainUrl/search.php?q=$query&page=$page").text
         val response = tryParseJson<VegaSearchResponse>(json) ?: return null
         val results = response.hits.map { hit ->
@@ -145,6 +147,7 @@ open class VegaMoviesProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val document = app.get(fixUrl(url)).document
         var title = document.select("title").text().replace("Download ", "")
         var posterUrl = document.select("p > img").attr("src")

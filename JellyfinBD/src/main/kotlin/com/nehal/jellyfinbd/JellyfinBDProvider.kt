@@ -155,6 +155,7 @@ class JellyfinBDProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val category = categories.firstOrNull { it.key == request.data } ?: return null
         val (token, userId) = getSession()
 
@@ -197,6 +198,7 @@ class JellyfinBDProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         if (query.isBlank()) return emptyList()
         val (token, userId) = getSession()
 
@@ -232,6 +234,7 @@ class JellyfinBDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val itemId = url.substringAfterLast("/")
         val (token, userId) = getSession()
 

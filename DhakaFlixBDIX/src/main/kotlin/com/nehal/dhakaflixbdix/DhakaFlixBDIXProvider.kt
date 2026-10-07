@@ -395,6 +395,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val cat = categories.find { it.path == request.data }
             ?: categories.first()
 
@@ -451,6 +452,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val cleanQuery = query.trim().lowercase()
         if (cleanQuery.isBlank() || cleanQuery.length < 2) return emptyList()
 
@@ -494,6 +496,7 @@ open class DhakaFlixBDIXProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val serverTag = getServerTagFromUrl(url)
         val decodedTitle = cleanTitle(url, serverTag)
         val isVideoFile = isMediaFile(url)

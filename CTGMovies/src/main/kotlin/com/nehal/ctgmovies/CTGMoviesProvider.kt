@@ -111,6 +111,7 @@ class CTGMoviesProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val targetUrl = if (request.data.isEmpty()) {
             if (page > 1) "$mainUrl/?page=$page" else mainUrl
         } else {
@@ -196,6 +197,7 @@ class CTGMoviesProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val searchUrl = "$mainUrl/search?q=${URLEncoder.encode(query, StandardCharsets.UTF_8.name())}"
         val res = app.get(searchUrl, timeout = 30L).text
         val doc = Jsoup.parse(res)
@@ -276,6 +278,7 @@ class CTGMoviesProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         var targetUrl = url
         if (targetUrl.contains("/watch/")) {
             val seriesSlug = Regex("""series=([a-zA-Z0-9\-_]+)""").find(targetUrl)?.groupValues?.get(1)

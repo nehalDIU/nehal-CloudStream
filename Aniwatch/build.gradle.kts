@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "Anime provider for aniwatch.co.at"

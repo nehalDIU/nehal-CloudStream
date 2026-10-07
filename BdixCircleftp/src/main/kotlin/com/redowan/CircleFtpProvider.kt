@@ -73,6 +73,7 @@ class CircleFtpProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val json = try {
             app.get(
                 "$mainApiUrl/api/posts?categoryExact=${request.data}&page=$page&order=desc&limit=10",
@@ -115,6 +116,7 @@ class CircleFtpProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val json = try {
             app.get(
                 "$mainApiUrl/api/posts?searchTerm=$query&order=desc",
@@ -136,6 +138,7 @@ class CircleFtpProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val json = try {
             app.get(
                 url.replace("$mainUrl/content/", "$mainApiUrl/api/posts/"),

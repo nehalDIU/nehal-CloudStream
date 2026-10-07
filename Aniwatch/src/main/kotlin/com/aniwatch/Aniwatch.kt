@@ -74,6 +74,7 @@ class Aniwatch : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val url = if (page > 1) {
             "$mainUrl/page/$page/?s=$query"
         } else {
@@ -84,6 +85,7 @@ class Aniwatch : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val url = if (request.data == "$mainUrl/") {
             if (page == 1) {
                 request.data
@@ -103,6 +105,7 @@ class Aniwatch : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         var doc = app.get(url).document
 
         // Check if we are on a watch page by looking for the "View detail" button.

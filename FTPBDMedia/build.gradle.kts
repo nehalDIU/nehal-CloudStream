@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 1
+version = 2
 
 cloudstream {
     description = "FTPBD Media (Emby) Provider with high-speed BDIX streaming"

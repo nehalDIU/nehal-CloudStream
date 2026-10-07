@@ -218,6 +218,7 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val pageSize = 40
         val items = when {
             request.data == "tv:all" -> {
@@ -561,6 +562,7 @@ open class DhakaFlixProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val type = categoryTypeForUrl(url) ?: if (url.contains("/TV-WEB-Series/")) TvType.TvSeries else TvType.Movie
         return if (type == TvType.TvSeries || type == TvType.Anime) {
             loadTvSeries(url, type)

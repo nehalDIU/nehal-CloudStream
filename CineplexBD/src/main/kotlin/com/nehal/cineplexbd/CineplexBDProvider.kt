@@ -56,6 +56,7 @@ open class CineplexBDProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val url = when {
             request.data == "trending" || request.data == "latest_movies" || request.data == "latest_series" -> {
                 if (page > 1) return null
@@ -110,6 +111,7 @@ open class CineplexBDProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val url = "$mainUrl/search.php?q=$query"
         val doc = app.get(url).document
         return doc.select("a[href*=\"view.php\"], a[href*=\"watch.php\"]").mapNotNull { el ->
@@ -120,6 +122,7 @@ open class CineplexBDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val fullUrl = fixUrl(url)
         val id = Regex("(?:id|series_id)=(\\d+)").find(fullUrl)?.groupValues?.get(1) ?: return null
         return if (fullUrl.contains("watch.php")) {

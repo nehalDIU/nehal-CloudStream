@@ -166,6 +166,7 @@ class MojaLossProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        AnalyticsTracker.heartbeat(name)
         val path = request.data
 
         if (path == "wp-json/mojaloss/v1/today") {
@@ -226,6 +227,7 @@ class MojaLossProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val cleanQuery = query.trim()
         if (cleanQuery.isEmpty()) return emptyList()
 
@@ -313,6 +315,7 @@ class MojaLossProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val headers = getRequestHeaders()
         val doc = app.get(url, headers = headers, timeout = 30L).document
 

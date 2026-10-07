@@ -45,6 +45,7 @@ open class ShowTimeBDProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val path = request.data.trimStart('/')
         val url = if (page <= 1) {
             "$mainUrl/$path"
@@ -70,6 +71,7 @@ open class ShowTimeBDProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val cleanQuery = query.trim()
         if (cleanQuery.isEmpty()) return emptyList()
 
@@ -146,6 +148,7 @@ open class ShowTimeBDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val doc = app.get(url, timeout = 30L, cacheTime = 60).document
         val singlePage = doc.selectFirst(".single_page") ?: throw ErrorLoadingException("Invalid page layout")
         val title = singlePage.selectFirst("h1")?.text()?.trim() ?: throw ErrorLoadingException("Missing title")

@@ -17,9 +17,7 @@ object AnalyticsTracker {
         data: Map<String, Any?> = emptyMap()
     ) = ioSafe {
         try {
-            if (ENDPOINT.isBlank() || ENDPOINT.contains("your-dashboard.vercel.app")) {
-                return@ioSafe
-            }
+            if (ENDPOINT.isBlank()) return@ioSafe
             val payload = mapOf(
                 "deviceId" to deviceId,
                 "provider" to provider,
@@ -30,13 +28,14 @@ object AnalyticsTracker {
             app.post(
                 ENDPOINT,
                 json = payload,
-                timeout = 3L
+                headers = mapOf("Content-Type" to "application/json"),
+                timeout = 15L
             )
         } catch (_: Throwable) {
         }
     }
 
     fun heartbeat(provider: String, currentTitle: String? = null) {
-        track(provider, "heartbeat", mapOf("title" to currentTitle))
+        track(provider, "heartbeat", if (currentTitle != null) mapOf("title" to currentTitle) else emptyMap())
     }
 }

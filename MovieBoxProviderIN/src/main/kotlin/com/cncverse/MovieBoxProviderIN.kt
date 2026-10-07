@@ -202,6 +202,7 @@ class MovieBoxProviderIN : MainAPI() {
     }
 
      override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         showTelegramPopup()
         // Show star popup on first visit (shared across all CNCVerse plugins)
         val token = getOrFetchToken()
@@ -289,6 +290,7 @@ class MovieBoxProviderIN : MainAPI() {
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         return search(query)
     }
 

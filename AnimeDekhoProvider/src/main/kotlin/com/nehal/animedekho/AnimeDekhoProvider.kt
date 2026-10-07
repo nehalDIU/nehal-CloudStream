@@ -38,6 +38,7 @@ open class AnimeDekhoProvider : MainAPI() {
         page: Int,
         request: MainPageRequest,
     ): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val link = "$mainUrl${request.data}"
         val document = app.get(link).document
         val home = document.select("article").mapNotNull {
@@ -59,6 +60,7 @@ open class AnimeDekhoProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<AnimeSearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val document = app.get("$mainUrl/?s=$query").document
         return document.select("ul[data-results] li article").mapNotNull {
             it.toSearchResult()
@@ -66,6 +68,7 @@ open class AnimeDekhoProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val media = parseJson<Media>(url)
         val document = app.get(media.url).document
         val rawTitle = document.selectFirst("h1.entry-title, h1")?.text()?.trim()

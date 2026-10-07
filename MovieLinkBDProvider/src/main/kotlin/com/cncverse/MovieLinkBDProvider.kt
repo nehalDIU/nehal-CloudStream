@@ -122,6 +122,7 @@ class MovieLinkBDProvider : MainAPI() {
 
     // ── Homepage / category pages ───────────────────────────────────────────
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val base = getBase()
         val path = request.data
         val url = when {
@@ -139,6 +140,7 @@ class MovieLinkBDProvider : MainAPI() {
 
     // ── Search ──────────────────────────────────────────────────────────────
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val base = getBase()
         val doc = app.get("$base/?search=${query.trim()}", headers = headers, timeout = 30).document
         return parseMovieCards(doc, base)
@@ -222,6 +224,7 @@ class MovieLinkBDProvider : MainAPI() {
 
     // ── Detail page ─────────────────────────────────────────────────────────
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val doc = app.get(url, headers = headers, timeout = 30).document
 
         // Title

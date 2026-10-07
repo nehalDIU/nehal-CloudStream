@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "FM FTP (FTPBD) Gigabit BDIX Streaming Provider"

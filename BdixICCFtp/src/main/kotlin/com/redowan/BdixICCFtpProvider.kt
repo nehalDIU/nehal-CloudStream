@@ -69,6 +69,7 @@ open class BdixICCFtpProvider : MainAPI() {
     override suspend fun getMainPage(
         page: Int, request: MainPageRequest
     ): HomePageResponse {
+        AnalyticsTracker.heartbeat(name)
         val doc = app.get("$mainUrl${request.data}").document
         val homeResponse = doc.select("div.post-wrapper > a")
         val home = homeResponse.mapNotNull { post ->
@@ -96,6 +97,7 @@ open class BdixICCFtpProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        AnalyticsTracker.track(name, "search", mapOf("query" to query))
         val mediaType = "application/x-www-form-urlencoded".toMediaType()
         val body = "cSearch=$query".toRequestBody(mediaType)
         val doc = app.post("$mainUrl/command.php", requestBody = body).text
@@ -104,6 +106,7 @@ open class BdixICCFtpProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        AnalyticsTracker.track(name, "view", mapOf("url" to url))
         val doc = app.get(url).document
         val table = doc.select(".table > tbody:nth-child(1)")
         val title = table.select("tr:nth-child(1)").text()
