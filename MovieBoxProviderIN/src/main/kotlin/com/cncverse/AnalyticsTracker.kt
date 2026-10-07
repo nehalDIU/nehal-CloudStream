@@ -6,7 +6,7 @@ import java.util.UUID
 
 object AnalyticsTracker {
     // Configurable endpoint pointing to your deployed Vercel dashboard API
-    var ENDPOINT = "https://your-dashboard.vercel.app/api/track"
+    var ENDPOINT = "https://nehal-cloudstream-dashboard.vercel.app/api/track"
 
     // Anonymous random session device identifier
     val deviceId: String by lazy {

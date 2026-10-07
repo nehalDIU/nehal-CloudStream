@@ -5,7 +5,7 @@ import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import java.util.UUID
 
 object AnalyticsTracker {
-    var ENDPOINT = "https://your-dashboard.vercel.app/api/track"
+    var ENDPOINT = "https://nehal-cloudstream-dashboard.vercel.app/api/track"
 
     val deviceId: String by lazy {
         UUID.randomUUID().toString()
