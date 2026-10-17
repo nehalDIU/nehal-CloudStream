@@ -1,17 +1,17 @@
 package com.nehal.netshort
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import java.util.UUID
+import java.net.URLEncoder
+import java.util.regex.Pattern
 
 class NetShortProvider : MainAPI() {
-    override var mainUrl = "https://appsecapi.netshort.com/prod-app-api"
+    override var mainUrl = "https://netshort.com"
     override var name = "NetShort"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -19,153 +19,82 @@ class NetShortProvider : MainAPI() {
     override val supportedTypes = setOf(TvType.AsianDrama, TvType.TvSeries)
 
     companion object {
+        private const val API_BASE = "https://appsecapi.netshort.com/prod-app-api"
         private val mapper by lazy { jacksonObjectMapper() }
         private val volcEngineExtractor by lazy { VolcEngineExtractor() }
-        @Volatile private var cachedToken: String? = null
-        @Volatile private var tokenFetchTime: Long = 0L
+
+        private val DRAMA_REGEX = Pattern.compile(
+            """\\\"shortPlayId\\\":\\\"(\d+)\\\",\\\"shortPlayName\\\":\\\"([^\\\"]+)\\\".*?\\\"(?:fullEpisodeNameUrl|shortPlayNameUrl)\\\":\\\"([^\\\"]+)\\\",\\\"shortPlayCover\\\":\\\"([^\\\"]+)\\\""""
+        )
+
+        private val EPISODE_REGEX = Pattern.compile(
+            """\\\"episodeId\\\":\\\"(\d+)\\\",\\\"episodeNo\\\":(\d+)(?:,\\\"episodeCover\\\":\\\"([^\\\"]+)\\\")?"""
+        )
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/video/shortPlay/recommend/load_user_recommend" to "Recommended",
-        "$mainUrl/video/shortPlay/tab/load_all_chart" to "Top Charts",
-        "$mainUrl/video/shortPlay/tab/load_page_free_group" to "Free Dramas",
-        "$mainUrl/video/classes/page?classType=1" to "Revenge & CEO",
-        "$mainUrl/video/classes/page?classType=2" to "Romance",
-        "$mainUrl/video/classes/page?classType=3" to "Fantasy & Werewolf"
+        "$mainUrl/en" to "Featured & Recommended",
+        "$mainUrl/en/drama/Revenge-1983832092270911490" to "Revenge",
+        "$mainUrl/en/drama/Modern%20Romance-1983832092736479234" to "Modern Romance",
+        "$mainUrl/en/drama/Underdog%20Rise-1984208314792402946" to "Underdog Rise",
+        "$mainUrl/en/drama/Fantasy%20Romance-1983832092417712131" to "Fantasy Romance",
+        "$mainUrl/en/drama/Rich%20Family%20Feud-1983832091889229827" to "Rich Family Feud",
+        "$mainUrl/en/drama/Love%20After%20Divorce-1983832091641765889" to "Love After Divorce",
+        "$mainUrl/en/drama/Contract%20Lovers-1983832091947950083" to "Contract Lovers"
     )
 
-    private suspend fun getAuthHeaders(): Map<String, String> {
-        val customToken = NetShortStorage.getCustomToken()
-        val token = if (!customToken.isNullOrBlank()) {
-            customToken
-        } else {
-            getOrRefreshGuestToken()
-        }
-
-        val headers = mutableMapOf(
-            "Content-Type" to "application/json",
-            "User-Agent" to "okhttp/4.9.0",
-            "language" to (NetShortStorage.getLanguage().ifBlank { lang }),
-            "Accept" to "application/json"
-        )
-        if (!token.isNullOrBlank()) {
-            headers["Authorization"] = "Bearer $token"
-        }
-        return headers
+    private fun cleanCover(raw: String): String {
+        return raw.replace("""\u0026""", "&")
+            .replace("""\u6bd4""", "比")
+            .replace("""\/""", "/")
     }
 
-    private suspend fun getOrRefreshGuestToken(): String? {
-        val now = System.currentTimeMillis()
-        if (cachedToken != null && (now - tokenFetchTime < 3_600_000L)) {
-            return cachedToken
-        }
+    private fun extractDramasFromHtml(html: String): List<SearchResponse> {
+        val list = mutableListOf<SearchResponse>()
+        val seen = HashSet<String>()
+        val matcher = DRAMA_REGEX.matcher(html)
 
-        val savedGuest = NetShortStorage.getGuestToken()
-        if (!savedGuest.isNullOrBlank() && cachedToken == null) {
-            cachedToken = savedGuest
-            return cachedToken
-        }
+        while (matcher.find()) {
+            val id = matcher.group(1) ?: continue
+            val title = matcher.group(2) ?: continue
+            val linkUrl = matcher.group(3) ?: "/full-episodes/$id"
+            val rawCover = matcher.group(4) ?: ""
 
-        // Attempt automated guest session handshake
-        return try {
-            val deviceId = UUID.randomUUID().toString()
-            val guestPayload = mapOf(
-                "deviceId" to deviceId,
-                "deviceNo" to deviceId,
-                "loginType" to 0,
-                "appVersion" to "2.1.3"
+            if (!seen.add(id)) continue
+
+            val fullUrl = if (linkUrl.startsWith("http")) linkUrl else "$mainUrl/en$linkUrl"
+            val cover = cleanCover(rawCover)
+
+            list.add(
+                newTvSeriesSearchResponse(
+                    name = title.trim(),
+                    url = fullUrl,
+                    type = TvType.AsianDrama
+                ) {
+                    this.posterUrl = cover.ifBlank { null }
+                }
             )
-            val res = app.post(
-                "$mainUrl/auth/login",
-                headers = mapOf(
-                    "Content-Type" to "application/json",
-                    "User-Agent" to "okhttp/4.9.0",
-                    "language" to lang
-                ),
-                json = guestPayload,
-                timeout = 10L
-            )
-            val json = res.text
-            val root = mapper.readTree(json)
-            val token = root.get("data")?.get("token")?.asText()
-                ?: root.get("data")?.get("access_token")?.asText()
-                ?: root.get("token")?.asText()
-
-            if (!token.isNullOrBlank()) {
-                cachedToken = token
-                tokenFetchTime = now
-                NetShortStorage.saveGuestToken(token)
-                token
-            } else {
-                null
-            }
-        } catch (e: Throwable) {
-            Log.d("NetShort", "Guest handshake notice: ${e.message}")
-            cachedToken
         }
+        return list
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         AnalyticsTracker.heartbeat(name)
-        val headers = getAuthHeaders()
         val dramas = mutableListOf<SearchResponse>()
 
-        val url = request.data
         try {
-            val body = when {
-                url.contains("load_user_recommend") -> {
-                    mapOf(
-                        "offset" to (page - 1) * 20,
-                        "limit" to 20,
-                        "policyType" to 0,
-                        "reload" to false,
-                        "codec" to "h264",
-                        "playClarity" to "720p"
-                    )
-                }
-                url.contains("load_all_chart") -> {
-                    mapOf(
-                        "pageNo" to page,
-                        "pageSize" to 20
-                    )
-                }
-                url.contains("load_page_free_group") -> {
-                    mapOf(
-                        "pageNo" to page,
-                        "pageSize" to 20
-                    )
-                }
-                url.contains("classes/page") -> {
-                    val classType = url.substringAfter("classType=").substringBefore("&").toIntOrNull() ?: 1
-                    mapOf(
-                        "pageNo" to page,
-                        "pageSize" to 20,
-                        "classType" to classType
-                    )
-                }
-                else -> {
-                    mapOf(
-                        "offset" to (page - 1) * 20,
-                        "limit" to 20
-                    )
-                }
-            }
+            val targetUrl = request.data
+            val res = app.get(
+                targetUrl,
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language" to "en-US,en;q=0.9"
+                ),
+                timeout = 20L
+            )
 
-            val response = app.post(url.substringBefore("?"), headers = headers, json = body, timeout = 15L).text
-            val root = mapper.readTree(response)
-            val dataNode = root.get("data")
-
-            val items: List<DramaItem> = when {
-                dataNode == null -> emptyList()
-                dataNode.isArray -> mapper.readValue(dataNode.toString())
-                dataNode.has("dataList") -> mapper.readValue(dataNode.get("dataList").toString())
-                dataNode.has("records") -> mapper.readValue(dataNode.get("records").toString())
-                else -> emptyList()
-            }
-
-            items.forEach { drama ->
-                drama.toSearchResponse()?.let { dramas.add(it) }
-            }
+            dramas.addAll(extractDramasFromHtml(res.text))
         } catch (e: Throwable) {
             Log.e("NetShort", "Failed to load main page: ${e.message}")
         }
@@ -176,41 +105,27 @@ class NetShortProvider : MainAPI() {
                 list = dramas,
                 isHorizontalImages = false
             ),
-            hasNext = dramas.isNotEmpty()
+            hasNext = false
         )
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         AnalyticsTracker.heartbeat(name, query)
-        val headers = getAuthHeaders()
         val results = mutableListOf<SearchResponse>()
 
         try {
-            val body = mapOf(
-                "keyword" to query,
-                "pageNo" to 1,
-                "pageSize" to 30
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val searchUrl = "$mainUrl/en/search?keyword=$encodedQuery"
+            val res = app.get(
+                searchUrl,
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                ),
+                timeout = 20L
             )
-            val response = app.post(
-                "$mainUrl/video/shortPlay/search/searchByKeyword",
-                headers = headers,
-                json = body,
-                timeout = 15L
-            ).text
 
-            val root = mapper.readTree(response)
-            val dataNode = root.get("data")
-            val items: List<DramaItem> = when {
-                dataNode == null -> emptyList()
-                dataNode.isArray -> mapper.readValue(dataNode.toString())
-                dataNode.has("records") -> mapper.readValue(dataNode.get("records").toString())
-                dataNode.has("dataList") -> mapper.readValue(dataNode.get("dataList").toString())
-                else -> emptyList()
-            }
-
-            items.forEach { drama ->
-                drama.toSearchResponse()?.let { results.add(it) }
-            }
+            results.addAll(extractDramasFromHtml(res.text))
         } catch (e: Throwable) {
             Log.e("NetShort", "Search failed: ${e.message}")
         }
@@ -218,82 +133,98 @@ class NetShortProvider : MainAPI() {
         return results
     }
 
-    private fun DramaItem.toSearchResponse(): SearchResponse? {
-        val id = shortPlayId?.ifBlank { null } ?: return null
-        val title = shortPlayName?.ifBlank { null } ?: return null
-        val cover = shortPlayCover?.ifBlank { null }
-
-        return newTvSeriesSearchResponse(
-            name = title,
-            url = id,
-            type = TvType.AsianDrama
-        ) {
-            this.posterUrl = cover
-        }
-    }
-
     override suspend fun load(url: String): LoadResponse {
-        val shortPlayId = url.trim()
-        val headers = getAuthHeaders()
+        val targetUrl = when {
+            url.startsWith("http") -> url
+            url.startsWith("/") -> "$mainUrl/en$url"
+            else -> "$mainUrl/en/full-episodes/$url"
+        }
 
-        val body = mapOf(
-            "shortPlayId" to shortPlayId,
-            "codec" to "h264",
-            "playClarity" to "720p",
-            "isRequestReserve" to false
+        val res = app.get(
+            targetUrl,
+            headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            ),
+            timeout = 20L
         )
+        val html = res.text
 
-        val response = app.post(
-            "$mainUrl/video/shortPlay/base/detail_info/V2",
-            headers = headers,
-            json = body,
-            timeout = 15L
-        ).text
+        // Extract Title
+        val titleMatcher = Pattern.compile("""\\\"shortPlayName\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
+        val title = if (titleMatcher.find()) titleMatcher.group(1) else "Short Drama"
 
-        val parsed = parseJson<NetShortApiResponse<DramaDetail>>(response)
-        val detail = parsed.data ?: throw ErrorLoadingException("Failed to load drama details: ${parsed.msg ?: "Empty response"}")
+        // Extract ID
+        val idMatcher = Pattern.compile("""\\\"shortPlayId\\\":\\\"(\d+)\\\"""").matcher(html)
+        val shortPlayId = if (idMatcher.find()) idMatcher.group(1) else targetUrl.substringAfterLast("-").substringAfterLast("/")
 
-        val title = detail.shortPlayName ?: "Short Drama"
-        val cover = detail.shortPlayCover
-        val plot = detail.shotIntroduce
+        // Extract Plot
+        val plotMatcher = Pattern.compile("""\\\"shotIntroduce\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
+        val plot = if (plotMatcher.find()) plotMatcher.group(1) else null
 
+        // Extract Cover
+        val coverMatcher = Pattern.compile("""\\\"shortPlayCover\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
+        val cover = if (coverMatcher.find()) cleanCover(coverMatcher.group(1)) else null
+
+        // Extract Labels / Tags
         val tags = mutableListOf<String>()
-        detail.classificationList?.forEach { c -> c.name?.let { tags.add(it) } }
-
-        val episodes = mutableListOf<Episode>()
-        detail.shortPlayEpisodeInfos?.forEachIndexed { index, ep ->
-            val epNo = ep.episodeNo ?: (index + 1)
-            val epId = ep.episodeId ?: epNo.toString()
-            val isLocked = ep.isLock == true || ep.isVip == true
-
-            val displayName = if (isLocked) {
-                "Episode $epNo [🔒 Locked]"
-            } else {
-                "Episode $epNo"
+        val tagMatcher = Pattern.compile("""\\\"labelName\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
+        while (tagMatcher.find()) {
+            val tag = tagMatcher.group(1)
+            if (!tag.isNullOrBlank() && !tags.contains(tag)) {
+                tags.add(tag)
             }
+        }
+
+        // Extract Episodes
+        val episodes = mutableListOf<Episode>()
+        val epMatcher = EPISODE_REGEX.matcher(html)
+        val seenEp = HashSet<Int>()
+
+        while (epMatcher.find()) {
+            val epId = epMatcher.group(1) ?: continue
+            val epNo = epMatcher.group(2)?.toIntOrNull() ?: continue
+            val epCoverRaw = epMatcher.group(3)
+            val epCover = if (!epCoverRaw.isNullOrBlank()) cleanCover(epCoverRaw) else cover
+
+            if (!seenEp.add(epNo)) continue
 
             val linkData = EpisodeStreamLinkData(
                 shortPlayId = shortPlayId,
                 episodeId = epId,
                 episodeNo = epNo,
-                isLock = isLocked,
-                sdkVid = ep.sdkVid,
-                playVoucher = ep.playVoucher,
-                episodeType = ep.episodeType
+                isLock = false
             )
 
             episodes.add(
                 newEpisode(linkData.toJson()) {
-                    this.name = displayName
+                    this.name = "Episode $epNo"
                     this.episode = epNo
-                    this.posterUrl = ep.episodeCover ?: cover
+                    this.posterUrl = epCover
+                }
+            )
+        }
+
+        // If no episodes were found via regex (fallback), create Episode 1
+        if (episodes.isEmpty()) {
+            val linkData = EpisodeStreamLinkData(
+                shortPlayId = shortPlayId,
+                episodeId = shortPlayId,
+                episodeNo = 1,
+                isLock = false
+            )
+            episodes.add(
+                newEpisode(linkData.toJson()) {
+                    this.name = "Episode 1"
+                    this.episode = 1
+                    this.posterUrl = cover
                 }
             )
         }
 
         return newTvSeriesLoadResponse(
             name = title,
-            url = shortPlayId,
+            url = targetUrl,
             type = TvType.AsianDrama,
             episodes = episodes
         ) {
@@ -301,9 +232,6 @@ class NetShortProvider : MainAPI() {
             this.backgroundPosterUrl = cover
             this.plot = plot
             this.tags = tags
-            detail.actorList?.mapNotNull { it.actorName }?.let { actors ->
-                addActors(actors)
-            }
         }
     }
 
@@ -319,7 +247,17 @@ class NetShortProvider : MainAPI() {
             null
         } ?: return false
 
-        val headers = getAuthHeaders()
+        val customToken = NetShortStorage.getCustomToken()
+
+        val headers = mutableMapOf(
+            "Content-Type" to "application/json",
+            "User-Agent" to "okhttp/4.9.0",
+            "language" to (NetShortStorage.getLanguage().ifBlank { lang }),
+            "Accept" to "application/json"
+        )
+        if (!customToken.isNullOrBlank()) {
+            headers["Authorization"] = "Bearer $customToken"
+        }
 
         // 1. Fetch exact episode streaming payload from detail_info API
         val body = mapOf(
@@ -337,7 +275,7 @@ class NetShortProvider : MainAPI() {
 
         try {
             val response = app.post(
-                "$mainUrl/video/shortPlay/base/episode/detail_info",
+                "$API_BASE/video/shortPlay/base/episode/detail_info",
                 headers = headers,
                 json = body,
                 timeout = 15L
@@ -364,13 +302,11 @@ class NetShortProvider : MainAPI() {
             Log.d("NetShort", "Episode detail fetch notice: ${e.message}")
         }
 
-        // If direct stream URL was returned:
         if (!directUrl.isNullOrBlank()) {
             volcEngineExtractor.resolveStream(directUrl, sdkVid, playVoucher, callback)
             return true
         }
 
-        // Resolve via VolcEngine VOD extractor
         if (!sdkVid.isNullOrBlank() || !playVoucher.isNullOrBlank()) {
             volcEngineExtractor.resolveStream(
                 videoUrlOrVid = sdkVid ?: "",
