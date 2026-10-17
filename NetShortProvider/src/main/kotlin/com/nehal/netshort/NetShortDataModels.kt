@@ -122,3 +122,35 @@ data class EpisodeStreamLinkData(
     @JsonProperty("playVoucher") val playVoucher: String? = null,
     @JsonProperty("episodeType") val episodeType: Int? = null
 )
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class LoginResponseData(
+    @JsonProperty("token") val token: String? = null,
+    @JsonProperty("timeout") val timeout: Long? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VideoEpisodeResponse(
+    @JsonProperty("episodeList") val episodeList: List<VideoEpisodeDetailItem>? = null,
+    @JsonProperty("isMember") val isMember: Int? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VideoEpisodeDetailItem(
+    @JsonProperty("episodeId") val episodeId: String? = null,
+    @JsonProperty("episodeNo") val episodeNo: Int? = null,
+    @JsonProperty("duration") val duration: String? = null,
+    @JsonProperty("episodeType") val episodeType: Int? = null,
+    @JsonProperty("playVoucher") val playVoucher: String? = null,
+    @JsonProperty("playVoucherBak") val playVoucherBak: String? = null,
+    @JsonProperty("playClarity") val playClarity: String? = null,
+    @JsonProperty("sdkVid") val sdkVid: String? = null,
+    @JsonProperty("subtitleList") val subtitleList: List<SubtitleDetailItem>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SubtitleDetailItem(
+    @JsonProperty("url") val url: String? = null,
+    @JsonProperty("format") val format: String? = null,
+    @JsonProperty("subtitleLanguage") val subtitleLanguage: String? = null
+)

@@ -7,6 +7,8 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.util.regex.Pattern
 
@@ -247,82 +249,94 @@ class NetShortProvider : MainAPI() {
             null
         } ?: return false
 
-        val customToken = NetShortStorage.getCustomToken()
-
-        val headers = mutableMapOf(
-            "Content-Type" to "application/json",
-            "User-Agent" to "okhttp/4.9.0",
-            "language" to (NetShortStorage.getLanguage().ifBlank { lang }),
-            "Accept" to "application/json"
-        )
-        if (!customToken.isNullOrBlank()) {
-            headers["Authorization"] = "Bearer $customToken"
+        // 1. Get automated visitor session token (zero config!)
+        val token = NetShortAuth.getValidToken()
+        if (token.isNullOrBlank()) {
+            Log.e("NetShort", "Failed to obtain guest session token for video resolution")
+            return false
         }
 
-        // 1. Fetch exact episode streaming payload from detail_info API
-        val body = mapOf(
-            "shortPlayId" to linkData.shortPlayId,
-            "episodeId" to linkData.episodeId,
-            "episodeType" to (linkData.episodeType ?: 0),
-            "episodeNo" to linkData.episodeNo,
-            "codec" to "h264",
-            "playClarity" to "720p"
-        )
+        // Try episodeType = 1 first (unlocked ad-free / direct stream), then fallback to 0 or 2
+        val candidateTypes = listOf(1, 0, 2)
+        var streamFound = false
 
-        var sdkVid = linkData.sdkVid
-        var playVoucher = linkData.playVoucher
-        var directUrl: String? = null
+        for (epType in candidateTypes) {
+            val payload = mapOf(
+                "shortPlayId" to linkData.shortPlayId,
+                "episodeId" to linkData.episodeId,
+                "episodeNo" to linkData.episodeNo,
+                "episodeType" to epType,
+                "codec" to "h264",
+                "playClarity" to "720p"
+            )
 
-        try {
-            val response = app.post(
-                "$API_BASE/video/shortPlay/base/episode/detail_info",
-                headers = headers,
-                json = body,
-                timeout = 15L
-            ).text
+            try {
+                val jsonBody = mapper.writeValueAsString(payload)
+                val (encKey, encBody) = NetShortCrypto.encryptPayload(jsonBody)
 
-            val parsed = parseJson<NetShortApiResponse<EpisodeDetailData>>(response)
-            val epDetail = parsed.data
+                val headers = mapOf(
+                    "Content-Type" to "application/json;charset=utf-8",
+                    "User-Agent" to "okhttp/4.9.0",
+                    "content-language" to (NetShortStorage.getLanguage().ifBlank { "en_US" }),
+                    "Authorization" to "Bearer $token",
+                    "encrypt-key" to encKey,
+                    "timestamp" to System.currentTimeMillis().toString(),
+                    "start_type" to "0",
+                    "push_switch" to "1",
+                    "network" to "WIFI,0,1"
+                )
 
-            if (epDetail != null) {
-                if (!epDetail.sdkVid.isNullOrBlank()) sdkVid = epDetail.sdkVid
-                if (!epDetail.playVoucher.isNullOrBlank()) playVoucher = epDetail.playVoucher
-                if (!epDetail.playUrl.isNullOrBlank()) directUrl = epDetail.playUrl
+                val mediaType = "application/json;charset=utf-8".toMediaType()
+                val response = app.post(
+                    "$API_BASE/video/shortPlay/base/episode/detail_info",
+                    headers = headers,
+                    requestBody = encBody.toRequestBody(mediaType),
+                    timeout = 15L
+                )
 
-                epDetail.episodeClarityList?.forEach { clarity ->
-                    if (!clarity.playUrl.isNullOrBlank()) {
-                        directUrl = clarity.playUrl
+                val respKey = response.headers["encrypt-key"]
+                val decryptedJson = NetShortCrypto.decryptPayload(response.text, respKey)
+                val parsed = parseJson<NetShortApiResponse<VideoEpisodeResponse>>(decryptedJson)
+
+                val epList = parsed.data?.episodeList
+                if (!epList.isNullOrEmpty()) {
+                    // Match either current episode or take first available
+                    val matchingEp = epList.find { it.episodeId == linkData.episodeId || it.episodeNo == linkData.episodeNo }
+                        ?: epList.first()
+
+                    // Handle Subtitles
+                    matchingEp.subtitleList?.forEach { sub ->
+                        val subUrl = sub.url
+                        if (!subUrl.isNullOrBlank()) {
+                            subtitleCallback(
+                                SubtitleFile(
+                                    lang = sub.subtitleLanguage ?: "en",
+                                    url = subUrl
+                                )
+                            )
+                        }
                     }
-                    if (!clarity.playVoucher.isNullOrBlank()) {
-                        playVoucher = clarity.playVoucher
+
+                    val playVoucher = matchingEp.playVoucher ?: matchingEp.playVoucherBak
+                    val sdkVid = matchingEp.sdkVid
+
+                    if (!playVoucher.isNullOrBlank() || !sdkVid.isNullOrBlank()) {
+                        volcEngineExtractor.resolveStream(
+                            videoUrlOrVid = playVoucher ?: sdkVid ?: "",
+                            sdkVid = sdkVid,
+                            playVoucher = playVoucher,
+                            callback = callback
+                        )
+                        streamFound = true
+                        break
                     }
                 }
+            } catch (e: Throwable) {
+                Log.d("NetShort", "Attempt with episodeType=$epType notice: ${e.message}")
             }
-        } catch (e: Throwable) {
-            Log.d("NetShort", "Episode detail fetch notice: ${e.message}")
         }
 
-        if (!directUrl.isNullOrBlank()) {
-            volcEngineExtractor.resolveStream(directUrl, sdkVid, playVoucher, callback)
-            return true
-        }
-
-        if (!sdkVid.isNullOrBlank() || !playVoucher.isNullOrBlank()) {
-            volcEngineExtractor.resolveStream(
-                videoUrlOrVid = sdkVid ?: "",
-                sdkVid = sdkVid,
-                playVoucher = playVoucher,
-                callback = callback
-            )
-            return true
-        }
-
-        if (linkData.isLock) {
-            throw ErrorLoadingException(
-                "Episode ${linkData.episodeNo} is locked (coin/VIP required in NetShort). Please watch free unlocked episodes."
-            )
-        }
-
-        return false
+        return streamFound
     }
 }
+

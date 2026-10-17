@@ -87,8 +87,23 @@ class VolcEngineExtractor : ExtractorApi() {
         val vid = sdkVid ?: videoUrlOrVid.ifBlank { null } ?: return
         val voucher = playVoucher?.trim()
 
-        // 2. Inspect playVoucher if it is a Base64-encoded JSON or URL
+        // 2. Inspect playVoucher if it is a Direct URL or Base64-encoded JSON/URL
         if (!voucher.isNullOrBlank()) {
+            if (voucher.startsWith("http://") || voucher.startsWith("https://")) {
+                val isM3u8 = voucher.contains(".m3u8")
+                callback(
+                    newExtractorLink(
+                        source = "NetShort",
+                        name = "NetShort CDN",
+                        url = voucher,
+                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    ) {
+                        this.quality = Qualities.P720.value
+                    }
+                )
+                return
+            }
+
             try {
                 val decodedVoucher = base64Decode(voucher)
                 if (decodedVoucher.startsWith("http://") || decodedVoucher.startsWith("https://")) {
