@@ -1,15 +1,11 @@
 version = 1
 
 cloudstream {
-    language = "en"
-    description = "AnimeKai — Watch HD Anime Online Free (Sub & Dub). Powered by WordPress Zetaflix theme."
-    authors = listOf("Nehal")
+    description = "Official AnimeKai provider (Clean & Fast)"
+    authors = listOf("nehal")
     status = 1
-    tvTypes = listOf(
-        "Anime",
-        "AnimeMovie",
-        "Movie",
-        "TvSeries"
-    )
-    iconUrl = "https://animekai.beer/images/animekai-icon.png"
+    tvTypes = listOf("Anime", "AnimeMovie", "OVA")
+    language = "en"
+    iconUrl = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/AnimeKaiProvider/icon.png"
+    isCrossPlatform = true
 }
