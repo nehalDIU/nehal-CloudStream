@@ -1,8 +1,8 @@
-version = 3
+version = 4
 
 cloudstream {
     language = "en"
-    description = "NetShort — Short dramas, mini-series, revenge, romance & fantasy."
+    description = "Short dramas, vertical reels & mini-series from NetShort & ToonBox."
     authors = listOf("Nehal")
     status = 1
     tvTypes = listOf(

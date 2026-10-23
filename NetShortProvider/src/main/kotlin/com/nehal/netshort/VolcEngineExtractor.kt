@@ -59,13 +59,14 @@ class VolcEngineExtractor : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        resolveStream(url, null, null, callback)
+        resolveStream(url, null, null, "VolcEngine", callback)
     }
 
     suspend fun resolveStream(
         videoUrlOrVid: String,
-        sdkVid: String?,
-        playVoucher: String?,
+        sdkVid: String? = null,
+        playVoucher: String? = null,
+        sourceName: String = "NetShort",
         callback: (ExtractorLink) -> Unit
     ) {
         // 1. Direct Video URL check (if already an HTTP .m3u8 or .mp4)
@@ -73,8 +74,8 @@ class VolcEngineExtractor : ExtractorApi() {
             val isM3u8 = videoUrlOrVid.contains(".m3u8")
             callback(
                 newExtractorLink(
-                    source = "NetShort",
-                    name = "NetShort Direct",
+                    source = sourceName,
+                    name = "$sourceName Direct",
                     url = videoUrlOrVid,
                     type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
@@ -93,8 +94,8 @@ class VolcEngineExtractor : ExtractorApi() {
                 val isM3u8 = voucher.contains(".m3u8")
                 callback(
                     newExtractorLink(
-                        source = "NetShort",
-                        name = "NetShort CDN",
+                        source = sourceName,
+                        name = "$sourceName CDN",
                         url = voucher,
                         type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     ) {
@@ -109,8 +110,8 @@ class VolcEngineExtractor : ExtractorApi() {
                 if (decodedVoucher.startsWith("http://") || decodedVoucher.startsWith("https://")) {
                     callback(
                         newExtractorLink(
-                            source = "NetShort",
-                            name = "NetShort CDN",
+                            source = sourceName,
+                            name = "$sourceName CDN",
                             url = decodedVoucher,
                             type = if (decodedVoucher.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                         ) {
@@ -135,8 +136,8 @@ class VolcEngineExtractor : ExtractorApi() {
                             val isM3u8 = playUrl.contains(".m3u8") || playInfo.format.equals("m3u8", ignoreCase = true)
                             callback(
                                 newExtractorLink(
-                                    source = "NetShort",
-                                    name = "VolcEngine ${playInfo.definition ?: "HD"}",
+                                    source = sourceName,
+                                    name = "$sourceName ${playInfo.definition ?: "HD"}",
                                     url = playUrl,
                                     type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                 ) {
@@ -187,8 +188,8 @@ class VolcEngineExtractor : ExtractorApi() {
                             val isM3u8 = playUrl.contains(".m3u8") || playInfo.format.equals("m3u8", ignoreCase = true)
                             callback(
                                 newExtractorLink(
-                                    source = "NetShort",
-                                    name = "NetShort ${playInfo.definition ?: "HD"}",
+                                    source = sourceName,
+                                    name = "$sourceName ${playInfo.definition ?: "HD"}",
                                     url = playUrl,
                                     type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                 ) {
