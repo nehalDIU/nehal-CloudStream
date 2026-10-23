@@ -5,10 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTMDbId
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.INFER_TYPE
@@ -16,14 +14,11 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 import java.net.URI
-import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlin.random.Random
 
 class MovieBoxProvider : MainAPI() {
 
@@ -63,8 +58,12 @@ class MovieBoxProvider : MainAPI() {
 
     val deviceId: String by lazy { generateDeviceId() }
 
-    private val secretKeyDefault = base64Decode("NzZpUmwwN3MweFNOOWpxbUVXQXQ3OUVCSlp1bElRSXNWNjRGWnIyTw==")
-    private val secretKeyAlt = base64Decode("WHFuMm5uTzQxL0w5Mm8xaXVYaFNMSFRiWHZZNFo1Wlo2Mm04bVNMQQ==")
+    private val secretKeyDefaultBytes: ByteArray by lazy {
+        base64DecodeArray(base64Decode("NzZpUmwwN3MweFNOOWpxbUVXQXQ3OUVCSlp1bElRSXNWNjRGWnIyTw=="))
+    }
+    private val secretKeyAltBytes: ByteArray by lazy {
+        base64DecodeArray(base64Decode("WHFuMm5uTzQxL0w5Mm8xaXVYaFNMSFRiWHZZNFo1Wlo2Mm04bVNMQQ=="))
+    }
 
     private val modernUserAgent = "com.community.oneroom/50020132 (Linux; U; Android 14; en_IN; Pixel 8; Build/UD1A.230803.041; Cronet/145.0.7582.0)"
     private val modernClientInfo: String by lazy {
@@ -84,7 +83,7 @@ class MovieBoxProvider : MainAPI() {
 
     private fun generateXClientToken(timestamp: Long = System.currentTimeMillis()): String {
         val tsStr = timestamp.toString()
-        val hash = md5(tsStr.reversed().toByteArray())
+        val hash = md5(tsStr.reversed().toByteArray(Charsets.UTF_8))
         return "$tsStr,$hash"
     }
 
@@ -100,7 +99,13 @@ class MovieBoxProvider : MainAPI() {
         val path = uri?.path ?: ""
         val rawQuery = uri?.rawQuery ?: ""
         val query = if (rawQuery.isNotBlank()) {
-            rawQuery.split("&").sorted().joinToString("&")
+            rawQuery.split("&")
+                .map {
+                    val p = it.split("=")
+                    p[0] to (p.getOrNull(1) ?: "")
+                }
+                .sortedBy { it.first }
+                .joinToString("&") { "${it.first}=${it.second}" }
         } else ""
 
         val canonicalUrl = if (query.isNotEmpty()) "$path?$query" else path
@@ -124,12 +129,11 @@ class MovieBoxProvider : MainAPI() {
         timestamp: Long = System.currentTimeMillis()
     ): String {
         val canonical = buildCanonicalString(method, accept, contentType, url, body, timestamp)
-        val secret = if (useAltKey) secretKeyAlt else secretKeyDefault
-        val secretBytes = base64DecodeArray(secret)
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secretBytes, "HmacSHA256"))
+        val secretBytes = if (useAltKey) secretKeyAltBytes else secretKeyDefaultBytes
+        val mac = Mac.getInstance("HmacMD5")
+        mac.init(SecretKeySpec(secretBytes, "HmacMD5"))
         val signed = mac.doFinal(canonical.toByteArray(Charsets.UTF_8))
-        return base64Encode(signed)
+        return "$timestamp|2|${base64Encode(signed)}"
     }
 
     private suspend fun fetchAnonymousToken(forceRefresh: Boolean = false): String? {
@@ -139,7 +143,7 @@ class MovieBoxProvider : MainAPI() {
         }
 
         return try {
-            val tokenUrl = "https://apig.inmoviebox.com/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=4516404531735022304&page=1&perPage=1"
+            val tokenUrl = "https://apig.inmoviebox.com/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=4516404531735022304&page=1&perPage=1&restrictKid=0"
             val xClientToken = generateXClientToken(now)
             val xTrSignature = generateXTrSignature("GET", "application/json", "application/json", tokenUrl, timestamp = now)
             val headers = mapOf(
@@ -188,20 +192,22 @@ class MovieBoxProvider : MainAPI() {
 
     private suspend fun buildAuthHeaders(
         method: String,
+        accept: String = "application/json",
+        contentType: String = "application/json",
         url: String,
         body: String? = null,
-        contentType: String? = "application/json"
+        useAltKey: Boolean = false
     ): Map<String, String> {
         loadPersistedToken()
         val token = fetchAnonymousToken()
         val now = System.currentTimeMillis()
         val xClientToken = generateXClientToken(now)
-        val xTrSignature = generateXTrSignature(method, "application/json", contentType, url, body, timestamp = now)
+        val xTrSignature = generateXTrSignature(method, accept, contentType, url, body, useAltKey, timestamp = now)
 
         val headers = mutableMapOf(
             "user-agent" to modernUserAgent,
-            "accept" to "application/json",
-            "content-type" to (contentType ?: "application/json"),
+            "accept" to accept,
+            "content-type" to contentType,
             "connection" to "keep-alive",
             "x-client-token" to xClientToken,
             "x-tr-signature" to xTrSignature,
@@ -220,6 +226,12 @@ class MovieBoxProvider : MainAPI() {
         return prefs.getString("moviebox_host", mainUrl) ?: mainUrl
     }
 
+    private fun setActiveHost(host: String) {
+        val ctx = context ?: return
+        val prefs = ctx.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("moviebox_host", host).apply()
+    }
+
     // ===========================
     // SEARCH
     // ===========================
@@ -235,16 +247,25 @@ class MovieBoxProvider : MainAPI() {
 
         val host = getActiveHost()
         val searchUrl = "$host/wefeed-mobile-bff/subject-api/search/v2"
-        val body = """{"page": 1, "perPage": 20, "keyword": "${query.replace("\"", "\\\"")}", "restrictKid": 0}"""
-        val headers = buildAuthHeaders("POST", searchUrl, body)
+        val bodyObj = mapOf(
+            "page" to 1,
+            "perPage" to 20,
+            "keyword" to query,
+            "restrictKid" to 0
+        )
+        val body = mapper.writeValueAsString(bodyObj)
+        val ct = "application/json; charset=utf-8"
+        val headers = buildAuthHeaders("POST", contentType = ct, url = searchUrl, body = body)
 
         return try {
-            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val mediaType = ct.toMediaType()
             val res = app.post(searchUrl, headers = headers, requestBody = body.toRequestBody(mediaType))
             val json = mapper.readTree(res.body.string())
             val results = json.get("data")?.get("results") ?: return emptyList()
 
             val list = mutableListOf<SearchResponse>()
+            val seenUrls = mutableSetOf<String>()
+
             for (sub in results) {
                 val subjects = sub.get("subjects") ?: continue
                 if (!subjects.isArray) continue
@@ -253,14 +274,20 @@ class MovieBoxProvider : MainAPI() {
                     val title = item.get("title")?.asText() ?: continue
                     val poster = item.get("cover")?.get("url")?.asText()
                     val type = item.get("subjectType")?.asInt(1) ?: 1
+                    val rating = item.get("imdbRatingValue")?.asText() ?: item.get("score")?.asText()
+                    val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id"
+
+                    if (!seenUrls.add(detailUrl)) continue
 
                     if (type == 2) {
-                        list.add(newTvSeriesSearchResponse(title, "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id", TvType.TvSeries) {
+                        list.add(newTvSeriesSearchResponse(title, detailUrl, TvType.TvSeries) {
                             this.posterUrl = poster
+                            this.score = Score.from10(rating)
                         })
                     } else {
-                        list.add(newMovieSearchResponse(title, "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id", TvType.Movie) {
+                        list.add(newMovieSearchResponse(title, detailUrl, TvType.Movie) {
                             this.posterUrl = poster
+                            this.score = Score.from10(rating)
                         })
                     }
                 }
@@ -350,45 +377,87 @@ class MovieBoxProvider : MainAPI() {
         if (key == "live|matches") {
             return loadLiveSportsMatches()
         }
+        if (key == "live|highlights") {
+            return loadLiveSportsHighlights()
+        }
 
         if (key.startsWith("r|")) {
             val parts = key.split("|")
             val tabId = parts.getOrNull(1) ?: "0"
             val categoryType = parts.getOrNull(2) ?: ""
-            val url = "$host/wefeed-mobile-bff/tab/ranking-list?tabId=$tabId&categoryType=$categoryType&page=1&perPage=20"
-            val headers = buildAuthHeaders("GET", url)
+            val url = "$host/wefeed-mobile-bff/tab/ranking-list?tabId=$tabId&categoryType=$categoryType&page=1&perPage=20&restrictKid=0"
+            val headers = buildAuthHeaders("GET", url = url)
             val res = app.get(url, headers = headers)
             return parseSubjectList(host, res.body.string())
         }
 
-        // Filter list format: "type|category;k=v"
-        val cleanKey = key.split(";").first()
-        val typeParts = cleanKey.split("|")
-        val subjectType = typeParts.getOrNull(1)?.toIntOrNull() ?: 1
-        val url = "$host/wefeed-mobile-bff/subject-api/list?page=1&perPage=20&subjectType=$subjectType"
-        val headers = buildAuthHeaders("GET", url)
-        val res = app.get(url, headers = headers)
+        // Filtered list format: "channelId|subjectType;k=v;k=v" or "channelId|classify"
+        // Example: "1|1", "1|2", "2|2;country=Japan;genre=Animation"
+        val parts = key.split(";")
+        val headerParts = parts[0].split("|")
+        val channelId = headerParts.getOrNull(0) ?: "1"
+
+        val paramMap = mutableMapOf<String, String>()
+        for (i in 1 until parts.size) {
+            val pair = parts[i].split("=")
+            if (pair.size == 2) {
+                paramMap[pair[0].trim()] = pair[1].trim()
+            }
+        }
+
+        val classify = paramMap["classify"] ?: if (headerParts.size > 1 && headerParts[1].toIntOrNull() == null) headerParts[1] else "All"
+        val country = paramMap["country"] ?: "All"
+        val year = paramMap["year"] ?: "All"
+        val genre = paramMap["genre"] ?: "All"
+        val sort = paramMap["sort"] ?: "ForYou"
+
+        val url = "$host/wefeed-mobile-bff/subject-api/list"
+        val bodyObj = mapOf(
+            "page" to 1,
+            "perPage" to 20,
+            "channelId" to channelId,
+            "classify" to classify,
+            "country" to country,
+            "year" to year,
+            "genre" to genre,
+            "sort" to sort,
+            "restrictKid" to 0
+        )
+        val bodyStr = mapper.writeValueAsString(bodyObj)
+        val ct = "application/json; charset=utf-8"
+        val headers = buildAuthHeaders("POST", contentType = ct, url = url, body = bodyStr)
+        val mediaType = ct.toMediaType()
+        val res = app.post(url, headers = headers, requestBody = bodyStr.toRequestBody(mediaType))
         return parseSubjectList(host, res.body.string())
     }
 
     private fun parseSubjectList(host: String, jsonStr: String): List<SearchResponse> {
         return try {
             val root = mapper.readTree(jsonStr)
-            val listNode = root.get("data")?.get("list") ?: root.get("data")?.get("subjects") ?: return emptyList()
+            val data = root.get("data") ?: return emptyList()
+            val listNode = data.get("subjects") ?: data.get("items") ?: data.get("list") ?: return emptyList()
             val list = mutableListOf<SearchResponse>()
+            val seenUrls = mutableSetOf<String>()
+
             for (item in listNode) {
                 val id = item.get("subjectId")?.asText() ?: continue
                 val title = item.get("title")?.asText() ?: continue
                 val poster = item.get("cover")?.get("url")?.asText()
                 val type = item.get("subjectType")?.asInt(1) ?: 1
+                val rating = item.get("imdbRatingValue")?.asText() ?: item.get("score")?.asText()
+                val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id"
+
+                if (!seenUrls.add(detailUrl)) continue
 
                 if (type == 2) {
-                    list.add(newTvSeriesSearchResponse(title, "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id", TvType.TvSeries) {
+                    list.add(newTvSeriesSearchResponse(title, detailUrl, TvType.TvSeries) {
                         this.posterUrl = poster
+                        this.score = Score.from10(rating)
                     })
                 } else {
-                    list.add(newMovieSearchResponse(title, "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id", TvType.Movie) {
+                    list.add(newMovieSearchResponse(title, detailUrl, TvType.Movie) {
                         this.posterUrl = poster
+                        this.score = Score.from10(rating)
                     })
                 }
             }
@@ -418,10 +487,49 @@ class MovieBoxProvider : MainAPI() {
                 val team1 = m.get("team1")?.get("name")?.asText() ?: ""
                 val team2 = m.get("team2")?.get("name")?.asText() ?: ""
                 val league = m.get("league")?.get("name")?.asText() ?: ""
+                val status = m.get("status")?.asText() ?: ""
                 val title = if (team1.isNotBlank() && team2.isNotBlank()) "$team1 vs $team2" else m.get("title")?.asText() ?: "Match"
                 val poster = m.get("team1")?.get("avatar")?.asText() ?: m.get("cover")?.asText()
 
-                results.add(newLiveSearchResponse("⚽ $title ($league)", "/sport_match:$id", TvType.Live) {
+                val displayTitle = if (status.isNotBlank()) "⚽ $title ($status)" else "⚽ $title"
+                results.add(newLiveSearchResponse(displayTitle, "/sport_match:$id", TvType.Live) {
+                    this.posterUrl = poster
+                })
+            }
+            results
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private suspend fun loadLiveSportsHighlights(): List<SearchResponse> {
+        val url = "$SPORT_API/live/match-list-v5"
+        val headers = mapOf(
+            "User-Agent" to WEB_USER_AGENT,
+            "Accept" to "application/json",
+            "Origin" to SPORT_URL,
+            "Referer" to SPORT_URL,
+            "X-Device-Info" to "{}"
+        )
+        return try {
+            val res = app.get(url, headers = headers)
+            val root = mapper.readTree(res.body.string())
+            val list = root.get("data")?.get("list") ?: return emptyList()
+            val results = mutableListOf<SearchResponse>()
+
+            for (m in list) {
+                val id = m.get("id")?.asText() ?: continue
+                val status = m.get("status")?.asText() ?: ""
+                // Filter for matches that have ended or have replay
+                if (!status.equals("FT", ignoreCase = true) && !status.equals("MatchEnded", ignoreCase = true)) continue
+
+                val team1 = m.get("team1")?.get("name")?.asText() ?: ""
+                val team2 = m.get("team2")?.get("name")?.asText() ?: ""
+                val league = m.get("league")?.get("name")?.asText() ?: ""
+                val title = if (team1.isNotBlank() && team2.isNotBlank()) "$team1 vs $team2" else m.get("title")?.asText() ?: "Highlights"
+                val poster = m.get("team1")?.get("avatar")?.asText() ?: m.get("cover")?.asText()
+
+                results.add(newLiveSearchResponse("🎬 $title (Highlights)", "/sport_match:$id", TvType.Live) {
                     this.posterUrl = poster
                 })
             }
@@ -450,17 +558,17 @@ class MovieBoxProvider : MainAPI() {
         }
 
         val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId"
-        val headers = buildAuthHeaders("GET", detailUrl)
+        val headers = buildAuthHeaders("GET", url = detailUrl)
         val res = app.get(detailUrl, headers = headers)
         val root = mapper.readTree(res.body.string())
-        val subject = root.get("data")?.get("subject") ?: throw ErrorLoadingException("No data")
+        val subject = root.get("data")?.get("subject") ?: root.get("data") ?: throw ErrorLoadingException("No data")
 
         val title = subject.get("title")?.asText() ?: "Untitled"
         val poster = subject.get("cover")?.get("url")?.asText()
         val plot = subject.get("description")?.asText()
-        val year = subject.get("year")?.asInt()
+        val year = subject.get("year")?.asInt() ?: subject.get("releaseDate")?.asText()?.take(4)?.toIntOrNull()
         val subjectType = subject.get("subjectType")?.asInt(1) ?: 1
-        val rating = subject.get("score")?.asDouble()
+        val rating = subject.get("score")?.asDouble() ?: subject.get("imdbRatingValue")?.asDouble()
 
         val isTv = subjectType == 2
 
@@ -470,7 +578,7 @@ class MovieBoxProvider : MainAPI() {
 
         if (isTv) {
             val seasonUrl = "$host/wefeed-mobile-bff/subject-api/season-info?subjectId=$subjectId"
-            val seasonHeaders = buildAuthHeaders("GET", seasonUrl)
+            val seasonHeaders = buildAuthHeaders("GET", url = seasonUrl)
             val seasonRes = app.get(seasonUrl, headers = seasonHeaders)
             val seasonRoot = mapper.readTree(seasonRes.body.string())
             val seasons = seasonRoot.get("data")?.get("seasons")
@@ -551,6 +659,15 @@ class MovieBoxProvider : MainAPI() {
             })
         }
 
+        match.highlights?.forEachIndexed { idx, clip ->
+            episodes.add(newEpisode("/sport_video:${clip.path}") {
+                this.name = clip.title.ifBlank { "Highlight ${idx + 1}" }
+                this.season = 2
+                this.episode = idx + 1
+                this.posterUrl = clip.coverUrl
+            })
+        }
+
         return newTvSeriesLoadResponse(match.title, "/sport_match:$id", TvType.Live, episodes) {
             this.posterUrl = match.poster
             this.plot = "${match.league ?: "Sports"} - ${match.status ?: "Live"}"
@@ -586,7 +703,7 @@ class MovieBoxProvider : MainAPI() {
         }
 
         val playInfoUrl = data
-        val headers = buildAuthHeaders("GET", playInfoUrl)
+        val headers = buildAuthHeaders("GET", url = playInfoUrl)
         val res = app.get(playInfoUrl, headers = headers)
         val root = mapper.readTree(res.body.string())
         val dataNode = root.get("data") ?: return false
@@ -631,7 +748,7 @@ class MovieBoxProvider : MainAPI() {
     private suspend fun loadCaptions(subjectId: String, subtitleCallback: (SubtitleFile) -> Unit) {
         val host = getActiveHost()
         val capUrl = "$host/wefeed-mobile-bff/subject-api/get-ext-captions?subjectId=$subjectId"
-        val headers = buildAuthHeaders("GET", capUrl)
+        val headers = buildAuthHeaders("GET", url = capUrl)
         try {
             val res = app.get(capUrl, headers = headers)
             val root = mapper.readTree(res.body.string())
