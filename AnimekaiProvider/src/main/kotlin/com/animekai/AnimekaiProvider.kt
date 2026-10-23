@@ -185,18 +185,55 @@ class AnimeKaiProvider : MainAPI() {
             ShowStatus.Ongoing
         }
 
-        val slug = url.substringAfterLast("/").substringBefore("?").substringBefore("#")
+        // Resilient slug extraction: ignores redirects and subpaths like /ep-1
+        val cleanUrl = url.substringBefore("?").substringBefore("#").trimEnd('/')
+        val slug = if (cleanUrl.contains("/watch/")) {
+            cleanUrl.substringAfter("/watch/").substringBefore("/")
+        } else {
+            cleanUrl.substringAfterLast("/")
+        }
 
-        val episodes = doc.select(".eplist ul.range li a").mapNotNull { epLink ->
-            val num = epLink.attr("num").toIntOrNull() ?: return@mapNotNull null
-            val epName = epLink.selectFirst("span")?.text()?.trim() ?: "Episode $num"
+        // Season detection from title (e.g. "Season 2", "2nd Season", "Part 2")
+        val seasonNum = Regex("""(?i)(?:season|part)\s*(\d+)""").find(title)?.groupValues?.get(1)?.toIntOrNull()
+            ?: Regex("""(?i)(\d+)(?:st|nd|rd|th)\s*season""").find(title)?.groupValues?.get(1)?.toIntOrNull()
+            ?: 1
 
-            newEpisode("$slug:$num") {
-                this.name = epName
-                this.episode = num
-                this.posterUrl = poster
+        val subEpisodes = mutableListOf<Episode>()
+        val dubEpisodes = mutableListOf<Episode>()
+
+        doc.select(".eplist ul.range li a").forEach { epLink ->
+            val num = epLink.attr("num").toIntOrNull() ?: return@forEach
+            val epName = epLink.selectFirst("span")?.text()?.trim()?.ifBlank { null } ?: "Episode $num"
+            val hasSub = epLink.attr("data-sub") == "1" || epLink.attr("langs") in listOf("1", "3")
+            val hasDub = epLink.attr("data-dub") == "1" || epLink.attr("langs") in listOf("2", "3")
+
+            if (hasSub || (!hasSub && !hasDub)) {
+                subEpisodes.add(
+                    newEpisode("$slug:$num#sub") {
+                        this.name = epName
+                        this.episode = num
+                        this.season = seasonNum
+                        this.posterUrl = poster
+                    }
+                )
             }
-        }.distinctBy { it.episode }
+
+            if (hasDub) {
+                dubEpisodes.add(
+                    newEpisode("$slug:$num#dub") {
+                        this.name = epName
+                        this.episode = num
+                        this.season = seasonNum
+                        this.posterUrl = poster
+                    }
+                )
+            }
+        }
+
+        val recommendations = doc.select(".sidebar-section .aitem-col .aitem, .aitem")
+            .mapNotNull { it.toAnimeSearchResponse() }
+            .filter { it.url != url }
+            .distinctBy { it.url }
 
         return newAnimeLoadResponse(title, url, TvType.Anime) {
             this.posterUrl = poster
@@ -207,7 +244,14 @@ class AnimeKaiProvider : MainAPI() {
             this.showStatus = showStatus
             this.japName = titleJp
             this.synonyms = altTitles
-            addEpisodes(DubStatus.Subbed, episodes)
+            this.recommendations = recommendations
+
+            if (subEpisodes.isNotEmpty()) {
+                addEpisodes(DubStatus.Subbed, subEpisodes.distinctBy { it.episode })
+            }
+            if (dubEpisodes.isNotEmpty()) {
+                addEpisodes(DubStatus.Dubbed, dubEpisodes.distinctBy { it.episode })
+            }
         }
     }
 
@@ -220,13 +264,17 @@ class AnimeKaiProvider : MainAPI() {
         AnalyticsTracker.track(name, "loadLinks", mapOf("data" to data))
 
         val parts = data.split(":")
-        val (slug, epNum) = if (parts.size >= 2) {
+        val (slug, epPart) = if (parts.size >= 2) {
             parts[0] to parts[1]
         } else {
             val s = data.substringAfter("/watch/").substringBefore("/")
             val n = Regex("""ep-(\d+)""").find(data)?.groupValues?.get(1) ?: "1"
             s to n
         }
+
+        val epNum = epPart.substringBefore("#")
+        val isDub = epPart.endsWith("#dub")
+        val isSub = epPart.endsWith("#sub")
 
         val sourcesUrl = "$mainUrl/watch/$slug/ep/$epNum/sources"
         val sourcesRes = app.get(
@@ -238,16 +286,51 @@ class AnimeKaiProvider : MainAPI() {
         ).parsedSafe<SourcesApiResponse>() ?: return false
 
         val servers = mutableListOf<Pair<String, String>>()
-        sourcesRes.sources?.sub?.forEach { src ->
-            src.sourceUrl?.let {
-                val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
-                servers.add("MegaPlay (Sub - $serverLabel)" to it)
+        val subSources = sourcesRes.sources?.sub ?: emptyList()
+        val dubSources = sourcesRes.sources?.dub ?: emptyList()
+
+        if (isDub) {
+            dubSources.forEach { src ->
+                src.sourceUrl?.let {
+                    val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
+                    servers.add("MegaPlay (Dub - $serverLabel)" to it)
+                }
             }
-        }
-        sourcesRes.sources?.dub?.forEach { src ->
-            src.sourceUrl?.let {
-                val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
-                servers.add("MegaPlay (Dub - $serverLabel)" to it)
+            if (servers.isEmpty()) {
+                subSources.forEach { src ->
+                    src.sourceUrl?.let {
+                        val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
+                        servers.add("MegaPlay (Sub - $serverLabel)" to it)
+                    }
+                }
+            }
+        } else if (isSub) {
+            subSources.forEach { src ->
+                src.sourceUrl?.let {
+                    val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
+                    servers.add("MegaPlay (Sub - $serverLabel)" to it)
+                }
+            }
+            if (servers.isEmpty()) {
+                dubSources.forEach { src ->
+                    src.sourceUrl?.let {
+                        val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
+                        servers.add("MegaPlay (Dub - $serverLabel)" to it)
+                    }
+                }
+            }
+        } else {
+            subSources.forEach { src ->
+                src.sourceUrl?.let {
+                    val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
+                    servers.add("MegaPlay (Sub - $serverLabel)" to it)
+                }
+            }
+            dubSources.forEach { src ->
+                src.sourceUrl?.let {
+                    val serverLabel = src.serverName?.ifBlank { "Server" } ?: "Server"
+                    servers.add("MegaPlay (Dub - $serverLabel)" to it)
+                }
             }
         }
 
