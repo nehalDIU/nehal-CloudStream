@@ -5,10 +5,22 @@ import android.content.SharedPreferences
 
 object NetShortStorage {
     private var prefs: SharedPreferences? = null
+    var appContext: Context? = null
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         if (prefs == null) {
             prefs = context.applicationContext.getSharedPreferences("NetShortPrefs", Context.MODE_PRIVATE)
+        }
+    }
+
+    fun showToast(message: String) {
+        val ctx = appContext ?: return
+        try {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(ctx, message, android.widget.Toast.LENGTH_LONG).show()
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -86,13 +98,31 @@ object NetShortStorage {
     }
 
     fun getToonBoxCustomHeaders(): Map<String, String> {
-        val raw = prefs?.getString("toonbox_custom_headers", null) ?: return emptyMap()
+        val raw = prefs?.getString("toonbox_custom_headers", null)?.trim() ?: return emptyMap()
+        if (raw.isEmpty()) return emptyMap()
         val map = mutableMapOf<String, String>()
+
+        // Check if raw string is JSON format
+        if (raw.startsWith("{") && raw.endsWith("}")) {
+            try {
+                val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+                val jsonMap = mapper.readValue(raw, Map::class.java)
+                jsonMap.forEach { (k, v) ->
+                    if (k != null && v != null) {
+                        map[k.toString().trim()] = v.toString().trim()
+                    }
+                }
+                if (map.isNotEmpty()) return map
+            } catch (_: Throwable) {
+            }
+        }
+
+        // Line-by-line fallback (e.g. Header: Value or Header=Value)
         raw.lines().forEach { line ->
-            val parts = line.split(":", limit = 2)
-            if (parts.size == 2) {
-                val k = parts[0].trim()
-                val v = parts[1].trim()
+            val sepIndex = line.indexOf(':').let { if (it != -1) it else line.indexOf('=') }
+            if (sepIndex > 0) {
+                val k = line.substring(0, sepIndex).trim()
+                val v = line.substring(sepIndex + 1).trim()
                 if (k.isNotEmpty() && v.isNotEmpty()) {
                     map[k] = v
                 }
