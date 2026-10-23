@@ -1,5 +1,6 @@
 package com.animekai
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.SubtitleFile
@@ -8,7 +9,10 @@ import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.M3u8Helper
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -67,18 +71,28 @@ open class MegaPlay(private val customName: String = "MegaPlay") : ExtractorApi(
         // Tier 1: Fast Direct HTTP Extraction + Native AES-256-CBC Decryption (~50ms)
         try {
             val pageHeaders = mapOf(
-                "Accept" to "*/*",
-                "X-Requested-With" to "XMLHttpRequest",
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 "Referer" to resolvedReferer,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
 
             val pageRes = app.get(url, headers = pageHeaders)
-            val playerId = pageRes.document.selectFirst("#megaplay-player")?.attr("data-id")
+            val pageText = pageRes.text
+            val playerId = Regex("""data-id=["'](\d+)["']""").find(pageText)?.groupValues?.get(1)
+                ?: pageRes.document.selectFirst("#megaplay-player")?.attr("data-id")
 
             if (!playerId.isNullOrBlank()) {
+                val apiHeaders = mapOf(
+                    "Accept" to "application/json, text/javascript, */*; q=0.01",
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Referer" to url,
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                )
+
                 val apiUrl = "$mainUrl/stream/getSources?id=$playerId&platform=OTHER"
-                val sourceRes = app.get(apiUrl, headers = pageHeaders).parsedSafe<MegaPlayResponse>()
+                val apiRes = app.get(apiUrl, headers = apiHeaders)
+                val sourceRes = apiRes.parsedSafe<MegaPlayResponse>()
+                val apiText = apiRes.text
 
                 // Subtitle tracks provided directly by API
                 sourceRes?.tracks?.forEach { track ->
@@ -97,8 +111,11 @@ open class MegaPlay(private val customName: String = "MegaPlay") : ExtractorApi(
                 var streamUrl = sourceRes?.sources?.file
 
                 // Decrypt AES-256-CBC enc payload
-                if (streamUrl.isNullOrBlank() && !sourceRes?.enc.isNullOrBlank()) {
-                    val decrypted = decryptEncPayload(sourceRes!!.enc!!)
+                val encPayload = sourceRes?.enc
+                    ?: Regex(""""enc"\s*:\s*"([^"]+)"""").find(apiText)?.groupValues?.get(1)
+
+                if (streamUrl.isNullOrBlank() && !encPayload.isNullOrBlank()) {
+                    val decrypted = decryptEncPayload(encPayload)
                     if (!decrypted.isNullOrBlank()) {
                         val parsedUrl = Regex(""""file"\s*:\s*"([^"]+)"""")
                             .find(decrypted)?.groupValues?.get(1)?.replace("\\/", "/")
@@ -109,12 +126,29 @@ open class MegaPlay(private val customName: String = "MegaPlay") : ExtractorApi(
                 }
 
                 if (!streamUrl.isNullOrBlank()) {
-                    M3u8Helper.generateM3u8(
-                        name,
-                        streamUrl,
-                        "$mainUrl/",
-                        headers = streamHeaders
-                    ).forEach(callback)
+                    // 1. Immediately emit master direct link so link is ALWAYS found
+                    callback(
+                        newExtractorLink(
+                            name,
+                            name,
+                            streamUrl,
+                            ExtractorLinkType.M3U8
+                        ) {
+                            this.referer = "$mainUrl/"
+                            this.headers = streamHeaders
+                            this.quality = Qualities.P1080.value
+                        }
+                    )
+
+                    // 2. Expand into multi-quality bitrates if available
+                    runCatching {
+                        M3u8Helper.generateM3u8(
+                            name,
+                            streamUrl,
+                            "$mainUrl/",
+                            headers = streamHeaders
+                        ).forEach(callback)
+                    }
                     return
                 }
             }
@@ -122,7 +156,7 @@ open class MegaPlay(private val customName: String = "MegaPlay") : ExtractorApi(
             Log.d("MegaPlay", "Direct extraction failed: ${e.message}")
         }
 
-        // Tier 2: Headless WebView Fallback (Safety net if token cipher shifts)
+        // Tier 2: Real Headless WebView Fallback (Safety net if token cipher shifts)
         val jsClick = """
             (() => {
                 const btn = document.querySelector('.jw-icon-display, .play-btn, button[aria-label="Play"]');
@@ -135,35 +169,47 @@ open class MegaPlay(private val customName: String = "MegaPlay") : ExtractorApi(
             interceptUrl = Regex("""\.m3u8"""),
             script = jsClick,
             useOkhttp = false,
-            timeout = 8_000L
+            timeout = 10_000L
         )
 
         try {
-            val m3u8Response = app.get(url = url, referer = resolvedReferer, interceptor = m3u8Resolver)
-            val m3u8Url = m3u8Response.url
-            if (m3u8Url.contains(".m3u8")) {
-                M3u8Helper.generateM3u8(
-                    name,
-                    m3u8Url,
-                    "$mainUrl/",
-                    headers = streamHeaders
-                ).forEach(callback)
+            val resolved = runCatching {
+                m3u8Resolver.resolveUsingWebView(url = url, referer = resolvedReferer)
+            }.getOrNull()
+
+            val webViewUrl = resolved?.first?.url?.toString()
+            if (!webViewUrl.isNullOrBlank() && webViewUrl.contains(".m3u8")) {
+                callback(
+                    newExtractorLink(
+                        name,
+                        "$name (Auto)",
+                        webViewUrl,
+                        ExtractorLinkType.M3U8
+                    ) {
+                        this.referer = "$mainUrl/"
+                        this.headers = streamHeaders
+                        this.quality = Qualities.Unknown.value
+                    }
+                )
             }
         } catch (e: Exception) {
             Log.e("MegaPlay", "WebView fallback failed: ${e.message}")
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class MegaPlayResponse(
         @JsonProperty("sources") val sources: SourcesData? = null,
         @JsonProperty("tracks") val tracks: List<TrackData> = emptyList(),
         @JsonProperty("enc") val enc: String? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class SourcesData(
         @JsonProperty("file") val file: String? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class TrackData(
         @JsonProperty("file") val file: String? = null,
         @JsonProperty("label") val label: String? = null,

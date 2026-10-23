@@ -1,5 +1,6 @@
 package com.animekai
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -106,6 +107,12 @@ class AnimeKaiProvider : MainAPI() {
         }
     }
 
+    // Required by CloudStream for general search queries
+    override suspend fun search(query: String): List<SearchResponse> {
+        return search(query, 1)?.items ?: emptyList()
+    }
+
+    // Paginated and dual-tier search
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         AnalyticsTracker.track(name, "search", mapOf("query" to query, "page" to page))
 
@@ -201,7 +208,9 @@ class AnimeKaiProvider : MainAPI() {
         val subEpisodes = mutableListOf<Episode>()
         val dubEpisodes = mutableListOf<Episode>()
 
-        doc.select(".eplist ul.range li a").forEach { epLink ->
+        // Support both .eplist ul.range li a and direct .eplist a[num]
+        val epElements = doc.select(".eplist a[num], .eplist ul.range li a")
+        epElements.forEach { epLink ->
             val num = epLink.attr("num").toIntOrNull() ?: return@forEach
             val epName = epLink.selectFirst("span")?.text()?.trim()?.ifBlank { null } ?: "Episode $num"
             val hasSub = epLink.attr("data-sub") == "1" || epLink.attr("langs") in listOf("1", "3")
@@ -228,6 +237,18 @@ class AnimeKaiProvider : MainAPI() {
                     }
                 )
             }
+        }
+
+        // Fallback for standalone movie pages with 0 explicit episode items
+        if (subEpisodes.isEmpty() && dubEpisodes.isEmpty()) {
+            subEpisodes.add(
+                newEpisode("$slug:1#sub") {
+                    this.name = title
+                    this.episode = 1
+                    this.season = seasonNum
+                    this.posterUrl = poster
+                }
+            )
         }
 
         val recommendations = doc.select(".sidebar-section .aitem-col .aitem, .aitem")
@@ -277,17 +298,37 @@ class AnimeKaiProvider : MainAPI() {
         val isSub = epPart.endsWith("#sub")
 
         val sourcesUrl = "$mainUrl/watch/$slug/ep/$epNum/sources"
-        val sourcesRes = app.get(
+        val response = app.get(
             sourcesUrl,
             headers = mapOf(
                 "Referer" to "$mainUrl/watch/$slug",
-                "X-Requested-With" to "XMLHttpRequest"
+                "X-Requested-With" to "XMLHttpRequest",
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
-        ).parsedSafe<SourcesApiResponse>() ?: return false
+        )
+
+        val sourcesRes = response.parsedSafe<SourcesApiResponse>()
+        val responseText = response.text
 
         val servers = mutableListOf<Pair<String, String>>()
-        val subSources = sourcesRes.sources?.sub ?: emptyList()
-        val dubSources = sourcesRes.sources?.dub ?: emptyList()
+        val subSources = mutableListOf<ServerItem>()
+        val dubSources = mutableListOf<ServerItem>()
+
+        if (sourcesRes?.sources != null) {
+            sourcesRes.sources.sub?.let { subSources.addAll(it) }
+            sourcesRes.sources.dub?.let { dubSources.addAll(it) }
+        } else {
+            // Regex fallback if Jackson parsing encounters unexpected schema differences
+            val subBlock = responseText.substringAfter("\"sub\":", "").substringBefore("\"dub\":", "")
+            val dubBlock = responseText.substringAfter("\"dub\":", "")
+
+            Regex(""""server_name"\s*:\s*"([^"]+)"[\s\S]*?"source_url"\s*:\s*"([^"]+)"""").findAll(subBlock).forEach { m ->
+                subSources.add(ServerItem(serverName = m.groupValues[1], sourceUrl = m.groupValues[2].replace("\\/", "/")))
+            }
+            Regex(""""server_name"\s*:\s*"([^"]+)"[\s\S]*?"source_url"\s*:\s*"([^"]+)"""").findAll(dubBlock).forEach { m ->
+                dubSources.add(ServerItem(serverName = m.groupValues[1], sourceUrl = m.groupValues[2].replace("\\/", "/")))
+            }
+        }
 
         if (isDub) {
             dubSources.forEach { src ->
@@ -334,6 +375,8 @@ class AnimeKaiProvider : MainAPI() {
             }
         }
 
+        if (servers.isEmpty()) return false
+
         servers.amap { (displayName, embedUrl) ->
             try {
                 MegaPlay(displayName).getUrl(embedUrl, "$mainUrl/", subtitleCallback, callback)
@@ -344,12 +387,14 @@ class AnimeKaiProvider : MainAPI() {
     }
 
     // ── Supporting Data Models ───────────────────────────────────────
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class HomeAjaxResponse(
         @JsonProperty("html") val html: String? = null,
         @JsonProperty("page") val page: Int? = null,
         @JsonProperty("has_next") val hasNext: Boolean? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class SuggestItem(
         @JsonProperty("slug") val slug: String,
         @JsonProperty("title") val title: String,
@@ -362,15 +407,18 @@ class AnimeKaiProvider : MainAPI() {
         @JsonProperty("dub_count") val dubCount: Int? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class SourcesApiResponse(
         @JsonProperty("sources") val sources: SourcesContainer? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class SourcesContainer(
         @JsonProperty("sub") val sub: List<ServerItem>? = emptyList(),
         @JsonProperty("dub") val dub: List<ServerItem>? = emptyList()
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class ServerItem(
         @JsonProperty("id") val id: Any? = null,
         @JsonProperty("server_name") val serverName: String? = null,
