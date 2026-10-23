@@ -15,14 +15,14 @@ import org.jsoup.nodes.Document
  * Target: https://animekai.beer
  * Platform: WordPress 7.1.3 + Zetaflix theme (v1.4.5)
  *
- * Architecture Highlights:
- *  - Search:    GET /?s={query}&post_type=tvshows (HTML .display-item)
- *  - Home:      /anime/, /movies/, /episodes/, /trending/ (paginated)
- *  - Detail:    Lightweight DOM extraction (TMDB high-res posters, backdrops, plot, genres)
- *  - Seasons:   Season 1 inline DOM; Seasons 2+ retrieved in parallel via admin-ajax zt_ajax_season_menu
- *  - Anti-Bot:  Sequential homepage requests + automated WebViewResolver fallback on CF challenge
- *  - Video:     ZetaPlayer REST API (/wp-json/zetaplayer/v2/) resolving all SUB & DUB mirrors
- *  - Telemetry: Integrated AnalyticsTracker for operational metrics
+ * Features:
+ *  - URL Normalization: Converts /episodes/... URLs to proper /anime/{slug}/ series pages
+ *  - Sub & Dub Dropdown: newAnimeLoadResponse with addEpisodes(DubStatus.Subbed/Dubbed)
+ *  - Multi-Season: Inline Season 1 + parallel asynchronous admin-ajax fetching for Seasons 2+
+ *  - Poster Tags: addDubStatus(dubExist=true, subExist=true) renders SUB & DUB badges on posters
+ *  - Cloudflare Protection: Automated WebViewResolver fallback when CF challenge/403 is encountered
+ *  - Multi-Server Streaming: Queries ZetaPlayer mirrors, prioritizing the user's selected audio mode
+ *  - Telemetry: Integrated AnalyticsTracker
  */
 class AnimekaiProvider : MainAPI() {
     override var mainUrl             = "https://animekai.beer"
@@ -37,7 +37,6 @@ class AnimekaiProvider : MainAPI() {
         TvType.TvSeries
     )
 
-    // Rate-limiting mitigation for Cloudflare
     override var sequentialMainPage      = true
     override var sequentialMainPageDelay = 500L
 
@@ -70,7 +69,8 @@ class AnimekaiProvider : MainAPI() {
         "$mainUrl/anime/"    to "Anime Series",
         "$mainUrl/movies/"   to "Anime Movies",
         "$mainUrl/episodes/" to "Latest Episodes",
-        "$mainUrl/trending/" to "Trending"
+        "$mainUrl/trending/" to "Trending",
+        "$mainUrl/ratings/"  to "Top Rated"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -105,15 +105,18 @@ class AnimekaiProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         AnalyticsTracker.track(name, "view", mapOf("url" to url))
-        val doc = fetchDocument(url) ?: run {
-            Log.e(TAG, "Failed to load document for $url")
+
+        // Auto-normalize episode permalink (/episodes/slug-2x3/) to main anime series page (/anime/slug/)
+        val targetUrl = normalizeAnimeUrl(url)
+
+        val doc = fetchDocument(targetUrl) ?: run {
+            Log.e(TAG, "Failed to load document for $targetUrl")
             return null
         }
 
-        // Title
         val title = doc.selectFirst("h1.entry-title, .f-title h1, h1")
             ?.text()?.trim()
-            ?: url.trimEnd('/').substringAfterLast("/").replace("-", " ")
+            ?: targetUrl.trimEnd('/').substringAfterLast("/").replace("-", " ")
 
         // Poster: Prefer high-res TMDB original attribute, fallback to src
         val poster = doc.selectFirst("img.mli-thumb, .tvshow-poster img, .poster img")
@@ -142,7 +145,7 @@ class AnimekaiProvider : MainAPI() {
         val rating = doc.selectFirst("span.f-imdb")
             ?.text()?.replace("IMDb:", "")?.trim()?.toDoubleOrNull()
 
-        val isMovie = url.contains("/movies/") || url.contains("/movie/")
+        val isMovie = targetUrl.contains("/movies/") || targetUrl.contains("/movie/")
 
         // WP Post ID from data attributes
         val postId = doc.selectFirst(".rating-stars[data-id], [data-itemid]")
@@ -152,7 +155,7 @@ class AnimekaiProvider : MainAPI() {
 
         // ── MOVIE ────────────────────────────────────────────────────────────
         if (isMovie) {
-            return newMovieLoadResponse(title, url, TvType.AnimeMovie, "$postId|movies|$url") {
+            return newMovieLoadResponse(title, targetUrl, TvType.AnimeMovie, "$postId|movies|SUB|$targetUrl") {
                 this.posterUrl           = poster
                 this.backgroundPosterUrl = backdrop
                 this.plot                = plot
@@ -162,35 +165,50 @@ class AnimekaiProvider : MainAPI() {
             }
         }
 
-        // ── TV SERIES ─────────────────────────────────────────────────────────
+        // ── ANIME SERIES (Dual SUB / DUB Lists + Multi-Season) ────────────────
         val seasonLinks = doc.select("ul.seasons-list a.play-ss")
         val nonce       = seasonLinks.firstOrNull()?.attr("data-sec") ?: ""
         val seasonNums  = seasonLinks.mapNotNull { it.attr("data-snum").toIntOrNull() }.distinct()
 
         // Season 1 episodes (inline in DOM)
-        val allEpisodes = mutableListOf<Episode>()
-        val season1Eps = parseEpisodeList(doc.select("ul#season-listep-1 li a.play-ep"), url)
-        allEpisodes.addAll(season1Eps)
+        val rawSeason1 = parseEpisodeAnchors(doc.select("ul#season-listep-1 li a.play-ep"))
 
         // Seasons 2+ (fetched in parallel with non-blocking amap)
         val otherSeasons = seasonNums.filter { it > 1 }
-        if (otherSeasons.isNotEmpty() && postId.isNotBlank()) {
-            val asyncSeasons = otherSeasons.amap { sNum ->
-                fetchSeasonEpisodes(postId, sNum, nonce, url)
+        val rawOtherSeasons = if (otherSeasons.isNotEmpty() && postId.isNotBlank()) {
+            otherSeasons.amap { sNum ->
+                fetchSeasonEpisodeAnchors(postId, sNum, nonce, targetUrl)
             }.flatten()
-            allEpisodes.addAll(asyncSeasons)
-        }
-
-        // Sort episodes chronologically by season and episode number
-        allEpisodes.sortWith(compareBy({ it.season ?: 1 }, { it.episode ?: 0 }))
-
-        val type = if (genres.any { it.contains("Animation", ignoreCase = true) || it.contains("Anime", ignoreCase = true) }) {
-            TvType.Anime
         } else {
-            TvType.TvSeries
+            emptyList()
         }
 
-        return newTvSeriesLoadResponse(title, url, type, allEpisodes) {
+        val allRawEpisodes = (rawSeason1 + rawOtherSeasons)
+            .distinctBy { "${it.season}_${it.episode}" }
+            .sortedWith(compareBy({ it.season }, { it.episode }))
+
+        // Build SUB and DUB episode lists to populate CloudStream's native Dub/Sub dropdown
+        val subEpisodes = allRawEpisodes.map { ep ->
+            newEpisode("${ep.postId}|tvep|SUB|$targetUrl") {
+                this.name      = ep.title
+                this.season    = ep.season
+                this.episode   = ep.episode
+                this.posterUrl = ep.thumb
+            }
+        }
+
+        val dubEpisodes = allRawEpisodes.map { ep ->
+            newEpisode("${ep.postId}|tvep|DUB|$targetUrl") {
+                this.name      = ep.title
+                this.season    = ep.season
+                this.episode   = ep.episode
+                this.posterUrl = ep.thumb
+            }
+        }
+
+        return newAnimeLoadResponse(title, targetUrl, TvType.Anime) {
+            addEpisodes(DubStatus.Subbed, subEpisodes)
+            addEpisodes(DubStatus.Dubbed, dubEpisodes)
             this.posterUrl           = poster
             this.backgroundPosterUrl = backdrop
             this.plot                = plot
@@ -212,18 +230,22 @@ class AnimekaiProvider : MainAPI() {
     ): Boolean {
         AnalyticsTracker.track(name, "play", mapOf("url" to data.take(100)))
 
-        // Data payload format: "{epPostId}|{type}|{refererUrl}"
-        val parts    = data.split("|", limit = 3)
-        val epPostId = parts.getOrNull(0)?.trim() ?: return false
-        val type     = parts.getOrNull(1)?.trim() ?: "tvep"
-        val refUrl   = parts.getOrNull(2)?.trim() ?: mainUrl
+        // Data payload format: "{epPostId}|{type}|{preferredAudio}|{refererUrl}"
+        // Strip automatically prepended mainUrl if CloudStream's newEpisode fixUrl added it
+        val cleanData = data.removePrefix("$mainUrl/").removePrefix(mainUrl).trim()
+        val parts     = cleanData.split("|")
+        val rawPid    = parts.getOrNull(0)?.trim().orEmpty()
+        val epPostId  = rawPid.substringAfterLast("/").trim()
+        val type      = parts.getOrNull(1)?.trim() ?: "tvep"
+        val prefAudio = parts.getOrNull(2)?.trim() ?: "SUB"
+        val refUrl    = parts.getOrNull(3)?.trim() ?: mainUrl
 
         if (epPostId.isBlank()) {
             Log.e(TAG, "loadLinks: missing epPostId from data=$data")
             return false
         }
 
-        // Step 1: Query server list
+        // Step 1: Query server list from ZetaPlayer REST API
         val serversUrl = "$mainUrl/wp-json/zetaplayer/v2/$epPostId/$type/default"
         val serversResp = try {
             app.get(serversUrl, headers = jsonHeaders + mapOf("Referer" to refUrl), timeout = 15)
@@ -233,35 +255,38 @@ class AnimekaiProvider : MainAPI() {
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get server list for $epPostId: ${e.message}")
+            null
+        }
+
+        val servers = serversResp?.embed.orEmpty()
+        if (servers.isEmpty()) {
+            Log.e(TAG, "No servers available in ZetaPlayer for epPostId=$epPostId")
             return false
         }
 
-        if (serversResp.status != 1 || serversResp.embed.isNullOrEmpty()) {
-            Log.e(TAG, "No servers available for $epPostId (status=${serversResp.status})")
-            return false
+        // Sort servers so the user's selected audio mode (DUB or SUB) is processed first
+        val sortedServers = servers.sortedByDescending { s ->
+            val nameUpper = s.name.uppercase()
+            if (prefAudio == "DUB") nameUpper.contains("DUB") else nameUpper.contains("SUB")
         }
 
-        // Step 2: Extract all SUB & DUB servers concurrently
+        // Step 2: Extract servers concurrently
         var success = false
-        serversResp.embed.amap { server ->
-            val serverUrl = "$mainUrl/wp-json/zetaplayer/v2/$epPostId/$type/${server.num}"
+        sortedServers.amap { server ->
             try {
-                val embedResp = app.get(
-                    serverUrl,
-                    headers = jsonHeaders + mapOf("Referer" to refUrl),
-                    timeout = 15
-                ).let { resp ->
-                    val raw = resp.text.stripPhpWarnings()
-                    parseJson<PlayerEmbedResponse>(raw)
+                val isDub = server.name.contains("DUB", ignoreCase = true)
+                val label = if (isDub) "DUB" else "SUB"
+
+                // First attempt: ZetaPlayer REST API
+                var embedSrc = getEmbedFromRest(epPostId, type, server.num, refUrl)
+
+                // Fallback attempt: ZetaPlayer admin-ajax endpoint
+                if (embedSrc == null) {
+                    embedSrc = getEmbedFromAdminAjax(epPostId, server.num, type, refUrl)
                 }
 
-                if (embedResp.status == 1) {
-                    val isDub = server.name.contains("DUB", ignoreCase = true)
-                    val label = if (isDub) "DUB" else "SUB"
-                    val embedSrc = resolveEmbedUrl(embedResp) ?: return@amap
-
-                    Log.d(TAG, "Extracting server [${server.name}] ($label) -> $embedSrc")
-
+                if (!embedSrc.isNullOrBlank()) {
+                    Log.d(TAG, "Resolving server [${server.name}] ($label) -> $embedSrc")
                     val extracted = loadExtractor(
                         embedSrc,
                         refUrl,
@@ -271,11 +296,47 @@ class AnimekaiProvider : MainAPI() {
                     if (extracted) success = true
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Server ${server.num} (${server.name}) resolution failed: ${e.message}")
+                Log.e(TAG, "Server ${server.num} (${server.name}) failed: ${e.message}")
             }
         }
 
         return success
+    }
+
+    private suspend fun getEmbedFromRest(pid: String, type: String, serverNum: Int, refUrl: String): String? {
+        val serverUrl = "$mainUrl/wp-json/zetaplayer/v2/$pid/$type/$serverNum"
+        return try {
+            val resp = app.get(serverUrl, headers = jsonHeaders + mapOf("Referer" to refUrl), timeout = 15)
+            val raw = resp.text.stripPhpWarnings()
+            val embedResp = parseJson<PlayerEmbedResponse>(raw)
+            resolveEmbedUrl(embedResp)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun getEmbedFromAdminAjax(pid: String, serverNum: Int, type: String, refUrl: String): String? {
+        return try {
+            val resp = app.post(
+                "$mainUrl/wp-admin/admin-ajax.php",
+                data = mapOf(
+                    "action" to "zeta_player_ajax",
+                    "post"   to pid,
+                    "nume"   to serverNum.toString(),
+                    "type"   to type
+                ),
+                headers = mapOf(
+                    "User-Agent"       to USER_AGENT,
+                    "Referer"          to refUrl,
+                    "X-Requested-With" to "XMLHttpRequest"
+                ),
+                timeout = 15
+            )
+            val embedResp = parseJson<PlayerEmbedResponse>(resp.text.stripPhpWarnings())
+            resolveEmbedUrl(embedResp)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     // =========================================================================
@@ -284,37 +345,41 @@ class AnimekaiProvider : MainAPI() {
 
     /**
      * Fetches an HTML document with automated fallback to WebViewResolver
-     * if a Cloudflare challenge or HTTP 403 block is detected.
+     * if Cloudflare challenge or HTTP 403 block is detected.
      */
     private suspend fun fetchDocument(url: String, referer: String = mainUrl): Document? {
-        return try {
+        try {
             val response = app.get(
                 url,
                 headers = defaultHeaders + mapOf("Referer" to referer),
-                timeout = 25
+                timeout = 15
             )
-
-            // Detect Cloudflare Turnstile / Managed Challenge
-            val isBlocked = response.code in listOf(403, 503) ||
-                response.text.contains("challenge-platform") ||
-                response.text.contains("Just a moment...") ||
-                response.text.contains("cf-browser-verification")
-
-            if (isBlocked) {
-                Log.w(TAG, "Cloudflare challenge detected on $url; launching WebViewResolver fallback")
-                val cfResolver = WebViewResolver(interceptUrl = Regex(""".*animekai\.beer.*"""))
-                val cfResp = app.get(
-                    url,
-                    headers = defaultHeaders + mapOf("Referer" to referer),
-                    interceptor = cfResolver,
-                    timeout = 35
-                )
-                cfResp.document
-            } else {
-                response.document
+            if (response.code !in 400..599 &&
+                !response.text.contains("challenge-platform") &&
+                !response.text.contains("Just a moment...") &&
+                !response.text.contains("cf-browser-verification")
+            ) {
+                return response.document
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Document fetch failed for $url: ${e.message}")
+            Log.w(TAG, "Direct GET for $url failed (${e.message}), attempting WebViewResolver fallback")
+        }
+
+        // Cloudflare Challenge Fallback via Android WebView
+        return try {
+            val cfResolver = WebViewResolver(
+                interceptUrl = Regex(""".*animekai\.beer.*"""),
+                useOkhttp    = false
+            )
+            val cfResp = app.get(
+                url,
+                headers     = defaultHeaders + mapOf("Referer" to referer),
+                interceptor = cfResolver,
+                timeout     = 35
+            )
+            cfResp.document
+        } catch (e: Exception) {
+            Log.e(TAG, "WebView fallback failed for $url: ${e.message}")
             null
         }
     }
@@ -323,12 +388,48 @@ class AnimekaiProvider : MainAPI() {
     // Private Helpers
     // =========================================================================
 
-    private suspend fun fetchSeasonEpisodes(
+    /**
+     * Converts any /episodes/{anime-slug}-{S}x{E}/ URL to its parent /anime/{anime-slug}/ URL.
+     */
+    private fun normalizeAnimeUrl(rawUrl: String): String {
+        val fixed = fixUrl(rawUrl)
+        if (fixed.contains("/episodes/")) {
+            val slug = fixed.trimEnd('/')
+                .substringAfterLast("/episodes/")
+                .replace(Regex("""-\d+[xX×]\d+.*"""), "")
+            return "$mainUrl/anime/$slug/"
+        }
+        return fixed
+    }
+
+    private data class RawEpisode(
+        val postId: String,
+        val season: Int,
+        val episode: Int,
+        val title: String?,
+        val thumb: String?
+    )
+
+    private fun parseEpisodeAnchors(elements: org.jsoup.select.Elements): List<RawEpisode> {
+        return elements.mapNotNull { anchor ->
+            val epPostId = anchor.attr("data-pid").trim().ifBlank { return@mapNotNull null }
+            val epNum    = anchor.attr("data-epid").toIntOrNull() ?: 1
+            val ssNum    = anchor.attr("data-ssid").toIntOrNull() ?: 1
+            val epTitle  = anchor.selectFirst("span.ep-title")?.text()?.trim()
+            val epThumb  = anchor.selectFirst("img")?.let { img ->
+                img.attr("src").ifBlank { null } ?: img.attr("data-src").ifBlank { null }
+            }
+
+            RawEpisode(epPostId, ssNum, epNum, epTitle, epThumb)
+        }
+    }
+
+    private suspend fun fetchSeasonEpisodeAnchors(
         postId: String,
         seasonNum: Int,
         nonce: String,
         refUrl: String
-    ): List<Episode> {
+    ): List<RawEpisode> {
         if (postId.isBlank()) return emptyList()
         return try {
             val resp = app.post(
@@ -351,40 +452,20 @@ class AnimekaiProvider : MainAPI() {
             val htmlFrag = json?.episodes ?: return emptyList()
 
             val fragDoc = Jsoup.parseBodyFragment(htmlFrag)
-            parseEpisodeList(fragDoc.select("li a.play-ep"), refUrl)
+            parseEpisodeAnchors(fragDoc.select("li a.play-ep"))
         } catch (e: Exception) {
-            Log.e(TAG, "fetchSeasonEpisodes failed for Season $seasonNum: ${e.message}")
+            Log.e(TAG, "fetchSeasonEpisodeAnchors failed for Season $seasonNum: ${e.message}")
             emptyList()
-        }
-    }
-
-    private fun parseEpisodeList(elements: org.jsoup.select.Elements, refUrl: String): List<Episode> {
-        return elements.mapNotNull { anchor ->
-            val epPostId = anchor.attr("data-pid").trim().ifBlank { return@mapNotNull null }
-            val epNum    = anchor.attr("data-epid").toIntOrNull()
-            val ssNum    = anchor.attr("data-ssid").toIntOrNull() ?: 1
-            val type     = anchor.attr("data-type").ifBlank { "tvep" }
-            val epTitle  = anchor.selectFirst("span.ep-title")?.text()?.trim()
-            val epThumb  = anchor.selectFirst("img")
-                ?.let { img ->
-                    img.attr("src").ifBlank { null }
-                        ?: img.attr("data-src").ifBlank { null }
-                }
-
-            newEpisode("$epPostId|$type|$refUrl") {
-                this.name      = epTitle
-                this.season    = ssNum
-                this.episode   = epNum
-                this.posterUrl = epThumb
-            }
         }
     }
 
     private fun parseDisplayItems(doc: Document, isMovie: Boolean?): List<SearchResponse> {
         return doc.select("div.display-item").mapNotNull { item ->
-            val anchor = item.selectFirst("a[href][data-ptype], a[href*='/anime/'], a[href*='/movies/']")
+            val anchor = item.selectFirst("a[href][data-ptype], a[href*='/anime/'], a[href*='/movies/'], a[href*='/episodes/']")
                 ?: return@mapNotNull null
-            val href  = fixUrl(anchor.attr("href")).ifBlank { return@mapNotNull null }
+            val rawHref = anchor.attr("href").ifBlank { return@mapNotNull null }
+            val seriesUrl = normalizeAnimeUrl(rawHref)
+
             val title = anchor.attr("title").ifBlank { null }
                 ?: item.selectFirst("h3, .item-desc-title h3")?.text()?.trim()
                 ?: return@mapNotNull null
@@ -396,21 +477,24 @@ class AnimekaiProvider : MainAPI() {
             }
 
             val ptype = anchor.attr("data-ptype")
-            val forceMovie = isMovie ?: (ptype == "movies" || href.contains("/movies/"))
+            val forceMovie = isMovie ?: (ptype == "movies" || seriesUrl.contains("/movies/"))
 
             if (forceMovie) {
-                newAnimeSearchResponse(title, href, TvType.AnimeMovie) {
+                newAnimeSearchResponse(title, seriesUrl, TvType.AnimeMovie) {
                     this.posterUrl = poster
+                    addDubStatus(dubExist = true, subExist = true)
                 }
             } else {
-                newAnimeSearchResponse(title, href, TvType.Anime) {
+                newAnimeSearchResponse(title, seriesUrl, TvType.Anime) {
                     this.posterUrl = poster
+                    addDubStatus(dubExist = true, subExist = true)
                 }
             }
         }
     }
 
-    private fun resolveEmbedUrl(resp: PlayerEmbedResponse): String? {
+    private fun resolveEmbedUrl(resp: PlayerEmbedResponse?): String? {
+        if (resp == null) return null
         val playUrl = resp.playUrl?.trim()
         if (!playUrl.isNullOrBlank() && playUrl.startsWith("http")) {
             return playUrl
