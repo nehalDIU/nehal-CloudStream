@@ -122,7 +122,7 @@ class MojaLossProvider : MainAPI() {
     override var sequentialMainPageDelay = 100L
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        const val USER_AGENT = MojaLossStorage.USER_AGENT
 
         fun parseDuration(text: String): Int? {
             var total = 0
@@ -150,13 +150,15 @@ class MojaLossProvider : MainAPI() {
         "category/tv-shows/korean-tv-shows/page/%d/" to "Korean TV Shows",
         "category/international-movies/page/%d/" to "International Movies",
         "4k/page/%d/" to "4K Movies",
-        "trending/page/%d/" to "Trending"
+        "trending" to "Trending"
     )
 
     private fun getRequestHeaders(): Map<String, String> {
         val headers = mutableMapOf(
             "Referer" to "$mainUrl/",
-            "User-Agent" to USER_AGENT
+            "User-Agent" to USER_AGENT,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language" to "en-US,en;q=0.9"
         )
         val cookie = MojaLossStorage.getCookie()
         if (!cookie.isNullOrEmpty()) {
@@ -199,6 +201,20 @@ class MojaLossProvider : MainAPI() {
             return newHomePageResponse(request.name, items, hasNext = false)
         }
 
+        if (path == "trending") {
+            if (page > 1) return null
+            val url = "$mainUrl/trending/"
+            val doc = try {
+                app.get(url, headers = getRequestHeaders(), timeout = 30L, cacheTime = 60).document
+            } catch (e: Exception) {
+                Log.e("MojaLoss", "Error fetching trending ($url): ${e.message}")
+                return null
+            }
+            val cards = doc.select(".trending-card, a.mj-fp-card, a.movie-card")
+            val items = cards.mapNotNull { it.toSearchResponse() }
+            return newHomePageResponse(request.name, items, hasNext = false)
+        }
+
         val targetUrl = if (path.contains("%d")) {
             if (page <= 1) {
                 val cleanPath = path.replace("page/%d/", "").trimEnd('/')
@@ -217,7 +233,7 @@ class MojaLossProvider : MainAPI() {
             return null
         }
 
-        val cards = doc.select("a.mj-fp-card, a.movie-card, div.movie-card > a")
+        val cards = doc.select("a.mj-fp-card, a.movie-card, div.movie-card > a, div.trending-card")
         val items = cards.mapNotNull { it.toSearchResponse() }
 
         val hasNext = doc.selectFirst("a[rel=next], a.mj-archive-page--nav:contains(Next), a[href*='/page/${page + 1}/']") != null ||
@@ -269,7 +285,7 @@ class MojaLossProvider : MainAPI() {
             val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
             val htmlUrl = "$mainUrl/?s=$encoded"
             val doc = app.get(htmlUrl, headers = getRequestHeaders(), timeout = 25L).document
-            val cards = doc.select("a.mj-fp-card, a.movie-card")
+            val cards = doc.select("a.mj-fp-card, a.movie-card, div.trending-card")
             cards.mapNotNull { it.toSearchResponse() }
         } catch (e: Exception) {
             Log.e("MojaLoss", "HTML search fallback failed: ${e.message}")
@@ -280,21 +296,39 @@ class MojaLossProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val href = fixUrlNull(attr("href")) ?: return null
-        if (href == mainUrl || href.endsWith("/pro/") || href.endsWith("/trial/")) return null
+        val isTrending = hasClass("trending-card") || selectFirst(".trending-card") != null
+        val href = if (isTrending) {
+            fixUrlNull(selectFirst("a[href]")?.attr("href")) ?: fixUrlNull(attr("href")) ?: return null
+        } else {
+            fixUrlNull(attr("href")) ?: return null
+        }
+        if (href == mainUrl || href.endsWith("/pro/") || href.endsWith("/trial/") || href.contains("/wp-login.php")) return null
 
-        val title = selectFirst(".mj-fp-card-title, .movie-title")?.text()?.trim()
-            ?: selectFirst("img")?.attr("alt")?.trim()
-            ?: return null
-        if (title.isBlank()) return null
+        val rawTitle = if (isTrending) {
+            selectFirst(".card-title a, .card-title, h3")?.text()?.trim()
+                ?: selectFirst("img")?.attr("alt")?.trim()
+                ?: return null
+        } else {
+            selectFirst(".mj-fp-card-title, .movie-title")?.text()?.trim()
+                ?: selectFirst("img")?.attr("alt")?.trim()
+                ?: return null
+        }
+        if (rawTitle.isBlank()) return null
 
-        val year = selectFirst(".mj-fp-card-year, .movie-year")?.text()?.trim()?.toIntOrNull()
+        val title = rawTitle.replace(Regex("""\s*\(\d{4}[^\)]*\)\s*"""), "").trim()
+        val year = if (isTrending) {
+            Regex("""\((\d{4})\)""").find(rawTitle)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        } else {
+            selectFirst(".mj-fp-card-year, .movie-year")?.text()?.trim()?.toIntOrNull()
+                ?: Regex("""\((\d{4})\)""").find(rawTitle)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        }
 
-        val badge = selectFirst(".mj-fp-card-badge, .movie-card-badge")?.text()?.trim() ?: ""
+        val badge = selectFirst(".mj-fp-card-badge, .movie-card-badge, .badge")?.text()?.trim() ?: ""
         val isTv = badge.contains("TV", ignoreCase = true) ||
                 badge.contains("Series", ignoreCase = true) ||
                 href.contains("/tv-shows/") ||
-                hasAttr("data-episodes")
+                hasAttr("data-episodes") ||
+                rawTitle.contains("Season", ignoreCase = true)
 
         val artStyle = selectFirst(".mj-fp-card-art, .movie-card-art")?.attr("style")
         val poster = fixUrlNull(extractPosterFromStyle(artStyle))
@@ -319,11 +353,15 @@ class MojaLossProvider : MainAPI() {
         val headers = getRequestHeaders()
         val doc = app.get(url, headers = headers, timeout = 30L).document
 
-        val title = doc.selectFirst("h1.mj-hero-title, h1.post_title, h1")?.ownText()?.trim()
-            ?: doc.selectFirst("meta[property='og:title']")?.attr("content")?.replace(Regex("\\|.*"), "")?.trim()
+        val h1 = doc.selectFirst("h1.mj-hero-title, h1.post_title, h1")
+        val rawH1 = h1?.ownText()?.trim()?.ifBlank { null }
+            ?: h1?.text()?.replace(Regex("""\(\d{4}[^\)]*\)"""), "")?.trim()
+        val title = rawH1?.ifBlank { null }
+            ?: doc.selectFirst("meta[property='og:title']")?.attr("content")?.replace(Regex("\\|.*"), "")?.replace(Regex("""\(\d{4}[^\)]*\)"""), "")?.trim()
             ?: throw ErrorLoadingException("Failed to load title")
 
         val year = doc.selectFirst(".mj-hero-title-meta")?.text()?.replace(Regex("[^0-9]"), "")?.take(4)?.toIntOrNull()
+            ?: Regex("\\b(19\\d\\d|20\\d\\d)\\b").find(doc.selectFirst("h1")?.text() ?: "")?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: Regex("\\b(19\\d\\d|20\\d\\d)\\b").find(title)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
         val plot = doc.selectFirst("p.mj-hero-overview, .post_text_area p, .overview")?.text()?.trim()
@@ -341,13 +379,15 @@ class MojaLossProvider : MainAPI() {
 
         val duration = doc.selectFirst(".mj-hero-title-runtime")?.text()?.trim()?.let { parseDuration(it) }
 
-        // Extract postId: e.g. from body class "postid-249917" or favorite buttons data-postid
+        // Extract postId with exhaustive multi-layer fallbacks
         val bodyClass = doc.selectFirst("body")?.className() ?: ""
         val postId = Regex("postid-(\\d+)").find(bodyClass)?.groupValues?.getOrNull(1)
             ?: doc.selectFirst("[data-postid]")?.attr("data-postid")
             ?: doc.selectFirst("[data-post-id]")?.attr("data-post-id")
+            ?: doc.selectFirst("input[name=post_id]")?.attr("value")
+            ?: Regex("""['"]post(?:_id)?['"]\s*:\s*['"]?(\d+)""").find(doc.html())?.groupValues?.getOrNull(1)
 
-        val isTv = doc.selectFirst("#mj-tv-season-tabs, .mj-tv-season-tab, body.mj-tv-redesign, script#plyr-tv-scanned") != null ||
+        val isTv = doc.selectFirst("#mj-tv-season-tabs, .mj-tv-season-tab, body.mj-tv-redesign, script#plyr-tv-scanned, script#plyr-config, script#plyr-tv-config") != null ||
                 doc.selectFirst(".mj-hero-title-runtime")?.text()?.contains("Season", ignoreCase = true) == true ||
                 doc.selectFirst("meta[property='og:type']")?.attr("content")?.contains("tv", ignoreCase = true) == true
 
@@ -377,20 +417,55 @@ class MojaLossProvider : MainAPI() {
                     }
                 }
             } else {
-                val mediaData = MojaLossMediaData(
-                    postId = postId,
-                    url = url,
-                    isTv = true,
-                    season = 1,
-                    episode = 1
-                )
-                episodes.add(
-                    newEpisode(mediaData.toJson()) {
-                        this.name = "Episode 1"
-                        this.season = 1
-                        this.episode = 1
+                // Check plyr JSON config for seasons
+                val configScript = doc.selectFirst("script#plyr-tv-scanned, script#plyr-config, script#plyr-tv-config")
+                val scriptData = configScript?.data() ?: configScript?.html()
+                val plyrConfig = if (!scriptData.isNullOrBlank()) {
+                    try {
+                        AppUtils.parseJson<PlyrTvConfig>(scriptData)
+                    } catch (e: Exception) {
+                        null
                     }
-                )
+                } else null
+
+                val seasons = plyrConfig?.seasons
+                if (!seasons.isNullOrEmpty()) {
+                    seasons.forEach { s ->
+                        val seasonNum = s.num ?: 1
+                        val epCount = s.episodes ?: s.episodeFiles?.size ?: 1
+                        for (ep in 1..epCount) {
+                            val mediaData = MojaLossMediaData(
+                                postId = postId,
+                                url = url,
+                                isTv = true,
+                                season = seasonNum,
+                                episode = ep
+                            )
+                            episodes.add(
+                                newEpisode(mediaData.toJson()) {
+                                    this.name = "Season $seasonNum – Episode $ep"
+                                    this.season = seasonNum
+                                    this.episode = ep
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    val mediaData = MojaLossMediaData(
+                        postId = postId,
+                        url = url,
+                        isTv = true,
+                        season = 1,
+                        episode = 1
+                    )
+                    episodes.add(
+                        newEpisode(mediaData.toJson()) {
+                            this.name = "Episode 1"
+                            this.season = 1
+                            this.episode = 1
+                        }
+                    )
+                }
             }
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
@@ -440,107 +515,39 @@ class MojaLossProvider : MainAPI() {
         }
 
         val cookie = MojaLossStorage.getOrRefreshCookie()
-        if (cookie.isNullOrEmpty()) {
-            throw ErrorLoadingException(
-                "MojaLoss requires a session cookie to stream. Please open Plugin Settings and configure your MojaLoss Session Cookie."
-            )
-        }
-
         val headers = mutableMapOf(
             "Referer" to "$mainUrl/",
+            "Origin" to mainUrl,
             "User-Agent" to USER_AGENT,
-            "Cookie" to cookie
+            "Accept" to "*/*"
         )
-
-        var foundLinks = false
-        val postId = mediaData.postId
-
-        // 1. Try MojaLoss Cast API (REST stream resolver)
-        if (!postId.isNullOrEmpty()) {
-            val qualities = listOf("default", "4k")
-            for (q in qualities) {
-                try {
-                    val castEndpoint = if (mediaData.isTv) {
-                        "$mainUrl/wp-json/mojaloss/v1/cast/tv"
-                    } else {
-                        "$mainUrl/wp-json/mojaloss/v1/cast/movie"
-                    }
-
-                    val postMap = if (mediaData.isTv) {
-                        mapOf(
-                            "post_id" to postId,
-                            "season" to (mediaData.season ?: 1),
-                            "episode" to (mediaData.episode ?: 1),
-                            "quality" to q
-                        )
-                    } else {
-                        mapOf(
-                            "post_id" to postId,
-                            "quality" to q
-                        )
-                    }
-
-                    val jsonBody = postMap.toJson()
-                    val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaType())
-
-                    val res = app.post(
-                        castEndpoint,
-                        headers = headers + mapOf("Content-Type" to "application/json"),
-                        requestBody = requestBody,
-                        timeout = 25L
-                    ).parsedSafe<CastResponse>()
-
-                    val streamUrl = res?.mediaUrl
-                    if (!streamUrl.isNullOrEmpty() && (isMediaStream(streamUrl) || streamUrl.startsWith("http"))) {
-                        val fullStreamUrl = fixUrl(streamUrl)
-                        val is4k = q == "4k" || fullStreamUrl.contains("4k", ignoreCase = true)
-                        val isM3u8 = fullStreamUrl.contains(".m3u8", ignoreCase = true) ||
-                                res.contentType?.contains("mpegurl", ignoreCase = true) == true
-                        val isMpd = fullStreamUrl.contains(".mpd", ignoreCase = true) ||
-                                res.contentType?.contains("dash", ignoreCase = true) == true
-
-                        val linkType = when {
-                            isM3u8 -> ExtractorLinkType.M3U8
-                            isMpd -> ExtractorLinkType.DASH
-                            else -> ExtractorLinkType.VIDEO
-                        }
-
-                        callback(
-                            newExtractorLink(
-                                name = this.name,
-                                source = if (is4k) "$name 4K" else "$name HD",
-                                url = fullStreamUrl,
-                                type = linkType
-                            ) {
-                                this.referer = "$mainUrl/"
-                                this.quality = if (is4k) Qualities.P2160.value else Qualities.P1080.value
-                                this.headers = headers
-                            }
-                        )
-                        foundLinks = true
-
-                        res.tracks?.forEach { track ->
-                            val trackUrl = track.contentId
-                            if (!trackUrl.isNullOrEmpty()) {
-                                subtitleCallback(
-                                    SubtitleFile(
-                                        lang = track.language ?: track.name ?: "en",
-                                        url = fixUrl(trackUrl)
-                                    )
-                                )
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("MojaLoss", "Cast API error for quality $q: ${e.message}")
-                }
-            }
+        if (!cookie.isNullOrEmpty()) {
+            headers["Cookie"] = cookie
         }
 
-        // 2. Scrape page HTML for TV plyr config or video player sources
+        var foundLinks = false
+        var currentPostId = mediaData.postId
+        var wpNonce: String? = null
+
+        // 1. Scrape target page for nonce, post_id, plyr config, and direct media tags
         if (mediaData.url.isNotEmpty()) {
             try {
-                val doc = app.get(mediaData.url, headers = headers, timeout = 30L).document
+                val pageRes = app.get(mediaData.url, headers = headers, timeout = 30L)
+                val doc = pageRes.document
+                val html = pageRes.text
+
+                // Extract WP REST Nonce from page scripts (wpApiSettings.nonce or MojalossCast.nonce)
+                wpNonce = Regex(""""nonce"\s*:\s*"([a-zA-Z0-9]+)"""").find(html)?.groupValues?.getOrNull(1)
+
+                // Backfill postId if missing
+                if (currentPostId.isNullOrEmpty()) {
+                    val bodyClass = doc.selectFirst("body")?.className() ?: ""
+                    currentPostId = Regex("postid-(\\d+)").find(bodyClass)?.groupValues?.getOrNull(1)
+                        ?: doc.selectFirst("[data-postid]")?.attr("data-postid")
+                        ?: doc.selectFirst("[data-post-id]")?.attr("data-post-id")
+                        ?: doc.selectFirst("input[name=post_id]")?.attr("value")
+                        ?: Regex("""['"]post(?:_id)?['"]\s*:\s*['"]?(\d+)""").find(html)?.groupValues?.getOrNull(1)
+                }
 
                 // Check for Plyr TV script config
                 val configScript = doc.selectFirst("script#plyr-tv-scanned, script#plyr-config, script#plyr-tv-config")
@@ -671,7 +678,6 @@ class MojaLossProvider : MainAPI() {
                         foundLinks = true
                     }
 
-                    // Captions & Subtitles
                     videoEl.select("track[src]").forEach { track ->
                         val src = fixUrlNull(track.attr("src")) ?: return@forEach
                         val lang = track.attr("srclang").ifBlank { track.attr("label") }.ifBlank { "en" }
@@ -679,7 +685,7 @@ class MojaLossProvider : MainAPI() {
                     }
                 }
 
-                // Explicit media links ONLY (must end with media extensions, NEVER match navigation pages like /directlink/)
+                // Explicit media links ONLY
                 doc.select("a[href]").forEach { dl ->
                     val dlHref = dl.attr("href")
                     if (isMediaStream(dlHref)) {
@@ -704,10 +710,103 @@ class MojaLossProvider : MainAPI() {
             }
         }
 
+        // 2. Try MojaLoss Cast API (REST stream resolver with CSRF Nonce & Cookie auth)
+        if (!currentPostId.isNullOrEmpty()) {
+            val qualities = listOf("default", "4k")
+            val castHeaders = headers.toMutableMap().apply {
+                put("Content-Type", "application/json")
+                if (!wpNonce.isNullOrEmpty()) {
+                    put("X-WP-Nonce", wpNonce)
+                }
+            }
+
+            for (q in qualities) {
+                try {
+                    val castEndpoint = if (mediaData.isTv) {
+                        "$mainUrl/wp-json/mojaloss/v1/cast/tv"
+                    } else {
+                        "$mainUrl/wp-json/mojaloss/v1/cast/movie"
+                    }
+
+                    val postMap = if (mediaData.isTv) {
+                        mapOf(
+                            "post_id" to currentPostId,
+                            "season" to (mediaData.season ?: 1),
+                            "episode" to (mediaData.episode ?: 1),
+                            "quality" to q
+                        )
+                    } else {
+                        mapOf(
+                            "post_id" to currentPostId,
+                            "quality" to q
+                        )
+                    }
+
+                    val jsonBody = postMap.toJson()
+                    val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaType())
+
+                    val res = app.post(
+                        castEndpoint,
+                        headers = castHeaders,
+                        requestBody = requestBody,
+                        timeout = 25L
+                    ).parsedSafe<CastResponse>()
+
+                    val streamUrl = res?.mediaUrl
+                    if (!streamUrl.isNullOrEmpty() && (isMediaStream(streamUrl) || streamUrl.startsWith("http"))) {
+                        val fullStreamUrl = fixUrl(streamUrl)
+                        val is4k = q == "4k" || fullStreamUrl.contains("4k", ignoreCase = true)
+                        val isM3u8 = fullStreamUrl.contains(".m3u8", ignoreCase = true) ||
+                                res.contentType?.contains("mpegurl", ignoreCase = true) == true
+                        val isMpd = fullStreamUrl.contains(".mpd", ignoreCase = true) ||
+                                res.contentType?.contains("dash", ignoreCase = true) == true
+
+                        val linkType = when {
+                            isM3u8 -> ExtractorLinkType.M3U8
+                            isMpd -> ExtractorLinkType.DASH
+                            else -> ExtractorLinkType.VIDEO
+                        }
+
+                        callback(
+                            newExtractorLink(
+                                name = this.name,
+                                source = if (is4k) "$name 4K" else "$name HD",
+                                url = fullStreamUrl,
+                                type = linkType
+                            ) {
+                                this.referer = "$mainUrl/"
+                                this.quality = if (is4k) Qualities.P2160.value else Qualities.P1080.value
+                                this.headers = headers
+                            }
+                        )
+                        foundLinks = true
+
+                        res.tracks?.forEach { track ->
+                            val trackUrl = track.contentId
+                            if (!trackUrl.isNullOrEmpty()) {
+                                subtitleCallback(
+                                    SubtitleFile(
+                                        lang = track.language ?: track.name ?: "en",
+                                        url = fixUrl(trackUrl)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MojaLoss", "Cast API error for quality $q: ${e.message}")
+                }
+            }
+        }
+
         if (!foundLinks) {
-            throw ErrorLoadingException(
+            val hasCookie = !MojaLossStorage.getCookie().isNullOrBlank()
+            val msg = if (!hasCookie) {
+                "MojaLoss requires an active session cookie or credentials to stream. Please open Plugin Settings (Settings -> Extensions -> MojaLoss -> Settings) to set your session cookie."
+            } else {
                 "No stream link found. Your MojaLoss session cookie may have expired or this title requires an active subscription."
-            )
+            }
+            throw ErrorLoadingException(msg)
         }
 
         return foundLinks
@@ -718,7 +817,9 @@ class MojaLossProvider : MainAPI() {
             val original = chain.request()
             val builder = original.newBuilder()
                 .header("Referer", "$mainUrl/")
+                .header("Origin", mainUrl)
                 .header("User-Agent", USER_AGENT)
+                .header("Accept", "*/*")
             val cookie = MojaLossStorage.getCookie()
             if (!cookie.isNullOrEmpty()) {
                 builder.header("Cookie", cookie)
