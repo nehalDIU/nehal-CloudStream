@@ -35,14 +35,14 @@ class NetShortProvider : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/en" to "Featured & Recommended",
-        "$mainUrl/en/drama/Revenge-1983832092270911490" to "Revenge",
-        "$mainUrl/en/drama/Modern%20Romance-1983832092736479234" to "Modern Romance",
-        "$mainUrl/en/drama/Underdog%20Rise-1984208314792402946" to "Underdog Rise",
-        "$mainUrl/en/drama/Fantasy%20Romance-1983832092417712131" to "Fantasy Romance",
-        "$mainUrl/en/drama/Rich%20Family%20Feud-1983832091889229827" to "Rich Family Feud",
-        "$mainUrl/en/drama/Love%20After%20Divorce-1983832091641765889" to "Love After Divorce",
-        "$mainUrl/en/drama/Contract%20Lovers-1983832091947950083" to "Contract Lovers"
+        "$mainUrl/" to "Featured & Recommended",
+        "$mainUrl/drama/Revenge-1983832092270911490" to "Revenge",
+        "$mainUrl/drama/Modern%20Romance-1983832092736479234" to "Modern Romance",
+        "$mainUrl/drama/Underdog%20Rise-1984208314792402946" to "Underdog Rise",
+        "$mainUrl/drama/Fantasy%20Romance-1983832092417712131" to "Fantasy Romance",
+        "$mainUrl/drama/Rich%20Family%20Feud-1983832091889229827" to "Rich Family Feud",
+        "$mainUrl/drama/Love%20After%20Divorce-1983832091641765889" to "Love After Divorce",
+        "$mainUrl/drama/Contract%20Lovers-1983832091947950083" to "Contract Lovers"
     )
 
     private fun cleanCover(raw: String): String {
@@ -117,7 +117,7 @@ class NetShortProvider : MainAPI() {
 
         try {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-            val searchUrl = "$mainUrl/en/search?keyword=$encodedQuery"
+            val searchUrl = "$mainUrl/search?keyword=$encodedQuery"
             val res = app.get(
                 searchUrl,
                 headers = mapOf(
@@ -138,8 +138,8 @@ class NetShortProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val targetUrl = when {
             url.startsWith("http") -> url
-            url.startsWith("/") -> "$mainUrl/en$url"
-            else -> "$mainUrl/en/full-episodes/$url"
+            url.startsWith("/") -> "$mainUrl$url"
+            else -> "$mainUrl/full-episodes/$url"
         }
 
         val res = app.get(
