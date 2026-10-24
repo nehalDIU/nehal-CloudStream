@@ -62,6 +62,18 @@ class VolcEngineExtractor : ExtractorApi() {
         resolveStream(url, null, null, "VolcEngine", callback)
     }
 
+    private fun isMediaUrl(url: String): Boolean {
+        val lower = url.lowercase().substringBefore("?")
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
+            lower.endsWith(".webp") || lower.endsWith(".gif") || lower.endsWith(".svg")) {
+            return false
+        }
+        return lower.endsWith(".m3u8") || lower.endsWith(".mp4") || lower.endsWith(".mpd") ||
+               lower.endsWith(".ts") || lower.endsWith(".mkv") || lower.endsWith(".webm") ||
+               url.contains(".m3u8") || url.contains(".mp4") || url.contains(".mpd") ||
+               url.contains("/video/") || url.contains("video_url")
+    }
+
     suspend fun resolveStream(
         videoUrlOrVid: String,
         sdkVid: String? = null,
@@ -69,15 +81,24 @@ class VolcEngineExtractor : ExtractorApi() {
         sourceName: String = "NetShort",
         callback: (ExtractorLink) -> Unit
     ) {
-        // 1. Direct Video URL check (if already an HTTP .m3u8 or .mp4)
+        // 1. Direct Video URL check (validate media container)
         if (videoUrlOrVid.startsWith("http://") || videoUrlOrVid.startsWith("https://")) {
+            if (!isMediaUrl(videoUrlOrVid)) {
+                Log.w("VolcEngine", "Ignoring non-video media candidate: $videoUrlOrVid")
+                return
+            }
             val isM3u8 = videoUrlOrVid.contains(".m3u8")
+            val isMpd = videoUrlOrVid.contains(".mpd")
             callback(
                 newExtractorLink(
                     source = sourceName,
                     name = "$sourceName Direct",
                     url = videoUrlOrVid,
-                    type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    type = when {
+                        isM3u8 -> ExtractorLinkType.M3U8
+                        isMpd -> ExtractorLinkType.DASH
+                        else -> ExtractorLinkType.VIDEO
+                    }
                 ) {
                     this.quality = Qualities.P720.value
                 }
@@ -91,23 +112,30 @@ class VolcEngineExtractor : ExtractorApi() {
         // 2. Inspect playVoucher if it is a Direct URL or Base64-encoded JSON/URL
         if (!voucher.isNullOrBlank()) {
             if (voucher.startsWith("http://") || voucher.startsWith("https://")) {
-                val isM3u8 = voucher.contains(".m3u8")
-                callback(
-                    newExtractorLink(
-                        source = sourceName,
-                        name = "$sourceName CDN",
-                        url = voucher,
-                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                    ) {
-                        this.quality = Qualities.P720.value
-                    }
-                )
-                return
+                if (isMediaUrl(voucher)) {
+                    val isM3u8 = voucher.contains(".m3u8")
+                    val isMpd = voucher.contains(".mpd")
+                    callback(
+                        newExtractorLink(
+                            source = sourceName,
+                            name = "$sourceName CDN",
+                            url = voucher,
+                            type = when {
+                                isM3u8 -> ExtractorLinkType.M3U8
+                                isMpd -> ExtractorLinkType.DASH
+                                else -> ExtractorLinkType.VIDEO
+                            }
+                        ) {
+                            this.quality = Qualities.P720.value
+                        }
+                    )
+                    return
+                }
             }
 
             try {
                 val decodedVoucher = base64Decode(voucher)
-                if (decodedVoucher.startsWith("http://") || decodedVoucher.startsWith("https://")) {
+                if ((decodedVoucher.startsWith("http://") || decodedVoucher.startsWith("https://")) && isMediaUrl(decodedVoucher)) {
                     callback(
                         newExtractorLink(
                             source = sourceName,

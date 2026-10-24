@@ -59,7 +59,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Awakening the forbidden class of Necromancer, an ostracized apprentice summons legions of skeletal warriors to conquer abyssal dungeons and overturn the corrupt empire.",
                 tags = listOf("Animated Comic", "Necromancy", "Underdog", "Action", "Fantasy", "Leveling"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7472295913302659072",
@@ -69,7 +69,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Reincarnated into a dangerous mythological realm populated by fearsome beasts, an ordinary household cat discovers its divine bloodline and tames wild ancient emperors.",
                 tags = listOf("Animated Comic", "Magical World", "Comedy", "Fantasy", "Beast Taming", "Adventure"),
                 episodeCount = 45,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7500382619692044288",
@@ -79,7 +79,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "A legendary underworld boss assassinated at his prime wakes up ten years in the past inside the body of an overlooked student, determined to rule the metropolis once again.",
                 tags = listOf("Animated Comic", "Reborn", "Urban", "Action", "Mafia", "Vengeance"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7496964987362086912",
@@ -89,7 +89,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Betrayed by the mortal king she once protected and left for dead in the scorched woods, the resurrected Elf Queen gathers ancient forest spirits for retribution.",
                 tags = listOf("Animated Comic", "Fantasy", "Revenge", "Royalty", "Magic", "Elves"),
                 episodeCount = 50,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7505143209876543210",
@@ -99,7 +99,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Transmigrated into the villain role of his favorite webcomic, he decides to defy his scripted doom by spoiling the wronged heroine and carving his own path.",
                 tags = listOf("Animated Comic", "Transmigration", "Romance", "Fantasy", "Comedy", "Sovereign"),
                 episodeCount = 45,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7510101010101010101",
@@ -109,7 +109,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Trapped in the world's deepest dungeon, he survives against impossible odds by absorbing abyssal darkness, rising as the supreme monarch who commands the dead.",
                 tags = listOf("Animated Comic", "Solo Leveling", "Abyss", "Monarch", "Shadows", "Dark Fantasy"),
                 episodeCount = 52,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7510101010101010102",
@@ -119,7 +119,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Reborn into a noble space dynasty, he vows to be a villainous tyrant who lives for luxury, but every wicked deed accidentally elevates him to beloved savior.",
                 tags = listOf("Animated Comic", "Sci-Fi", "Comedy", "Space Opera", "Overlord", "Empire"),
                 episodeCount = 40,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7510101010101010103",
@@ -129,7 +129,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "A martial arts ancestor descends into the body of an ordinary modern student, shattering arrogant bullies and awakening ancient spiritual veins in the metropolis.",
                 tags = listOf("Animated Comic", "Martial Arts", "Urban Cultivation", "High School", "Action"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7510101010101010104",
@@ -139,7 +139,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Stuck in the Qi refining stage for three millennia while watching disciples become celestial immortals, his punch is now strong enough to shatter heavens.",
                 tags = listOf("Animated Comic", "Immortal", "Overpowered", "Comedy", "Cultivation", "Action"),
                 episodeCount = 55,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7510101010101010105",
@@ -149,7 +149,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "The retired supreme hero is forced back into duty when the seal breaks, teaming up with twelve fiercely loyal battle maidens to defend civilization.",
                 tags = listOf("Animated Comic", "Harem", "Fantasy", "Action", "Hero", "Battle Maidens"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7502109876543210987",
@@ -159,7 +159,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Poisoned on her wedding day by her jealous sister and false husband, she is granted a second chance with complete memories and lethal martial prowess.",
                 tags = listOf("Animated Comic", "Reborn in Fury", "Revenge", "Strong Female Lead", "Drama"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7506154320987654321",
@@ -169,7 +169,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "When demonic rifts tear through the globe and humanity is pushed to the brink of extinction, the fallen sovereign returns through time to lead the counteroffensive.",
                 tags = listOf("Animated Comic", "Rebirth", "Action", "Sovereign", "Sci-Fi", "Apocalypse"),
                 episodeCount = 52,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020201",
@@ -179,7 +179,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "After a tragic demise in the holy palace, she awakens as the cherished prodigy daughter of the realm's fiercest sword master, mastering sacred blade arts.",
                 tags = listOf("Animated Comic", "Sword God", "Reincarnation", "Martial Arts", "Female Lead"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020202",
@@ -189,7 +189,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Knowing her tragic fate at the hands of the royal prince, the reincarnated villainess cuts ties with the court and builds her own commercial empire.",
                 tags = listOf("Animated Comic", "Villainess", "Reincarnation", "Romance", "Strategy", "Royalty"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020203",
@@ -199,7 +199,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "A modern psychologist wakes up as the captive consort of a ruthless emperor, using her wit and empathy to tame the bloodthirsty sovereign.",
                 tags = listOf("Animated Comic", "Transmigration", "Historical", "Romance", "Drama", "Imperial Palace"),
                 episodeCount = 45,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020204",
@@ -209,7 +209,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "With a high-tech fortress system in his mind, he awakens ten days before the meteor strike, preparing safe zones and stockpiling resources.",
                 tags = listOf("Animated Comic", "Apocalypse", "Reborn", "Survival", "Sci-Fi", "Fortress"),
                 episodeCount = 50,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020205",
@@ -219,7 +219,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Having traversed ten thousand different lives across endless universes, the primordial immortal returns to his original modern world with absolute supremacy.",
                 tags = listOf("Animated Comic", "Immortal Return", "Reincarnation", "Urban", "Overpowered"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020206",
@@ -229,7 +229,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Starting out as a lowly translucent blob, he absorbs celestial dragon scales and evolves into an awe-inspiring apex dragon monarch.",
                 tags = listOf("Animated Comic", "Isekai", "Evolution", "Dragon", "Fantasy", "Action"),
                 episodeCount = 40,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7520202020202020207",
@@ -239,7 +239,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Betrayed on the battlefield after ten years of bloody warfare, the mercenary king regresses to his squad's rookie days to prevent the massacre.",
                 tags = listOf("Animated Comic", "Regression", "Military", "Mercenary", "Action", "Tactics"),
                 episodeCount = 45,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030301",
@@ -249,7 +249,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Signing in every morning awards him legendary artifacts, dragon pills, and divine techniques, elevating him from a library sweep boy to supreme ancestor.",
                 tags = listOf("Animated Comic", "Sign-In System", "Cultivation", "Overpowered", "Action"),
                 episodeCount = 54,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030302",
@@ -259,7 +259,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "With an omniscience engine analyzing every cultivator's flaws and weaknesses, he defeats realm masters with a single casual tap of his finger.",
                 tags = listOf("Animated Comic", "System", "Omniscience", "Cultivation", "Martial Arts"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030303",
@@ -269,7 +269,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "While other disciples spend centuries meditating, he awakens with maximum stats in every skill, roaming the immortal realms effortlessly.",
                 tags = listOf("Animated Comic", "Max Level", "Comedy", "Cultivation", "Overpowered"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030304",
@@ -279,7 +279,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "When the popular VR cultivation game merges with reality, the server's undisputed top player retains all his heavenly powers in the real world.",
                 tags = listOf("Animated Comic", "LitRPG", "Game to Reality", "Cultivation", "Action"),
                 episodeCount = 50,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030305",
@@ -289,7 +289,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Inheriting the primordial frost domain, he freezes fire-breathing mythical beasts and turns demonic invasions into crystalline ice sculptures.",
                 tags = listOf("Animated Comic", "Frost Magic", "Cultivation", "System", "Action", "Fantasy"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030306",
@@ -299,7 +299,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Practicing the forbidden nine heavens mantra, his body undergoes nine celestial metamorphoses, gaining the strength of nine ancient starry dragons.",
                 tags = listOf("Animated Comic", "Dragon Cultivation", "Nine Heavens", "Martial Arts", "Action"),
                 episodeCount = 56,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030307",
@@ -309,7 +309,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Pills that take grandmasters decades to concoct are refined automatically by his system in seconds, making him the kingdom's most sought-after benefactor.",
                 tags = listOf("Animated Comic", "Alchemy", "System", "Cultivation", "Trade", "Wealth"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030308",
@@ -319,7 +319,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Dumped into an abyss pit by rivals, the system unlocks infinite experience multipliers for every beast he slays, turning exile into a training spree.",
                 tags = listOf("Animated Comic", "Cheat System", "Abyss", "Action", "Revenge", "Leveling"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7530303030303030309",
@@ -329,7 +329,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "From an injured demonic whelp to the dreadlord of the nine hells, every physical hit he sustains triggers an evolutionary adaptation.",
                 tags = listOf("Animated Comic", "Demon King", "Evolution", "System", "Dark Fantasy", "Action"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7503120987654321098",
@@ -339,7 +339,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Entering forgotten celestial ruins to save his ailing sister, an adventurous treasure hunter breaks the divine seal and inherits the primordial powers of old gods.",
                 tags = listOf("Animated Comic", "Fantasy", "Action", "Mythology", "Gods", "Ruins"),
                 episodeCount = 55,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7507165432098765432",
@@ -349,7 +349,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "An accidental summoning ritual binds a humble scholar to the most powerful Succubus Queen in the underworld, sparking an interdimensional adventure.",
                 tags = listOf("Animated Comic", "Supernatural", "Comedy", "Romance", "Fantasy", "Summoning"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040401",
@@ -359,7 +359,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Combining modern chemical engineering with medieval arcane circles, he invents alchemical elixirs that cure curses and empower imperial armies.",
                 tags = listOf("Animated Comic", "Arcane", "Magic", "Alchemy", "Innovation", "Fantasy"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040402",
@@ -369,7 +369,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Branded with the golden dragon crest, he speaks the ancient dragon tongue and summons draconic elders to crush invading demonic hordes.",
                 tags = listOf("Animated Comic", "Dragon God", "Fantasy", "Magic", "Summoner", "Action"),
                 episodeCount = 50,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040403",
@@ -379,7 +379,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Mocked for hatching a tiny sparrow from his spirit egg, he reveals its true lineage when it bathes in sacred fire and awakens as a nine-colored phoenix.",
                 tags = listOf("Animated Comic", "Beast Taming", "Phoenix", "Mythical", "Fantasy", "Action"),
                 episodeCount = 45,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040404",
@@ -389,7 +389,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Climbing a hundred-floor magic tower where each level holds an entire civilization, he unlocks the secret origins of magic itself.",
                 tags = listOf("Animated Comic", "Tower Climbing", "Magic", "Adventure", "Fantasy", "Spire"),
                 episodeCount = 52,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040405",
@@ -399,7 +399,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Drawing mana directly from stellar constellations, an apprentice astrologer becomes the astral emperor who reshapes destiny across galaxies.",
                 tags = listOf("Animated Comic", "Astral Magic", "Stars", "Fantasy", "Action", "Cosmic"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040406",
@@ -409,7 +409,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Carving primordial runes directly onto his skin and armor, he wields ancient runic spells that bypass modern anti-magic barriers.",
                 tags = listOf("Animated Comic", "Runes", "Ancient Magic", "Fantasy", "Battle Mage"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7540404040404040407",
@@ -419,7 +419,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "A holy knight assigned to execute a fugitive dark elf sorceress discovers a church conspiracy, forging an uneasy alliance to unveil the truth.",
                 tags = listOf("Animated Comic", "Paladin", "Dark Elf", "Romance", "Fantasy", "Magic"),
                 episodeCount = 40,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7496941662934011904",
@@ -429,7 +429,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Cast out and humiliated by a corrupt guild after years of loyalty, he unlocks an ancient sovereign system and builds an empire that brings his former masters to their knees.",
                 tags = listOf("Animated Comic", "Underdog", "Revenge", "Sovereign", "Action", "Guild"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7508176543209876543",
@@ -439,7 +439,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Ten thousand years of immortal cultivation culminate when the legendary War God returns to his modern hometown to protect his family from tyrannical syndicates.",
                 tags = listOf("Animated Comic", "Cultivation", "Urban", "Action", "God of War", "Revenge"),
                 episodeCount = 50,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050501",
@@ -449,7 +449,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Stripped of his family inheritance and left crippled in the streets, he masters the forbidden shadow blade art, systematically dismantling the treacherous clan.",
                 tags = listOf("Animated Comic", "Underdog", "Family Feud", "Martial Arts", "Revenge"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050502",
@@ -459,7 +459,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Laughed at for being poor, a humble tutor awakens an ancient banking ledger that reveals the hidden debts owed to his lineage by global billionaires.",
                 tags = listOf("Animated Comic", "Urban", "Wealth", "Underdog", "Billionaire", "Payback"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050503",
@@ -469,7 +469,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "After enduring three years of domestic abuse as a live-in son-in-law, his grandfather's estate transfers absolute control of the country's top enterprise to him.",
                 tags = listOf("Animated Comic", "Son-in-Law", "Urban", "Drama", "Revenge", "Billionaire"),
                 episodeCount = 50,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050504",
@@ -479,7 +479,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Exiled to the frozen barren northern frontier, the sickly third prince consumes the blood of an abyssal black dragon, marching back to reclaim the throne.",
                 tags = listOf("Animated Comic", "Banished Prince", "Dragon Blood", "War", "Revenge", "Throne"),
                 episodeCount = 52,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050505",
@@ -489,7 +489,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Working the dangerous crystal mines on a penal colony planet, he discovers an alien mech core that transforms him into the galaxy's fiercest commander.",
                 tags = listOf("Animated Comic", "Sci-Fi", "Mecha", "Underdog", "Action", "Space Warlord"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050506",
@@ -499,7 +499,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "The sole survivor of a slaughtered village spends a decade forging a demon-slaying greatsword, tracking down every creature responsible for the massacre.",
                 tags = listOf("Animated Comic", "Dark Fantasy", "Demon Slayer", "Revenge", "Action"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7550505050505050507",
@@ -509,7 +509,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Having his meridians destroyed by a deceitful mentor, he harnesses demonic chaos energy to forge unbreakable dark meridians, returning for payback.",
                 tags = listOf("Animated Comic", "Martial Arts", "Cultivation", "Underdog", "Revenge", "Chaos"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7501098765432109876",
@@ -519,7 +519,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "In a royal court fraught with assassination plots and power struggles, a hidden palace scribe becomes the Crown Prince's only confidant and secret beloved.",
                 tags = listOf("Animated Comic", "Romance", "Royalty", "Drama", "Historical", "Intrigue"),
                 episodeCount = 40,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7504132098765432109",
@@ -529,7 +529,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Afflicted by a blood curse that drives him mad under every new moon, the cold and unapproachable Grand Duke discovers that her touch alone can calm the darkness.",
                 tags = listOf("Animated Comic", "Romance", "Fantasy", "Royalty", "Supernatural", "Curse"),
                 episodeCount = 40,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7509187654321098765",
@@ -539,7 +539,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Waking up in the body of an adorable nine-tailed spirit fox, she ends up adopted as the cherished companion of the empire's most fearsome Dragon Emperor.",
                 tags = listOf("Animated Comic", "Reborn", "Comedy", "Romance", "Oriental Fantasy", "Emperor"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060601",
@@ -549,7 +549,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Feared across five kingdoms for his merciless temper, the Tyrant King kneels only for his beloved enchantress, giving her whatever her heart desires.",
                 tags = listOf("Animated Comic", "Tyrant King", "Romance", "Royalty", "Historical", "Drama"),
                 episodeCount = 45,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060602",
@@ -559,7 +559,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Contracted into a marriage with the city's wealthiest and most ruthless magnate, she chips away at his icy exterior until he becomes obsessed with protecting her.",
                 tags = listOf("Animated Comic", "Billionaire", "CEO", "Contract Marriage", "Urban Romance"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060603",
@@ -569,7 +569,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "A genius modern doctor navigates the intricate concubine politics of the royal inner palace, outwitting scheming rivals and winning the Emperor's devotion.",
                 tags = listOf("Animated Comic", "Inner Palace", "Doctor", "Royalty", "Romance", "Historical"),
                 episodeCount = 48,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060604",
@@ -579,7 +579,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "To escape an arranged political marriage with a foreign warmonger, the spirited princess disguises herself as an elite knight guarding the handsome Grand Marshal.",
                 tags = listOf("Animated Comic", "Disguise", "Princess", "Romance", "Action", "Royalty"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060605",
@@ -589,7 +589,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Dumped by the fickle Crown Prince for her cousin, she turns around and proposes to his uncle, the indomitable Regent Lord, becoming the Prince's aunt.",
                 tags = listOf("Animated Comic", "Revenge Romance", "Regent Lord", "Royalty", "Comedy", "Drama"),
                 episodeCount = 44,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060606",
@@ -599,7 +599,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Marked by an ancient prophecy as the true mate of the Alpha King, a spirited rogue wolf must choose between her pack's freedom and undeniable passion.",
                 tags = listOf("Animated Comic", "Werewolf", "Alpha King", "Romance", "Supernatural", "Pack"),
                 episodeCount = 42,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             ),
             ToonBoxDrama(
                 dramaId = "7560606060606060607",
@@ -609,7 +609,7 @@ class ToonBoxProvider : MainAPI() {
                 plot = "Sent as a peace offering to the frozen northern empire, a sun priestess melts the frozen heart of the aloof Ice Emperor, uniting fire and frost.",
                 tags = listOf("Animated Comic", "Ice Emperor", "Fantasy Romance", "Royalty", "Magic"),
                 episodeCount = 46,
-                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+                defaultStreamUrl = null
             )
         )
     }
@@ -957,6 +957,11 @@ class ToonBoxProvider : MainAPI() {
         // 1. Authenticated API playback via ToonBox get_play_url
         if (!customToken.isNullOrBlank()) {
             try {
+                val headers = getHeaders().toMutableMap()
+                headers["Authorization"] = "Bearer $customToken"
+                val customHeaders = NetShortStorage.getToonBoxCustomHeaders()
+                headers.putAll(customHeaders)
+
                 val playResp = app.get(
                     "$mainUrl/api/v1/video/get_play_url",
                     params = mapOf(
@@ -966,7 +971,7 @@ class ToonBoxProvider : MainAPI() {
                         "version" to APP_VERSION,
                         "language" to (NetShortStorage.getToonBoxLanguage().ifBlank { "en" })
                     ),
-                    headers = getHeaders(),
+                    headers = headers,
                     timeout = 15L
                 )
 
@@ -990,32 +995,51 @@ class ToonBoxProvider : MainAPI() {
                     val voucher = playInfo.playVoucher
 
                     if (!directUrl.isNullOrBlank() || !sdkVid.isNullOrBlank() || !voucher.isNullOrBlank()) {
+                        var resolved = false
                         volcEngineExtractor.resolveStream(
                             videoUrlOrVid = directUrl ?: sdkVid ?: voucher ?: "",
                             sdkVid = sdkVid,
                             playVoucher = voucher,
                             sourceName = "ToonBox VIP",
-                            callback = callback
+                            callback = { link ->
+                                resolved = true
+                                callback(link)
+                            }
                         )
-                        return true
+                        if (resolved) return true
                     }
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "ToonBox get_play_url error: ${e.message}")
+                Log.e(TAG, "ToonBox get_play_url error: " + e.message)
             }
         }
 
-        // 2. Direct ToonBox VolcEngine CDN stream resolution for free users
+        // 2. Direct catalog stream check (only if valid media URL is present)
         val catalogMatch = TOONBOX_CATALOG.find { it.dramaId == toonBoxData.dramaId }
         val streamCandidate = catalogMatch?.defaultStreamUrl
-            ?: "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+        if (!streamCandidate.isNullOrBlank() && 
+            !streamCandidate.endsWith(".jpg") && 
+            !streamCandidate.endsWith(".png") &&
+            (streamCandidate.contains(".mp4") || streamCandidate.contains(".m3u8") || streamCandidate.contains(".mpd"))) {
+            var streamFound = false
+            volcEngineExtractor.resolveStream(
+                videoUrlOrVid = streamCandidate,
+                sourceName = "ToonBox HD",
+                callback = { link ->
+                    streamFound = true
+                    callback(link)
+                }
+            )
+            if (streamFound) return true
+        }
 
-        volcEngineExtractor.resolveStream(
-            videoUrlOrVid = streamCandidate,
-            sourceName = "ToonBox HD",
-            callback = callback
-        )
+        // 3. User feedback toast when links cannot be resolved
+        if (customToken.isNullOrBlank()) {
+            NetShortStorage.showToast("ToonBox requires an account token for full streaming. Open Settings > Extensions > NetShort & ToonBox to add your token.")
+        } else {
+            NetShortStorage.showToast("ToonBox link resolution failed for Episode " + toonBoxData.episodeNo + ". Please verify your token in Settings.")
+        }
 
-        return true
+        return false
     }
 }
