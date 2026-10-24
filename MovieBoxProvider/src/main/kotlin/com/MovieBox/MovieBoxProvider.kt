@@ -582,30 +582,56 @@ class MovieBoxProvider : MainAPI() {
         val backdrop = metaData?.get("background")?.asText()
 
         if (isTv) {
-            val seasonUrl = "$host/wefeed-mobile-bff/subject-api/season-info?subjectId=$subjectId"
-            val seasonHeaders = buildAuthHeaders("GET", url = seasonUrl)
-            val seasonRes = app.get(seasonUrl, headers = seasonHeaders)
-            val seasonRoot = mapper.readTree(seasonRes.body.string())
-            val seasons = seasonRoot.get("data")?.get("seasons")
-
             val episodes = mutableListOf<Episode>()
-            if (seasons != null && seasons.isArray) {
-                for (s in seasons) {
-                    val sNum = s.get("seasonNumber")?.asInt(1) ?: 1
-                    val eps = s.get("episodes") ?: continue
-                    for (ep in eps) {
-                        val epNum = ep.get("episodeNumber")?.asInt(1) ?: 1
-                        val epTitle = ep.get("title")?.asText() ?: "Episode $epNum"
-                        val epPoster = ep.get("cover")?.get("url")?.asText()
-                        val epData = "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$sNum&ep=$epNum"
+            try {
+                val seasonUrl = "$host/wefeed-mobile-bff/subject-api/season-info?subjectId=$subjectId"
+                val seasonHeaders = buildAuthHeaders("GET", url = seasonUrl)
+                val seasonRes = app.get(seasonUrl, headers = seasonHeaders)
+                val seasonRoot = mapper.readTree(seasonRes.body.string())
+                val seasons = seasonRoot.get("data")?.get("seasons")
 
-                        episodes.add(newEpisode(epData) {
-                            this.name = epTitle
-                            this.season = sNum
-                            this.episode = epNum
-                            this.posterUrl = epPoster
-                        })
+                if (seasons != null && seasons.isArray && seasons.size() > 0) {
+                    for (s in seasons) {
+                        val sNum = s.get("se")?.asInt(1) ?: s.get("seasonNumber")?.asInt(1) ?: 1
+                        val allEpStr = s.get("allEp")?.asText()?.trim() ?: ""
+                        val maxEp = s.get("maxEp")?.asInt(0) ?: 0
+
+                        val epList: List<Int> = if (allEpStr.isNotBlank()) {
+                            allEpStr.split(",").mapNotNull { it.trim().toIntOrNull() }
+                        } else if (maxEp > 0) {
+                            (1..maxEp).toList()
+                        } else {
+                            listOf(1)
+                        }
+
+                        for (epNum in epList) {
+                            val epData = "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$sNum&ep=$epNum"
+                            episodes.add(newEpisode(epData) {
+                                this.name = "Episode $epNum"
+                                this.season = sNum
+                                this.episode = epNum
+                                this.posterUrl = poster
+                            })
+                        }
                     }
+                }
+            } catch (_: Exception) {}
+
+            // Guaranteed fallback so CloudStream never shows "Coming Soon" for available series
+            if (episodes.isEmpty()) {
+                val totalEp = subject.get("totalEpisode")?.asInt(0)
+                    ?: subject.get("totalEpisodes")?.asInt(0)
+                    ?: subject.get("currentEpisodes")?.asInt(0)
+                    ?: 1
+                val count = if (totalEp > 0) totalEp else 1
+                for (i in 1..count) {
+                    val epData = "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=1&ep=$i"
+                    episodes.add(newEpisode(epData) {
+                        this.name = "Episode $i"
+                        this.season = 1
+                        this.episode = i
+                        this.posterUrl = poster
+                    })
                 }
             }
 
@@ -828,7 +854,11 @@ class MovieBoxProvider : MainAPI() {
         // 4. Fallback to /subject-api/resource
         if (emittedCount == 0) {
             try {
-                val resUrl = "$host/wefeed-mobile-bff/subject-api/resource?subjectId=$subjectId&page=1&perPage=20"
+                val resUrl = if (se > 0 || ep > 0) {
+                    "$host/wefeed-mobile-bff/subject-api/resource?subjectId=$subjectId&se=$se&ep=$ep&page=1&perPage=20"
+                } else {
+                    "$host/wefeed-mobile-bff/subject-api/resource?subjectId=$subjectId&page=1&perPage=20"
+                }
                 val headers = buildAuthHeaders("GET", url = resUrl)
                 val res = app.get(resUrl, headers = headers)
                 val root = mapper.readTree(res.body.string())
