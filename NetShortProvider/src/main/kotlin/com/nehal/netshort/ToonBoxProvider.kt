@@ -636,10 +636,52 @@ class ToonBoxProvider : MainAPI() {
         return headers
     }
 
+    private fun getPosterUrl(raw: String?): String {
+        if (raw.isNullOrBlank()) return DEFAULT_COVER
+        val clean = raw.trim()
+        if (clean.contains("googleusercontent.com")) {
+            val base = clean.substringBefore("=")
+            return "$base=w600-h900-c"
+        }
+        return clean
+    }
+
+    private fun getBackdropUrl(raw: String?): String {
+        if (raw.isNullOrBlank()) return DEFAULT_COVER
+        val clean = raw.trim()
+        if (clean.contains("googleusercontent.com")) {
+            val base = clean.substringBefore("=")
+            return "$base=w1280-h720-c"
+        }
+        return clean
+    }
+
+    private fun getEpisodeThumbUrl(raw: String?, epNo: Int, title: String? = null): String {
+        val knownYtId = when {
+            title?.contains("Condemned Sovereign", ignoreCase = true) == true -> "tKv3oANo1TY"
+            title?.contains("Necro Summons", ignoreCase = true) == true -> "wIGh_4otGr4"
+            title?.contains("Cat Who Conquered", ignoreCase = true) == true -> "zCfqhZ9enmI"
+            title?.contains("Double Life Don", ignoreCase = true) == true -> "lOkpRTh99uI"
+            title?.contains("Elf Queen", ignoreCase = true) == true -> "QSM7V-ncJdM"
+            else -> null
+        }
+        if (!knownYtId.isNullOrBlank()) {
+            return "https://i.ytimg.com/vi/$knownYtId/hqdefault.jpg"
+        }
+
+        if (raw.isNullOrBlank()) return DEFAULT_COVER
+        val clean = raw.trim()
+        if (clean.contains("googleusercontent.com")) {
+            val base = clean.substringBefore("=")
+            return "$base=w640-h360-c"
+        }
+        return clean
+    }
+
     private fun ToonBoxDramaItem.toSearchResponse(): SearchResponse? {
         val id = dramaId ?: return null
         val title = dramaName ?: return null
-        val poster = coverUrl ?: DEFAULT_COVER
+        val poster = getPosterUrl(coverUrl ?: DEFAULT_COVER)
         return newTvSeriesSearchResponse(title, "$mainUrl/api/v1/drama/info?drama_id=$id", TvType.Anime) {
             this.posterUrl = poster
         }
@@ -647,7 +689,7 @@ class ToonBoxProvider : MainAPI() {
 
     private fun ToonBoxDrama.toSearchResponse(): SearchResponse {
         return newTvSeriesSearchResponse(title, "$mainUrl/api/v1/drama/info?drama_id=$dramaId", TvType.Anime) {
-            this.posterUrl = coverUrl
+            this.posterUrl = getPosterUrl(coverUrl)
         }
     }
 
@@ -879,7 +921,7 @@ class ToonBoxProvider : MainAPI() {
                                 newEpisode(linkData.toJson()) {
                                     this.name = v.subTitle ?: "Episode $epNo"
                                     this.episode = epNo
-                                    this.posterUrl = v.coverUrl ?: dramaDetail.coverUrl
+                                    this.posterUrl = getEpisodeThumbUrl(v.coverUrl ?: dramaDetail.coverUrl, epNo, dramaDetail.dramaName)
                                 }
                             )
                         }
@@ -889,14 +931,15 @@ class ToonBoxProvider : MainAPI() {
                 }
 
                 if (episodes.isNotEmpty()) {
+                    val rawCover = dramaDetail.coverUrl ?: catalogMatch?.coverUrl ?: DEFAULT_COVER
                     return newTvSeriesLoadResponse(
                         name = dramaDetail.dramaName ?: catalogMatch?.title ?: "ToonBox Drama $dramaId",
                         url = "$mainUrl/api/v1/drama/info?drama_id=$dramaId",
                         type = TvType.Anime,
                         episodes = episodes
                     ) {
-                        this.posterUrl = dramaDetail.coverUrl ?: catalogMatch?.coverUrl
-                        this.backgroundPosterUrl = dramaDetail.coverUrl ?: catalogMatch?.coverUrl
+                        this.posterUrl = getPosterUrl(rawCover)
+                        this.backgroundPosterUrl = getBackdropUrl(rawCover)
                         this.plot = dramaDetail.description ?: dramaDetail.intro ?: catalogMatch?.plot
                         this.tags = dramaDetail.tagList?.filter { it.isNotBlank() } ?: catalogMatch?.tags
                     }
@@ -906,7 +949,9 @@ class ToonBoxProvider : MainAPI() {
 
         // 2. Load ToonBox Animated Comic structure
         val title = catalogMatch?.title ?: "ToonBox Comic $dramaId"
-        val cover = catalogMatch?.coverUrl ?: DEFAULT_COVER
+        val rawCover = catalogMatch?.coverUrl ?: DEFAULT_COVER
+        val poster = getPosterUrl(rawCover)
+        val backdrop = getBackdropUrl(rawCover)
         val plot = catalogMatch?.plot ?: "ToonBox animated comic adaptation featuring full character expressions, voice acting, and smooth panel transitions."
         val tags = catalogMatch?.tags ?: listOf("Animated Comic", "ToonBox", "Manga Reel")
         val epCount = catalogMatch?.episodeCount ?: 46
@@ -924,7 +969,7 @@ class ToonBoxProvider : MainAPI() {
                 newEpisode(linkData.toJson()) {
                     this.name = "Episode $epNo"
                     this.episode = epNo
-                    this.posterUrl = cover
+                    this.posterUrl = getEpisodeThumbUrl(rawCover, epNo, title)
                 }
             )
         }
@@ -935,8 +980,8 @@ class ToonBoxProvider : MainAPI() {
             type = TvType.Anime,
             episodes = episodes
         ) {
-            this.posterUrl = cover
-            this.backgroundPosterUrl = cover
+            this.posterUrl = poster
+            this.backgroundPosterUrl = backdrop
             this.plot = plot
             this.tags = tags
         }
