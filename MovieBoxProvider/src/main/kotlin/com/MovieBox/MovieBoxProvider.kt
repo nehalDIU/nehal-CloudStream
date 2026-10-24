@@ -358,7 +358,11 @@ class MovieBoxProvider : MainAPI() {
             SectionManagerFragment.defaultSections.toMutableList()
         }
 
-        val hidden = savedHiddenStr?.split(",")?.toSet() ?: emptySet()
+        val hidden = if (savedHiddenStr != null) {
+            savedHiddenStr.split(",").filter { it.isNotBlank() }.toSet()
+        } else {
+            SectionManagerFragment.DEFAULT_HIDDEN_SECTIONS
+        }
         val visibleSections = activeSections.filter { !hidden.contains(it.first) }
 
         val rows = visibleSections.amap { (key, title) ->
@@ -592,7 +596,7 @@ class MovieBoxProvider : MainAPI() {
                         val epNum = ep.get("episodeNumber")?.asInt(1) ?: 1
                         val epTitle = ep.get("title")?.asText() ?: "Episode $epNum"
                         val epPoster = ep.get("cover")?.get("url")?.asText()
-                        val epData = "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&seasonNumber=$sNum&episodeNumber=$epNum"
+                        val epData = "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$sNum&ep=$epNum"
 
                         episodes.add(newEpisode(epData) {
                             this.name = epTitle
@@ -702,47 +706,153 @@ class MovieBoxProvider : MainAPI() {
             return true
         }
 
-        val playInfoUrl = data
-        val headers = buildAuthHeaders("GET", url = playInfoUrl)
-        val res = app.get(playInfoUrl, headers = headers)
-        val root = mapper.readTree(res.body.string())
-        val dataNode = root.get("data") ?: return false
+        val host = getActiveHost()
+        val uri = runCatching { URI(data) }.getOrNull()
+        val queryMap = uri?.rawQuery?.split("&")?.associate {
+            val p = it.split("=")
+            p[0] to (p.getOrNull(1) ?: "")
+        } ?: emptyMap()
 
-        // Load subtitles
-        val subjectId = data.substringAfter("subjectId=").substringBefore("&")
+        val subjectId = queryMap["subjectId"] ?: data.substringAfter("subjectId=").substringBefore("&")
+        val se = queryMap["se"]?.toIntOrNull() ?: queryMap["seasonNumber"]?.toIntOrNull() ?: 0
+        val ep = queryMap["ep"]?.toIntOrNull() ?: queryMap["episodeNumber"]?.toIntOrNull() ?: 0
+
+        // 1. Subtitles
         loadCaptions(subjectId, subtitleCallback)
 
-        // Extract Streams
-        val streams = dataNode.get("streams") ?: dataNode.get("list")
-        if (streams != null && streams.isArray) {
-            for (st in streams) {
-                val url = st.get("url")?.asText() ?: continue
-                if (isDecoyStream(url)) continue
+        var emittedCount = 0
+        val seenUrls = mutableSetOf<String>()
 
-                val resolution = st.get("resolution")?.asInt() ?: 0
-                val quality = when {
-                    resolution >= 1080 -> Qualities.P1080.value
-                    resolution >= 720 -> Qualities.P720.value
-                    resolution >= 480 -> Qualities.P480.value
-                    else -> Qualities.Unknown.value
-                }
+        suspend fun emitStream(streamUrl: String, resolution: Int = 0, codecName: String = ""): Boolean {
+            if (streamUrl.isBlank() || isDecoyStream(streamUrl)) return false
+            if (!seenUrls.add(streamUrl)) return false
 
-                val type = if (url.contains(".mpd") || url.contains("/index.mpd")) {
-                    ExtractorLinkType.DASH
-                } else if (url.contains(".m3u8")) {
-                    ExtractorLinkType.M3U8
-                } else {
-                    INFER_TYPE
-                }
-
-                callback(newExtractorLink(name, "$name $resolution p", url, type) {
-                    this.quality = quality
-                    this.referer = getActiveHost()
-                })
+            val quality = when {
+                resolution >= 1080 -> Qualities.P1080.value
+                resolution >= 720 -> Qualities.P720.value
+                resolution >= 480 -> Qualities.P480.value
+                resolution >= 360 -> Qualities.P360.value
+                else -> Qualities.Unknown.value
             }
+
+            val type = when {
+                streamUrl.contains(".mpd") || streamUrl.contains("/index.mpd") -> ExtractorLinkType.DASH
+                streamUrl.contains(".m3u8") -> ExtractorLinkType.M3U8
+                else -> ExtractorLinkType.VIDEO
+            }
+
+            val label = buildString {
+                append(name)
+                if (codecName.isNotBlank()) append(" (${codecName.uppercase()})")
+                if (resolution > 0) append(" ${resolution}p")
+            }
+
+            callback(newExtractorLink(name, label, streamUrl, type) {
+                this.quality = quality
+                this.referer = host
+                this.headers = mapOf("User-Agent" to modernUserAgent)
+            })
+            emittedCount++
+            return true
         }
 
-        return true
+        // 2. Play-info extraction (checks duration, size, and policy resource)
+        try {
+            val playInfoUrl = if (data.startsWith("http")) data else "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$se&ep=$ep"
+            val headers = buildAuthHeaders("GET", url = playInfoUrl)
+            val res = app.get(playInfoUrl, headers = headers)
+            val root = mapper.readTree(res.body.string())
+            val dataNode = root.get("data")
+            val streams = dataNode?.get("streams") ?: dataNode?.get("list")
+            if (streams != null && streams.isArray) {
+                for (st in streams) {
+                    val url = st.get("url")?.asText() ?: continue
+                    val duration = st.get("duration")?.asLong()
+                    val size = st.get("size")?.asText()?.toLongOrNull() ?: st.get("size")?.asLong()
+                    if (isDecoyStream(url, duration, size)) continue
+
+                    val resVal = st.get("resolution")?.asInt() ?: 0
+                    val codec = st.get("codecName")?.asText() ?: ""
+                    emitStream(url, resVal, codec)
+
+                    val signCookie = st.get("signCookie")?.asText()
+                    if (!signCookie.isNullOrBlank()) {
+                        extractPolicyResource(signCookie)?.let { policyUrl ->
+                            emitStream(policyUrl, resVal, codec)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 3. ResourceDetectors via subject-api/get (real full HD media streams)
+        try {
+            val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId"
+            val headers = buildAuthHeaders("GET", url = detailUrl)
+            val res = app.get(detailUrl, headers = headers)
+            val root = mapper.readTree(res.body.string())
+            val detectors = root.get("data")?.get("resourceDetectors")
+            if (detectors != null && detectors.isArray) {
+                for (d in detectors) {
+                    val list = d.get("resolutionList")
+                    if (list != null && list.isArray && list.size() > 0) {
+                        for (item in list) {
+                            val itemSe = item.get("se")?.asInt(0) ?: 0
+                            val itemEp = item.get("ep")?.asInt(0) ?: item.get("episode")?.asInt(0) ?: 0
+                            val matchEpisode = (se == 0 && ep == 0) || (itemSe == se && itemEp == ep)
+                            if (!matchEpisode) continue
+
+                            val resUrl = item.get("resourceLink")?.asText()
+                                ?: item.get("downloadUrl")?.asText()
+                                ?: continue
+                            val duration = item.get("duration")?.asLong()
+                            val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
+                            if (isDecoyStream(resUrl, duration, size)) continue
+
+                            val resVal = item.get("resolution")?.asInt(0) ?: 0
+                            val codec = item.get("codecName")?.asText() ?: ""
+                            emitStream(resUrl, resVal, codec)
+                        }
+                    } else {
+                        val dlUrl = d.get("downloadUrl")?.asText() ?: d.get("resourceLink")?.asText()
+                        if (!dlUrl.isNullOrBlank()) {
+                            val codec = d.get("codecName")?.asText() ?: ""
+                            emitStream(dlUrl, 0, codec)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 4. Fallback to /subject-api/resource
+        if (emittedCount == 0) {
+            try {
+                val resUrl = "$host/wefeed-mobile-bff/subject-api/resource?subjectId=$subjectId&page=1&perPage=20"
+                val headers = buildAuthHeaders("GET", url = resUrl)
+                val res = app.get(resUrl, headers = headers)
+                val root = mapper.readTree(res.body.string())
+                val list = root.get("data")?.get("list")
+                if (list != null && list.isArray) {
+                    for (item in list) {
+                        val itemSe = item.get("se")?.asInt(0) ?: 0
+                        val itemEp = item.get("ep")?.asInt(0) ?: item.get("episode")?.asInt(0) ?: 0
+                        val matchEpisode = (se == 0 && ep == 0) || (itemSe == se && itemEp == ep)
+                        if (!matchEpisode) continue
+
+                        val link = item.get("resourceLink")?.asText() ?: continue
+                        val duration = item.get("duration")?.asLong()
+                        val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
+                        if (isDecoyStream(link, duration, size)) continue
+
+                        val resVal = item.get("resolution")?.asInt(0) ?: 0
+                        val codec = item.get("codecName")?.asText() ?: ""
+                        emitStream(link, resVal, codec)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        return emittedCount > 0
     }
 
     private suspend fun loadCaptions(subjectId: String, subtitleCallback: (SubtitleFile) -> Unit) {
@@ -763,7 +873,44 @@ class MovieBoxProvider : MainAPI() {
         } catch (_: Exception) {}
     }
 
-    private fun isDecoyStream(url: String): Boolean {
-        return url.contains("decoy") || url.contains("sample") || url.contains("blank.mp4")
+    private fun extractPolicyResource(cookie: String): String? {
+        return try {
+            val pattern1 = Regex("""Edge-Cache-Cookie=urlprefix=([^:;\s]+)""")
+            val pattern2 = Regex("""CloudFront-Policy=([^;]+)""")
+            val encoded = pattern1.find(cookie)?.groupValues?.get(1)
+                ?: pattern2.find(cookie)?.groupValues?.get(1)
+                ?: return null
+
+            val normalized = encoded.replace('-', '+').replace('_', '/')
+            val padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
+            val decoded = base64Decode(padded)
+
+            if (decoded.contains("Statement")) {
+                val node = mapper.readTree(decoded)
+                val resource = node.get("Statement")?.get(0)?.get("Resource")?.asText()?.trimEnd('*')
+                if (!resource.isNullOrBlank()) {
+                    if (resource.endsWith(".mpd")) resource else "${resource.trimEnd('/')}/index.mpd"
+                } else null
+            } else {
+                decoded
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun isDecoyStream(url: String, duration: Long? = null, size: Long? = null): Boolean {
+        if (url.isBlank()) return true
+        val lower = url.lowercase()
+        if (lower.contains("b164fbfb4347792950bdfbfb563d39d9") ||
+            lower.contains("80da52722ee7de7a4303290af6783424") ||
+            lower.contains("blank.mp4") ||
+            lower.contains("decoy") ||
+            lower.contains("sample") ||
+            lower.contains("/other/")
+        ) return true
+        if (duration != null && duration in 1..300) return true
+        if (size != null && size in 1..2000000) return true
+        return false
     }
 }

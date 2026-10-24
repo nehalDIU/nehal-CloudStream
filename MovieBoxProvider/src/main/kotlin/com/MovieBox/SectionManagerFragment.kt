@@ -24,6 +24,8 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
         const val PREF_ORDER_KEY = "moviebox_section_order"
         const val PREF_HIDDEN_KEY = "moviebox_section_hidden"
 
+        val DEFAULT_HIDDEN_SECTIONS = setOf("live|matches", "live|highlights")
+
         val defaultSections = listOf(
             "live|matches" to "⚽ Live Football & Sports",
             "live|highlights" to "Football Match Highlights",
@@ -286,8 +288,13 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
         }
 
         hiddenSections.clear()
-        if (!savedHiddenStr.isNullOrBlank()) {
-            hiddenSections.addAll(savedHiddenStr.split(",").filter { it.isNotBlank() })
+        if (savedHiddenStr != null) {
+            if (savedHiddenStr.isNotBlank()) {
+                hiddenSections.addAll(savedHiddenStr.split(",").filter { it.isNotBlank() })
+            }
+        } else {
+            // By default, Live Sports & Highlights are unchecked so movies/series are shown first
+            hiddenSections.addAll(DEFAULT_HIDDEN_SECTIONS)
         }
     }
 
@@ -303,7 +310,7 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
         val prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
         prefs.edit()
             .remove(PREF_ORDER_KEY)
-            .remove(PREF_HIDDEN_KEY)
+            .putString(PREF_HIDDEN_KEY, DEFAULT_HIDDEN_SECTIONS.joinToString(","))
             .apply()
     }
 }
