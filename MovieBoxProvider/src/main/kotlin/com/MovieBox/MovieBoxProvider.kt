@@ -348,7 +348,7 @@ class MovieBoxProvider : MainAPI() {
 
         val activeSections = if (!savedOrderStr.isNullOrBlank()) {
             val map = SectionManagerFragment.defaultSections.toMap()
-            val list = savedOrderStr.split(",").filter { it.isNotBlank() }
+            val list = savedOrderStr.split(",").filter { it.isNotBlank() }.map { SectionManagerFragment.migrateKey(it) }
             val loaded = list.mapNotNull { key -> map[key]?.let { key to it } }.toMutableList()
             for (def in SectionManagerFragment.defaultSections) {
                 if (loaded.none { it.first == def.first }) loaded.add(def)
@@ -359,7 +359,7 @@ class MovieBoxProvider : MainAPI() {
         }
 
         val hidden = if (savedHiddenStr != null) {
-            savedHiddenStr.split(",").filter { it.isNotBlank() }.toSet()
+            savedHiddenStr.split(",").filter { it.isNotBlank() }.map { SectionManagerFragment.migrateKey(it) }.toSet()
         } else {
             SectionManagerFragment.DEFAULT_HIDDEN_SECTIONS
         }
@@ -377,7 +377,8 @@ class MovieBoxProvider : MainAPI() {
         return newHomePageResponse(rows)
     }
 
-    private suspend fun loadSectionItems(host: String, key: String): List<SearchResponse> {
+    private suspend fun loadSectionItems(host: String, rawKey: String): List<SearchResponse> {
+        val key = SectionManagerFragment.migrateKey(rawKey)
         if (key == "live|matches") {
             return loadLiveSportsMatches()
         }

@@ -26,6 +26,20 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
 
         val DEFAULT_HIDDEN_SECTIONS = setOf("live|matches", "live|highlights")
 
+        fun migrateKey(key: String): String {
+            var k = when {
+                key == "1|2" -> "2|2"
+                key == "1|1006" -> "1|1;genre=Animation"
+                key.startsWith("1|2") -> "2|2" + key.removePrefix("1|2")
+                else -> key
+            }
+            if (k.contains("classify=Hindi dub")) {
+                val parts = k.split(";").filter { it.isNotBlank() && it.trim() != "classify=Hindi dub" }
+                k = parts.joinToString(";")
+            }
+            return k
+        }
+
         val defaultSections = listOf(
             "live|matches" to "⚽ Live Football & Sports",
             "live|highlights" to "Football Match Highlights",
@@ -44,30 +58,30 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
             "r|5|3910636007619709856" to "Western TV",
             "r|5|5177200225164885656" to "Turkish Drama",
             "1|1" to "Movies",
-            "1|2" to "Series",
-            "1|1006" to "Anime",
+            "2|2" to "Series",
+            "1|1;genre=Animation" to "Anime (Movies)",
             "2|2;country=Japan;genre=Animation" to "Anime (Series)",
             "1|1;country=India" to "Indian (Movies)",
-            "1|2;country=India" to "Indian (Series)",
-            "1|1;classify=Hindi dub;country=United States" to "USA (Movies)",
-            "1|2;classify=Hindi dub;country=United States" to "USA (Series)",
+            "2|2;country=India" to "Indian (Series)",
+            "1|1;country=United States" to "USA (Movies)",
+            "2|2;country=United States" to "USA (Series)",
             "1|1;country=Japan" to "Japan (Movies)",
-            "1|2;country=Japan" to "Japan (Series)",
+            "2|2;country=Japan" to "Japan (Series)",
             "1|1;country=China" to "China (Movies)",
-            "1|2;country=China" to "China (Series)",
+            "2|2;country=China" to "China (Series)",
             "1|1;country=Philippines" to "Philippines (Movies)",
-            "1|2;country=Philippines" to "Philippines (Series)",
+            "2|2;country=Philippines" to "Philippines (Series)",
             "1|1;country=Thailand" to "Thailand (Movies)",
-            "1|2;country=Thailand" to "Thailand (Series)",
+            "2|2;country=Thailand" to "Thailand (Series)",
             "1|1;country=Nigeria" to "Nollywood (Movies)",
-            "1|2;country=Nigeria" to "Nollywood (Series)",
+            "2|2;country=Nigeria" to "Nollywood (Series)",
             "1|1;country=Korea" to "South Korean (Movies)",
-            "1|2;country=Korea" to "South Korean (Series)",
-            "1|1;classify=Hindi dub;genre=Action" to "Action (Movies)",
-            "1|1;classify=Hindi dub;genre=Crime" to "Crime (Movies)",
-            "1|1;classify=Hindi dub;genre=Comedy" to "Comedy (Movies)",
-            "1|2;classify=Hindi dub;genre=Crime" to "Crime (Series)",
-            "1|2;classify=Hindi dub;genre=Comedy" to "Comedy (Series)"
+            "2|2;country=Korea" to "South Korean (Series)",
+            "1|1;genre=Action" to "Action (Movies)",
+            "1|1;genre=Crime" to "Crime (Movies)",
+            "1|1;genre=Comedy" to "Comedy (Movies)",
+            "2|2;genre=Crime" to "Crime (Series)",
+            "2|2;genre=Comedy" to "Comedy (Series)"
         )
     }
 
@@ -277,7 +291,7 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
 
         val map = defaultSections.toMap()
         currentOrder = if (!savedOrderStr.isNullOrBlank()) {
-            val list = savedOrderStr.split(",").filter { it.isNotBlank() }
+            val list = savedOrderStr.split(",").filter { it.isNotBlank() }.map { migrateKey(it) }
             val loaded = list.mapNotNull { key -> map[key]?.let { key to it } }.toMutableList()
             for (def in defaultSections) {
                 if (loaded.none { it.first == def.first }) loaded.add(def)
@@ -290,7 +304,8 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
         hiddenSections.clear()
         if (savedHiddenStr != null) {
             if (savedHiddenStr.isNotBlank()) {
-                hiddenSections.addAll(savedHiddenStr.split(",").filter { it.isNotBlank() })
+                val migratedHidden = savedHiddenStr.split(",").filter { it.isNotBlank() }.map { migrateKey(it) }
+                hiddenSections.addAll(migratedHidden)
             }
         } else {
             // By default, Live Sports & Highlights are unchecked so movies/series are shown first
