@@ -44,6 +44,25 @@ class MovieBoxProvider : MainAPI() {
         var bearerToken: String? = null
         @Volatile
         var tokenTimestamp: Long = 0L
+
+        fun isAdultContent(title: String?, genre: String?, tags: List<String>? = null): Boolean {
+            val text = buildString {
+                if (!title.isNullOrBlank()) append(" ").append(title.lowercase())
+                if (!genre.isNullOrBlank()) append(" ").append(genre.lowercase())
+                tags?.forEach { append(" ").append(it.lowercase()) }
+            }
+            val adultMarkers = listOf(
+                "18+", "(18+)", "[18+]", "adult", "erotic", "erotica",
+                "sensual", "hentai", "ecchi", "uncensored", "nsfw",
+                "porn", "sex", "lust", "seduction", "desire", "softcore"
+            )
+            return adultMarkers.any { marker ->
+                when (marker) {
+                    "18+", "(18+)", "[18+]" -> text.contains(marker)
+                    else -> Regex("""\b$marker\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+                }
+            }
+        }
     }
 
     override var name = "MovieBox"
@@ -51,7 +70,7 @@ class MovieBoxProvider : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "en"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live, TvType.NSFW)
 
     private val mapper = jacksonObjectMapper()
     private val random = SecureRandom()
@@ -245,13 +264,16 @@ class MovieBoxProvider : MainAPI() {
             if (sportResults.isNotEmpty()) return sportResults
         }
 
+        val adultEnabled = SectionManagerFragment.isAdultEnabled(context)
+        val restrictKid = if (adultEnabled) 0 else 1
+
         val host = getActiveHost()
         val searchUrl = "$host/wefeed-mobile-bff/subject-api/search/v2"
         val bodyObj = mapOf(
             "page" to 1,
             "perPage" to 20,
             "keyword" to query,
-            "restrictKid" to 0
+            "restrictKid" to restrictKid
         )
         val body = mapper.writeValueAsString(bodyObj)
         val ct = "application/json; charset=utf-8"
@@ -275,17 +297,27 @@ class MovieBoxProvider : MainAPI() {
                     val poster = item.get("cover")?.get("url")?.asText()
                     val type = item.get("subjectType")?.asInt(1) ?: 1
                     val rating = item.get("imdbRatingValue")?.asText() ?: item.get("score")?.asText()
+                    val genre = item.get("genre")?.asText()
                     val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id"
 
                     if (!seenUrls.add(detailUrl)) continue
 
+                    val isAdult = isAdultContent(title, genre)
+                    if (isAdult && !adultEnabled) continue
+
+                    val resolvedType = when {
+                        isAdult -> TvType.NSFW
+                        type == 2 -> TvType.TvSeries
+                        else -> TvType.Movie
+                    }
+
                     if (type == 2) {
-                        list.add(newTvSeriesSearchResponse(title, detailUrl, TvType.TvSeries) {
+                        list.add(newTvSeriesSearchResponse(title, detailUrl, resolvedType) {
                             this.posterUrl = poster
                             this.score = Score.from10(rating)
                         })
                     } else {
-                        list.add(newMovieSearchResponse(title, detailUrl, TvType.Movie) {
+                        list.add(newMovieSearchResponse(title, detailUrl, resolvedType) {
                             this.posterUrl = poster
                             this.score = Score.from10(rating)
                         })
@@ -386,11 +418,14 @@ class MovieBoxProvider : MainAPI() {
             return loadLiveSportsHighlights()
         }
 
+        val adultEnabled = SectionManagerFragment.isAdultEnabled(context)
+        val restrictKid = if (adultEnabled) 0 else 1
+
         if (key.startsWith("r|")) {
             val parts = key.split("|")
             val tabId = parts.getOrNull(1) ?: "0"
             val categoryType = parts.getOrNull(2) ?: ""
-            val url = "$host/wefeed-mobile-bff/tab/ranking-list?tabId=$tabId&categoryType=$categoryType&page=1&perPage=20&restrictKid=0"
+            val url = "$host/wefeed-mobile-bff/tab/ranking-list?tabId=$tabId&categoryType=$categoryType&page=1&perPage=20&restrictKid=$restrictKid"
             val headers = buildAuthHeaders("GET", url = url)
             val res = app.get(url, headers = headers)
             return parseSubjectList(host, res.body.string())
@@ -426,7 +461,7 @@ class MovieBoxProvider : MainAPI() {
             "year" to year,
             "genre" to genre,
             "sort" to sort,
-            "restrictKid" to 0
+            "restrictKid" to restrictKid
         )
         val bodyStr = mapper.writeValueAsString(bodyObj)
         val ct = "application/json; charset=utf-8"
@@ -443,6 +478,7 @@ class MovieBoxProvider : MainAPI() {
             val listNode = data.get("subjects") ?: data.get("items") ?: data.get("list") ?: return emptyList()
             val list = mutableListOf<SearchResponse>()
             val seenUrls = mutableSetOf<String>()
+            val adultEnabled = SectionManagerFragment.isAdultEnabled(context)
 
             for (item in listNode) {
                 val id = item.get("subjectId")?.asText() ?: continue
@@ -450,17 +486,27 @@ class MovieBoxProvider : MainAPI() {
                 val poster = item.get("cover")?.get("url")?.asText()
                 val type = item.get("subjectType")?.asInt(1) ?: 1
                 val rating = item.get("imdbRatingValue")?.asText() ?: item.get("score")?.asText()
+                val genre = item.get("genre")?.asText()
                 val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$id"
 
                 if (!seenUrls.add(detailUrl)) continue
 
+                val isAdult = isAdultContent(title, genre)
+                if (isAdult && !adultEnabled) continue
+
+                val resolvedType = when {
+                    isAdult -> TvType.NSFW
+                    type == 2 -> TvType.TvSeries
+                    else -> TvType.Movie
+                }
+
                 if (type == 2) {
-                    list.add(newTvSeriesSearchResponse(title, detailUrl, TvType.TvSeries) {
+                    list.add(newTvSeriesSearchResponse(title, detailUrl, resolvedType) {
                         this.posterUrl = poster
                         this.score = Score.from10(rating)
                     })
                 } else {
-                    list.add(newMovieSearchResponse(title, detailUrl, TvType.Movie) {
+                    list.add(newMovieSearchResponse(title, detailUrl, resolvedType) {
                         this.posterUrl = poster
                         this.score = Score.from10(rating)
                     })
@@ -576,6 +622,13 @@ class MovieBoxProvider : MainAPI() {
         val rating = subject.get("score")?.asDouble() ?: subject.get("imdbRatingValue")?.asDouble()
 
         val isTv = subjectType == 2
+        val genre = subject.get("genre")?.asText()
+        val isAdult = isAdultContent(title, genre)
+        val resolvedType = when {
+            isAdult -> TvType.NSFW
+            isTv -> TvType.TvSeries
+            else -> TvType.Movie
+        }
 
         val (tmdbId, imdbId) = identifyID(title, year, if (isTv) "tv" else "movie")
         val metaData = fetchMetaData(imdbId, if (isTv) TvType.TvSeries else TvType.Movie)
@@ -635,7 +688,7 @@ class MovieBoxProvider : MainAPI() {
                 }
             }
 
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            return newTvSeriesLoadResponse(title, url, resolvedType, episodes) {
                 this.posterUrl = poster
                 this.backgroundPosterUrl = backdrop
                 this.plot = plot
@@ -646,7 +699,7 @@ class MovieBoxProvider : MainAPI() {
             }
         } else {
             val playData = "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId"
-            return newMovieLoadResponse(title, url, TvType.Movie, playData) {
+            return newMovieLoadResponse(title, url, resolvedType, playData) {
                 this.posterUrl = poster
                 this.backgroundPosterUrl = backdrop
                 this.plot = plot

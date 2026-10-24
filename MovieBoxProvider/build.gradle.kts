@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 41
+version = 42
 
 android {
     namespace = "com.MovieBox"
@@ -21,7 +21,8 @@ cloudstream {
     tvTypes = listOf(
         "Movie",
         "TvSeries",
-        "Live"
+        "Live",
+        "NSFW"
     )
     requiresResources = true
 }

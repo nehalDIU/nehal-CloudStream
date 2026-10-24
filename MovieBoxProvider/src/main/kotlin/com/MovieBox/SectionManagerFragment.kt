@@ -23,6 +23,20 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
     companion object {
         const val PREF_ORDER_KEY = "moviebox_section_order"
         const val PREF_HIDDEN_KEY = "moviebox_section_hidden"
+        const val PREF_ENABLE_ADULT_KEY = "moviebox_enable_adult"
+
+        fun isAdultEnabled(ctx: Context?): Boolean {
+            val globalEnable = com.lagradost.cloudstream3.MainAPI.settingsForProvider.enableAdult
+            if (ctx == null) return globalEnable
+            val prefs = ctx.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+            return prefs.getBoolean(PREF_ENABLE_ADULT_KEY, globalEnable)
+        }
+
+        fun setAdultEnabled(ctx: Context?, enabled: Boolean) {
+            if (ctx == null) return
+            val prefs = ctx.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(PREF_ENABLE_ADULT_KEY, enabled).apply()
+        }
 
         val DEFAULT_HIDDEN_SECTIONS = setOf("live|matches", "live|highlights")
 
@@ -149,6 +163,47 @@ class SectionManagerFragment : BottomSheetDialogFragment() {
             addView(resetBtn)
         }
         root.addView(header)
+
+        // 18+ / Adult Content Toggle
+        val adultCard = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setBackgroundColor(Color.parseColor("#221515"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, dp(10)) }
+        }
+
+        val adultCb = CheckBox(ctx).apply {
+            isChecked = isAdultEnabled(ctx)
+            setOnCheckedChangeListener { _, checked ->
+                setAdultEnabled(ctx, checked)
+                val msg = if (checked) "🔞 18+ / Adult content enabled" else "🔞 18+ / Adult content hidden"
+                Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+        adultCard.addView(adultCb)
+
+        val adultLabelBox = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(dp(8), 0, 0, 0)
+            addView(TextView(ctx).apply {
+                text = "🔞 Show 18+ / Adult Content"
+                textSize = 13f
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            addView(TextView(ctx).apply {
+                text = "Filters explicit/erotic content · syncs with CloudStream NSFW"
+                textSize = 10f
+                setTextColor(Color.parseColor("#aaaaaa"))
+            })
+        }
+        adultCard.addView(adultLabelBox)
+        root.addView(adultCard)
 
         val hint = TextView(ctx).apply {
             text = "  Uncheck to hide  ·  ▲▼ to reorder"
