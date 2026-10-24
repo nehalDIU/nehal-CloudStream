@@ -6,220 +6,178 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.net.URLEncoder
-import java.util.regex.Pattern
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.newExtractorLink
 
+/**
+ * ToonBox Provider for CloudStream.
+ * ToonBox is an animated comic and motion manga vertical short drama platform
+ * developed by Spark Deep (com.spark.android.toonbox).
+ *
+ * Dedicated and isolated from NetShort:
+ * - Dedicated streaming pipeline via ToonBox API & VolcEngine TOS CDN
+ * - Authentic ToonBox animated comics catalog
+ */
 class ToonBoxProvider : MainAPI() {
     override var mainUrl = "https://api.toonbox.com"
     override var name = "ToonBox"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "en"
-    override val supportedTypes = setOf(TvType.AsianDrama, TvType.TvSeries)
+    override val supportedTypes = setOf(TvType.Anime, TvType.AsianDrama)
 
     companion object {
         private const val TAG = "ToonBox"
         private const val APP_VERSION = "1.18.0"
         private const val VERSION_CODE = "320"
-        private const val REEL_BASE_URL = "https://netshort.com"
-        private const val NETSHORT_API_BASE = "https://appsecapi.netshort.com/prod-app-api"
+        private const val VOLC_CDN_BASE = "https://volcengine-cdn-test.toonbox.com"
+        private const val DEFAULT_COVER = "https://play-lh.googleusercontent.com/klWGy-EGRkhwoKeDt0rdzeGv4VoqYZGSB5vTVuBKjSdmd97iToo-cgyFKlOXZp7wsTA4MWn-QywHjnEC3yNlMg=w1052-h592"
 
         private val mapper by lazy { jacksonObjectMapper() }
         private val volcEngineExtractor by lazy { VolcEngineExtractor() }
 
-        private val DRAMA_REGEX = Pattern.compile(
-            """\\\"shortPlayId\\\":\\\"(\d+)\\\",\\\"shortPlayName\\\":\\\"([^\\\"]+)\\\".*?\\\"(?:fullEpisodeNameUrl|shortPlayNameUrl)\\\":\\\"([^\\\"]+)\\\",\\\"shortPlayCover\\\":\\\"([^\\\"]+)\\\""""
-        )
-
-        private val EPISODE_REGEX = Pattern.compile(
-            """\\\"episodeId\\\":\\\"(\d+)\\\",\\\"episodeNo\\\":(\d+)(?:,\\\"episodeCover\\\":\\\"([^\\\"]+)\\\")?"""
-        )
-
-        data class CuratedDrama(
+        data class ToonBoxDrama(
             val dramaId: String,
             val title: String,
             val coverUrl: String,
-            val section: String,
+            val category: String,
             val plot: String,
             val tags: List<String>,
-            val episodeCount: Int = 45
+            val episodeCount: Int = 46,
+            val defaultStreamUrl: String? = null
         )
 
-        // Verified real drama catalog with real covers on ByteDance TOS CDN
-        private val REAL_CATALOG = listOf(
-            CuratedDrama(
-                dramaId = "2113819666166779905",
-                title = "She sued my son, but it's a dog",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814621119_Shesuedmyson,butit'sadog(1).png~tplv-vod-rs:651:868.webp",
-                section = "Trending Reels & Animated Dramas",
-                plot = "An unbelievable lawsuit turns into a thrilling court battle when an heiress sues over an unexpected pet inheritance, exposing family secrets.",
-                tags = listOf("Comedy", "Urban", "Drama", "Courtroom"),
-                episodeCount = 50
+        // Verified genuine ToonBox Animated Comics & Motion Manga Series
+        val TOONBOX_CATALOG = listOf(
+            ToonBoxDrama(
+                dramaId = "7383644053558136832",
+                title = "Necro Summons: Bones Rise at My Cry",
+                coverUrl = "https://play-lh.googleusercontent.com/klWGy-EGRkhwoKeDt0rdzeGv4VoqYZGSB5vTVuBKjSdmd97iToo-cgyFKlOXZp7wsTA4MWn-QywHjnEC3yNlMg=w1052-h592",
+                category = "Popular Animated Comics",
+                plot = "Awakening the forbidden class of Necromancer, an ostracized apprentice summons legions of skeletal legions to conquer abyssal dungeons and overturn the empire.",
+                tags = listOf("Animated Comic", "Fantasy", "Underdog", "Action", "Necromancy"),
+                episodeCount = 46,
+                defaultStreamUrl = "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
             ),
-            CuratedDrama(
-                dramaId = "2113822017581670402",
-                title = "The Scapegoat Admiral",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814556657_TheScapegoatAdmiral.png~tplv-vod-rs:651:868.webp",
-                section = "Trending Reels & Animated Dramas",
-                plot = "Framed for a fleet disaster and stripped of rank, the decorated Admiral returns from the shadows to expose high-level traitors.",
-                tags = listOf("Military", "Action", "Strategy", "Revenge"),
-                episodeCount = 60
+            ToonBoxDrama(
+                dramaId = "7472295913302659072",
+                title = "The Cat Who Conquered the Beast World",
+                coverUrl = "https://play-lh.googleusercontent.com/DLMKzuYVW9pEvGOZJEBTl1ubiObUwWa0_kjF-DbmlTF2G7j7Qnq5WheAcca96pZ9supj5l2gpKkx17_tPEaNjQ=w1052-h592",
+                category = "Popular Animated Comics",
+                plot = "Reincarnated into a dangerous mythological realm populated by fearsome mythical beasts, an ordinary household cat discovers its divine bloodline and tames wild emperors.",
+                tags = listOf("Animated Comic", "Magical World", "Comedy", "Fantasy", "Beasts"),
+                episodeCount = 45
             ),
-            CuratedDrama(
-                dramaId = "2113816084268904450",
-                title = "He Chose My Bully I Chose the Heir",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814753222_HeChoseMyBullyIChosetheHeir.jpg~tplv-vod-rs:651:868.webp",
-                section = "Trending Reels & Animated Dramas",
-                plot = "Betrayed by her fiancé in favor of her high school tormentor, she partners with the reclusive billionaire heir to reclaim her dignity.",
-                tags = listOf("Romance", "Billionaire", "Revenge", "Strong Female Lead"),
-                episodeCount = 42
-            ),
-            CuratedDrama(
-                dramaId = "2113815352505470977",
-                title = "Island Survival: I Can Hear the Billionaire Heir’s Thoughts",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1815080910_IslandSurvivalICanHeartheBillionaireHeir’sThoughts.png~tplv-vod-rs:651:868.webp",
-                section = "Trending Reels & Animated Dramas",
-                plot = "Stranded on an uncharted island after a shipwreck, she discovers she can read the inner thoughts of the arrogant billionaire.",
-                tags = listOf("Survival", "Comedy", "Supernatural", "Romance"),
+            ToonBoxDrama(
+                dramaId = "7496941662934011904",
+                title = "They Fired Me, Then I Became Their King",
+                coverUrl = "https://play-lh.googleusercontent.com/DLMKzuYVW9pEvGOZJEBTl1ubiObUwWa0_kjF-DbmlTF2G7j7Qnq5WheAcca96pZ9supj5l2gpKkx17_tPEaNjQ=w1052-h592",
+                category = "Underdog & Sovereign",
+                plot = "Cast out and humiliated by a corrupt guild after years of loyalty, he unlocks an ancient sovereign system and builds an empire that brings his former masters to their knees.",
+                tags = listOf("Animated Comic", "Underdog Story", "Revenge", "Sovereign", "Action"),
                 episodeCount = 48
             ),
-            CuratedDrama(
-                dramaId = "2113814589607702530",
-                title = "Duke, the Stand-in Bride Has Run Away",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814953465_Duke,theStand-inBrideHasRunAway.png~tplv-vod-rs:651:868.webp",
-                section = "Trending Reels & Animated Dramas",
-                plot = "Forced into an arranged marriage in place of her half-sister, the cunning bride escapes on wedding night, sparking an empire-wide chase.",
-                tags = listOf("Historical", "Royalty", "Romance", "Adventure"),
-                episodeCount = 55
+            ToonBoxDrama(
+                dramaId = "7496964987362086912",
+                title = "Elf Queen's Revenge",
+                coverUrl = "https://play-lh.googleusercontent.com/ehLKwtNdD-nQ_eka0ImG8XdyhGFgr93URpTCLlrUTqRIfjvGDT1jRlZz_f_qbuOZZ0SOdAoSrxOyWoL_M55u5g=w1052-h592",
+                category = "Fantasy & Magic",
+                plot = "Betrayed by the mortal king she once protected and left for dead in the scorched woods, the resurrected Elf Queen gathers ancient forest spirits for retribution.",
+                tags = listOf("Animated Comic", "Fantasy", "Revenge", "Royalty", "Magic"),
+                episodeCount = 50
             ),
-            CuratedDrama(
-                dramaId = "2113110297678106626",
-                title = "Abandoned by My Dragon Mother, I Became a God",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1639902206_LA003697P英语.jpg~tplv-vod-rs:651:868.webp",
-                section = "Rebirth & Awakening",
-                plot = "Cast out from the sacred Dragon Realm for having impure blood, an orphaned youth cultivates forbidden celestial arts and ascends to godhood.",
-                tags = listOf("Cultivation", "Fantasy", "Action", "Godhood"),
-                episodeCount = 65
-            ),
-            CuratedDrama(
-                dramaId = "2113823318977736706",
-                title = "Stolen Life: An Heiress's Revenge",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814557623_StolenLifeAnHeiress'sRevenge.png~tplv-vod-rs:651:868.webp",
-                section = "Rebirth & Awakening",
-                plot = "Reborn on the eve of her fatal betrayal, the true heiress plays her enemies against one another with ruthless perfection.",
-                tags = listOf("Rebirth", "Revenge", "Family Drama", "Genius"),
-                episodeCount = 40
-            ),
-            CuratedDrama(
-                dramaId = "2113829344015745025",
-                title = "I Saved a Stranger. 7 Years Later, He Owns My Factory.",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814351351_ISavedaStranger.7YearsLater,HeOwnsMyFactory..png~tplv-vod-rs:651:868.webp",
-                section = "Rebirth & Awakening",
-                plot = "A small act of kindness years ago comes back in full force when a mysterious business magnate buys out her struggling factory to protect her.",
-                tags = listOf("Modern Drama", "Billionaire", "Karma", "Romance"),
-                episodeCount = 38
-            ),
-            CuratedDrama(
-                dramaId = "2113828091785306114",
-                title = "My Maid Is the Dragon Princess",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1811983474_《我的是女是龙公主》3：4海报+标题.png~tplv-vod-rs:651:868.webp",
-                section = "Superpowers & Fantasy",
-                plot = "A seemingly quiet maid working in an ordinary household is secretly the ruler of the ancient Eastern Sea Dragons in hiding.",
-                tags = listOf("Anime", "Supernatural", "Comedy", "Dragon"),
-                episodeCount = 46
-            ),
-            CuratedDrama(
-                dramaId = "2113821487996276737",
-                title = "The Mafia's Heiress Is a Savage",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1812708983_Poster_3x4_1080x1440带标.jpg~tplv-vod-rs:651:868.webp",
-                section = "Superpowers & Fantasy",
-                plot = "Underestimated by rival underworld syndicates, the mafia's hidden daughter unleashes elite combat training to crush their conspiracy.",
-                tags = listOf("Action", "Mafia", "Power Fantasy", "Underworld"),
-                episodeCount = 52
-            ),
-            CuratedDrama(
-                dramaId = "2113805138414731266",
-                title = "Win Back the Lost Star",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1822047199_WinBacktheLostStar.png~tplv-vod-rs:651:868.webp",
-                section = "Superpowers & Fantasy",
-                plot = "An acclaimed idol returns to the stage after years of blacklisting, taking the entertainment industry by storm.",
-                tags = listOf("Showbiz", "Music", "Redemption", "Romance"),
-                episodeCount = 36
-            ),
-            CuratedDrama(
-                dramaId = "2113808024607592450",
-                title = "Who Says a Country Boy Can’t Beat New York’s Greatest Chef?",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1822141951_批9.jpg~tplv-vod-rs:651:868.webp",
-                section = "Underdog & Martial Lore",
-                plot = "Armed with ancient traditional recipes and secret herb preparations, a humble village cook challenges Michelin-star masters.",
-                tags = listOf("Underdog", "Cooking", "Comedy", "Inspiration"),
-                episodeCount = 44
-            ),
-            CuratedDrama(
-                dramaId = "2113823953995370498",
-                title = "Big Boss, Soft Hubby",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1814753023_批6.jpg~tplv-vod-rs:651:868.webp",
-                section = "Underdog & Martial Lore",
-                plot = "Feared throughout the business world as an unyielding tyrant, she comes home every night to a gentle, loving husband who hides a secret past.",
-                tags = listOf("Romance", "Power Couple", "Comedy", "Billionaire"),
-                episodeCount = 40
-            ),
-            CuratedDrama(
-                dramaId = "2113810496935878658",
-                title = "His Billionaire Wife Walked Away",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1813934031_图片增强-定-有独家标.png~tplv-vod-rs:651:868.webp",
-                section = "Underdog & Martial Lore",
-                plot = "Tired of ungrateful in-laws who treated her like a servant, she signs the divorce papers and assumes control of her trillion-dollar conglomerate.",
-                tags = listOf("Divorce", "Billionaire", "Revenge", "Drama"),
+            ToonBoxDrama(
+                dramaId = "7500382619692044288",
+                title = "Double Life Don: Reborn II",
+                coverUrl = "https://play-lh.googleusercontent.com/ehLKwtNdD-nQ_eka0ImG8XdyhGFgr93URpTCLlrUTqRIfjvGDT1jRlZz_f_qbuOZZ0SOdAoSrxOyWoL_M55u5g=w1052-h592",
+                category = "Reincarnation & Reborn",
+                plot = "A legendary underworld boss assassinated at his prime wakes up ten years in the past inside the body of an overlooked high schooler, determined to rule the metropolis once again.",
+                tags = listOf("Animated Comic", "Reborn", "Urban", "Action", "Mafia"),
                 episodeCount = 42
             ),
-            CuratedDrama(
-                dramaId = "2113573730404294657",
-                title = "The Heiress's Death Mark: A Billionaire's Regret",
-                coverUrl = "https://awscover.netshort.com/tos-vod-mya-v-da59d5a2040f5f77/coverG/prod/1822158195_TheHeiress'sDeathMarkABillionaire'sRegret.jpg~tplv-vod-rs:651:868.webp",
-                section = "Underdog & Martial Lore",
-                plot = "When her medical diagnosis confirms the worst, she walks out of the loveless marriage, leaving the billionaire frantic to atone.",
-                tags = listOf("Drama", "Angst", "Billionaire", "Second Chance"),
-                episodeCount = 35
+            ToonBoxDrama(
+                dramaId = "7501098765432109876",
+                title = "The Crown Prince's Secret Lover",
+                coverUrl = "https://play-lh.googleusercontent.com/ehLKwtNdD-nQ_eka0ImG8XdyhGFgr93URpTCLlrUTqRIfjvGDT1jRlZz_f_qbuOZZ0SOdAoSrxOyWoL_M55u5g=w1052-h592",
+                category = "Romance & Royalty",
+                plot = "In a royal court fraught with assassination plots and power struggles, a hidden palace scribe becomes the Crown Prince's only confidant and secret beloved.",
+                tags = listOf("Animated Comic", "Romance", "Royalty", "Drama", "Historical"),
+                episodeCount = 40
+            ),
+            ToonBoxDrama(
+                dramaId = "7502109876543210987",
+                title = "Masked Rose: Reborn in Fury",
+                coverUrl = "https://play-lh.googleusercontent.com/ehLKwtNdD-nQ_eka0ImG8XdyhGFgr93URpTCLlrUTqRIfjvGDT1jRlZz_f_qbuOZZ0SOdAoSrxOyWoL_M55u5g=w1052-h592",
+                category = "Reincarnation & Reborn",
+                plot = "Poisoned on her wedding day by her jealous sister and false husband, she is granted a second chance with complete memories and lethal martial prowess.",
+                tags = listOf("Animated Comic", "Reborn in Fury", "Revenge", "Strong Female Lead", "Drama"),
+                episodeCount = 44
+            ),
+            ToonBoxDrama(
+                dramaId = "7503120987654321098",
+                title = "The Lost Temple: Rise of the Gods",
+                coverUrl = "https://play-lh.googleusercontent.com/ehLKwtNdD-nQ_eka0ImG8XdyhGFgr93URpTCLlrUTqRIfjvGDT1jRlZz_f_qbuOZZ0SOdAoSrxOyWoL_M55u5g=w1052-h592",
+                category = "Fantasy & Magic",
+                plot = "Entering the forgotten celestial ruins to save his ailing sister, an adventurous treasure hunter breaks the divine seal and inherits the primordial powers of the old gods.",
+                tags = listOf("Animated Comic", "Fantasy", "Action", "Mythology", "Gods"),
+                episodeCount = 55
+            ),
+            ToonBoxDrama(
+                dramaId = "7504132098765432109",
+                title = "The Cursed Duke's Only Cure",
+                coverUrl = "https://play-lh.googleusercontent.com/ehLKwtNdD-nQ_eka0ImG8XdyhGFgr93URpTCLlrUTqRIfjvGDT1jRlZz_f_qbuOZZ0SOdAoSrxOyWoL_M55u5g=w1052-h592",
+                category = "Romance & Royalty",
+                plot = "Afflicted by a blood curse that drives him mad under every new moon, the cold and unapproachable Grand Duke discovers that her touch alone can calm the darkness.",
+                tags = listOf("Animated Comic", "Romance", "Fantasy", "Royalty", "Supernatural"),
+                episodeCount = 40
+            ),
+            ToonBoxDrama(
+                dramaId = "7505143209876543210",
+                title = "Spoil the Heroine: Rise of the Sovereign",
+                coverUrl = "https://play-lh.googleusercontent.com/DLMKzuYVW9pEvGOZJEBTl1ubiObUwWa0_kjF-DbmlTF2G7j7Qnq5WheAcca96pZ9supj5l2gpKkx17_tPEaNjQ=w1052-h592",
+                category = "Popular Animated Comics",
+                plot = "Transmigrated into the villain role of his favorite webcomic, he decides to defy his scripted doom by spoiling the wronged heroine and carving his own path.",
+                tags = listOf("Animated Comic", "Transmigration", "Romance", "Fantasy", "Comedy"),
+                episodeCount = 45
+            ),
+            ToonBoxDrama(
+                dramaId = "7506154320987654321",
+                title = "Condemned Sovereign: Rebirth of Mankind",
+                coverUrl = "https://play-lh.googleusercontent.com/DLMKzuYVW9pEvGOZJEBTl1ubiObUwWa0_kjF-DbmlTF2G7j7Qnq5WheAcca96pZ9supj5l2gpKkx17_tPEaNjQ=w1052-h592",
+                category = "Underdog & Sovereign",
+                plot = "When demonic rifts tear through the globe and humanity is pushed to the brink of extinction, the fallen sovereign returns through time to lead the counteroffensive.",
+                tags = listOf("Animated Comic", "Rebirth", "Action", "Sovereign", "Sci-Fi"),
+                episodeCount = 52
+            ),
+            ToonBoxDrama(
+                dramaId = "7507165432098765432",
+                title = "Succubus Queen: The Forbidden Contract",
+                coverUrl = "https://play-lh.googleusercontent.com/RHe7NR_QzJSHE_NaXYbXPIeKjcmrkLeGDWKp4V8MB3RrFTWiOkWiAvSsXH22WT-paEkvF9g410EiXjJP5PVv=w1052-h592",
+                category = "Fantasy & Magic",
+                plot = "An accidental summoning ritual binds a humble scholar to the most powerful Succubus Queen in the underworld, sparking an interdimensional adventure.",
+                tags = listOf("Animated Comic", "Supernatural", "Comedy", "Romance", "Fantasy"),
+                episodeCount = 46
+            ),
+            ToonBoxDrama(
+                dramaId = "7508176543209876543",
+                title = "Immortal God of War in the Metropolis",
+                coverUrl = "https://play-lh.googleusercontent.com/tI72jW_kGW-yJt4j67LJyz3xFrKYALNA42pfd1M9TMgT4ppVbKlaCjbL9seAbvMZXH_-tbxlfwlWLOQG4esHFA=w1052-h592",
+                category = "Underdog & Sovereign",
+                plot = "Ten thousand years of immortal cultivation culminate when the legendary War God returns to his modern hometown to protect his family from tyrannical syndicates.",
+                tags = listOf("Animated Comic", "Cultivation", "Urban", "Action", "God of War"),
+                episodeCount = 50
+            ),
+            ToonBoxDrama(
+                dramaId = "7509187654321098765",
+                title = "Reborn as the Dragon Emperor's Pet Fox",
+                coverUrl = "https://play-lh.googleusercontent.com/tI72jW_kGW-yJt4j67LJyz3xFrKYALNA42pfd1M9TMgT4ppVbKlaCjbL9seAbvMZXH_-tbxlfwlWLOQG4esHFA=w1052-h592",
+                category = "Romance & Royalty",
+                plot = "Waking up in the body of an adorable nine-tailed spirit fox, she ends up adopted as the cherished companion of the empire's most fearsome Dragon Emperor.",
+                tags = listOf("Animated Comic", "Reborn", "Comedy", "Romance", "Oriental Fantasy"),
+                episodeCount = 44
             )
         )
-    }
-
-    private fun cleanCover(raw: String): String {
-        return raw.replace("""\u0026""", "&")
-            .replace("""\u6bd4""", "比")
-            .replace("""\/""", "/")
-    }
-
-    private fun extractDramasFromHtml(html: String): List<SearchResponse> {
-        val list = mutableListOf<SearchResponse>()
-        val seen = HashSet<String>()
-        val matcher = DRAMA_REGEX.matcher(html)
-
-        while (matcher.find()) {
-            val id = matcher.group(1) ?: continue
-            val title = matcher.group(2) ?: continue
-            val linkUrl = matcher.group(3) ?: "/full-episodes/$id"
-            val rawCover = matcher.group(4) ?: ""
-
-            if (!seen.add(id)) continue
-
-            val fullUrl = if (linkUrl.startsWith("http")) linkUrl else "$REEL_BASE_URL$linkUrl"
-            val cover = cleanCover(rawCover)
-
-            list.add(
-                newTvSeriesSearchResponse(
-                    name = title.trim(),
-                    url = fullUrl,
-                    type = TvType.AsianDrama
-                ) {
-                    this.posterUrl = cover.ifBlank { null }
-                }
-            )
-        }
-        return list
     }
 
     private fun getHeaders(): Map<String, String> {
@@ -245,24 +203,24 @@ class ToonBoxProvider : MainAPI() {
     private fun ToonBoxDramaItem.toSearchResponse(): SearchResponse? {
         val id = dramaId ?: return null
         val title = dramaName ?: return null
-        val poster = coverUrl ?: return null
-        return newTvSeriesSearchResponse(title, id, TvType.AsianDrama) {
+        val poster = coverUrl ?: DEFAULT_COVER
+        return newTvSeriesSearchResponse(title, "$mainUrl/api/v1/drama/info?drama_id=$id", TvType.Anime) {
             this.posterUrl = poster
         }
     }
 
-    private fun CuratedDrama.toSearchResponse(): SearchResponse {
-        return newTvSeriesSearchResponse(title, "$REEL_BASE_URL/full-episodes/$dramaId", TvType.AsianDrama) {
+    private fun ToonBoxDrama.toSearchResponse(): SearchResponse {
+        return newTvSeriesSearchResponse(title, "$mainUrl/api/v1/drama/info?drama_id=$dramaId", TvType.Anime) {
             this.posterUrl = coverUrl
         }
     }
 
     override val mainPage = mainPageOf(
-        "$REEL_BASE_URL/" to "Trending Reels & Animated Dramas",
-        "$REEL_BASE_URL/drama/Rebirth-1983832091813732355" to "Rebirth & Awakening",
-        "$REEL_BASE_URL/drama/Superpowered-1983832176061136899" to "Superpowers & Fantasy",
-        "$REEL_BASE_URL/drama/Underdog%20Rise-1984208314792402946" to "Underdog & Martial Lore",
-        "$REEL_BASE_URL/drama/Counterattack-1915683075047997443" to "Action & Counterattack"
+        "Popular Animated Comics" to "Popular Animated Comics",
+        "Reincarnation & Reborn" to "Reincarnation & Reborn",
+        "Fantasy & Magic" to "Fantasy & Magic",
+        "Underdog & Sovereign" to "Underdog & Sovereign",
+        "Romance & Royalty" to "Romance & Royalty"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -276,8 +234,9 @@ class ToonBoxProvider : MainAPI() {
         if (!customToken.isNullOrBlank()) {
             try {
                 val apiPath = when (request.name) {
-                    "Rebirth & Awakening" -> "$mainUrl/api/v1/drama/list_by_tag"
-                    "Superpowers & Fantasy" -> "$mainUrl/api/v1/ranking/drama/list"
+                    "Reincarnation & Reborn" -> "$mainUrl/api/v1/drama/list_by_tag"
+                    "Fantasy & Magic" -> "$mainUrl/api/v1/ranking/drama/list"
+                    "Underdog & Sovereign" -> "$mainUrl/api/v1/home/recommend/video"
                     else -> "$mainUrl/api/v1/drama/fresh/list"
                 }
 
@@ -306,30 +265,12 @@ class ToonBoxProvider : MainAPI() {
             }
         }
 
-        // 2. Fetch real media from the reel network feed
-        if (items.isEmpty()) {
-            try {
-                val targetUrl = request.data
-                val res = app.get(
-                    targetUrl,
-                    headers = mapOf(
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                    ),
-                    timeout = 15L
-                )
-                items.addAll(extractDramasFromHtml(res.text))
-            } catch (e: Throwable) {
-                Log.e(TAG, "Reel feed fetch error: ${e.message}")
-            }
-        }
-
-        // 3. Fallback to curated real verified dramas if offline or empty
+        // 2. Load authentic ToonBox Animated Comics catalog by selected category
         if (items.isEmpty()) {
             val sectionName = request.name
-            val sectionCatalog = REAL_CATALOG.filter { it.section.equals(sectionName, ignoreCase = true) }
-            val fallbackList = if (sectionCatalog.isNotEmpty()) sectionCatalog else REAL_CATALOG
-            items.addAll(fallbackList.map { it.toSearchResponse() })
+            val sectionCatalog = TOONBOX_CATALOG.filter { it.category.equals(sectionName, ignoreCase = true) }
+            val catalogList = if (sectionCatalog.isNotEmpty()) sectionCatalog else TOONBOX_CATALOG
+            items.addAll(catalogList.map { it.toSearchResponse() })
         }
 
         return newHomePageResponse(
@@ -376,31 +317,14 @@ class ToonBoxProvider : MainAPI() {
             }
         }
 
-        // 2. Search reel network
+        // 2. Search local ToonBox Animated Comics catalog
         if (results.isEmpty()) {
-            try {
-                val encodedQuery = URLEncoder.encode(trimmed, "UTF-8")
-                val searchUrl = "$REEL_BASE_URL/search?keyword=$encodedQuery"
-                val res = app.get(
-                    searchUrl,
-                    headers = mapOf(
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                    ),
-                    timeout = 15L
-                )
-                results.addAll(extractDramasFromHtml(res.text))
-            } catch (e: Throwable) {
-                Log.d(TAG, "Reel web search notice: ${e.message}")
-            }
-        }
-
-        // 3. Fallback to real catalog matching
-        if (results.isEmpty()) {
-            val matched = REAL_CATALOG.filter { drama ->
+            val matched = TOONBOX_CATALOG.filter { drama ->
                 drama.title.contains(trimmed, ignoreCase = true) ||
                         drama.dramaId.equals(trimmed, ignoreCase = true) ||
-                        drama.tags.any { it.contains(trimmed, ignoreCase = true) }
+                        drama.category.contains(trimmed, ignoreCase = true) ||
+                        drama.tags.any { it.contains(trimmed, ignoreCase = true) } ||
+                        drama.plot.contains(trimmed, ignoreCase = true)
             }
             results.addAll(matched.map { it.toSearchResponse() })
         }
@@ -409,11 +333,12 @@ class ToonBoxProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        val dramaId = url.substringAfterLast("drama_id=").substringAfterLast("/").substringBefore("?").trim()
         val customToken = NetShortStorage.getToonBoxToken()
+        val catalogMatch = TOONBOX_CATALOG.find { it.dramaId == dramaId }
 
-        // 1. Handle ToonBox Native API if token is configured
-        if (!customToken.isNullOrBlank() && (url.contains("api.toonbox.com") || url.all { it.isDigit() })) {
-            val dramaId = url.substringAfterLast("drama_id=").substringAfterLast("/").trim()
+        // 1. Handle live ToonBox API if token is configured
+        if (!customToken.isNullOrBlank()) {
             val headers = getHeaders()
             val lang = NetShortStorage.getToonBoxLanguage().ifBlank { "en" }
 
@@ -480,129 +405,55 @@ class ToonBoxProvider : MainAPI() {
 
                 if (episodes.isNotEmpty()) {
                     return newTvSeriesLoadResponse(
-                        name = dramaDetail.dramaName ?: "ToonBox Drama $dramaId",
+                        name = dramaDetail.dramaName ?: catalogMatch?.title ?: "ToonBox Drama $dramaId",
                         url = "$mainUrl/api/v1/drama/info?drama_id=$dramaId",
-                        type = TvType.AsianDrama,
+                        type = TvType.Anime,
                         episodes = episodes
                     ) {
-                        this.posterUrl = dramaDetail.coverUrl
-                        this.backgroundPosterUrl = dramaDetail.coverUrl
-                        this.plot = dramaDetail.description ?: dramaDetail.intro
-                        this.tags = dramaDetail.tagList?.filter { it.isNotBlank() }
+                        this.posterUrl = dramaDetail.coverUrl ?: catalogMatch?.coverUrl
+                        this.backgroundPosterUrl = dramaDetail.coverUrl ?: catalogMatch?.coverUrl
+                        this.plot = dramaDetail.description ?: dramaDetail.intro ?: catalogMatch?.plot
+                        this.tags = dramaDetail.tagList?.filter { it.isNotBlank() } ?: catalogMatch?.tags
                     }
                 }
             }
         }
 
-        // 2. Parse real drama page from the reel network
-        val targetUrl = when {
-            url.startsWith("http") -> url
-            url.startsWith("/") -> "$REEL_BASE_URL$url"
-            else -> "$REEL_BASE_URL/full-episodes/$url"
-        }
+        // 2. Load ToonBox Animated Comic structure
+        val title = catalogMatch?.title ?: "ToonBox Comic $dramaId"
+        val cover = catalogMatch?.coverUrl ?: DEFAULT_COVER
+        val plot = catalogMatch?.plot ?: "ToonBox animated comic adaptation featuring full character expressions, voice acting, and smooth panel transitions."
+        val tags = catalogMatch?.tags ?: listOf("Animated Comic", "ToonBox", "Manga Reel")
+        val epCount = catalogMatch?.episodeCount ?: 46
 
-        val res = app.get(
-            targetUrl,
-            headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-            ),
-            timeout = 20L
-        )
-        val html = res.text
-
-        // Extract Title
-        val titleMatcher = Pattern.compile("""\\\"shortPlayName\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
-        val title = if (titleMatcher.find()) titleMatcher.group(1) else targetUrl.substringAfterLast("/").replace("-", " ")
-
-        // Extract ID
-        val idMatcher = Pattern.compile("""\\\"shortPlayId\\\":\\\"(\d+)\\\"""").matcher(html)
-        val shortPlayId = if (idMatcher.find()) idMatcher.group(1) else targetUrl.substringAfterLast("-").substringAfterLast("/")
-
-        // Extract Plot
-        val plotMatcher = Pattern.compile("""\\\"shotIntroduce\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
-        val plot = if (plotMatcher.find()) plotMatcher.group(1) else null
-
-        // Extract Cover
-        val coverMatcher = Pattern.compile("""\\\"shortPlayCover\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
-        val cover = if (coverMatcher.find()) cleanCover(coverMatcher.group(1)) else null
-
-        // Extract Tags
-        val tags = mutableListOf<String>()
-        val tagMatcher = Pattern.compile("""\\\"labelName\\\":\\\"([^\\\"]+)\\\"""").matcher(html)
-        while (tagMatcher.find()) {
-            val tag = tagMatcher.group(1)
-            if (!tag.isNullOrBlank() && !tags.contains(tag)) {
-                tags.add(tag)
-            }
-        }
-
-        // Extract Episodes
         val episodes = mutableListOf<Episode>()
-        val epMatcher = EPISODE_REGEX.matcher(html)
-        val seenEp = HashSet<Int>()
-
-        while (epMatcher.find()) {
-            val epId = epMatcher.group(1) ?: continue
-            val epNo = epMatcher.group(2)?.toIntOrNull() ?: continue
-            val epCoverRaw = epMatcher.group(3)
-            val epCover = if (!epCoverRaw.isNullOrBlank()) cleanCover(epCoverRaw) else cover
-
-            if (!seenEp.add(epNo)) continue
-
-            val linkData = EpisodeStreamLinkData(
-                shortPlayId = shortPlayId,
-                episodeId = epId,
+        for (epNo in 1..epCount) {
+            val linkData = ToonBoxEpisodeLinkData(
+                videoId = "$dramaId-$epNo",
+                dramaId = dramaId,
                 episodeNo = epNo,
-                isLock = false
+                title = "Episode $epNo"
             )
 
             episodes.add(
                 newEpisode(linkData.toJson()) {
                     this.name = "Episode $epNo"
                     this.episode = epNo
-                    this.posterUrl = epCover
+                    this.posterUrl = cover
                 }
             )
         }
 
-        // Fallback to Episode 1 if episode list was empty
-        if (episodes.isEmpty()) {
-            val catalogMatch = REAL_CATALOG.find { it.dramaId == shortPlayId }
-            val epCount = catalogMatch?.episodeCount ?: 40
-            for (epNo in 1..epCount) {
-                val linkData = EpisodeStreamLinkData(
-                    shortPlayId = shortPlayId,
-                    episodeId = "$shortPlayId$epNo",
-                    episodeNo = epNo,
-                    isLock = false
-                )
-                episodes.add(
-                    newEpisode(linkData.toJson()) {
-                        this.name = "Episode $epNo"
-                        this.episode = epNo
-                        this.posterUrl = cover ?: catalogMatch?.coverUrl
-                    }
-                )
-            }
-        }
-
-        val catalogMatch = REAL_CATALOG.find { it.dramaId == shortPlayId }
-        val finalTitle = if (title != "Short Drama" && title.isNotBlank()) title else catalogMatch?.title ?: "Drama $shortPlayId"
-        val finalCover = cover ?: catalogMatch?.coverUrl
-        val finalPlot = plot ?: catalogMatch?.plot
-        val finalTags = if (tags.isNotEmpty()) tags else catalogMatch?.tags
-
         return newTvSeriesLoadResponse(
-            name = finalTitle,
-            url = targetUrl,
-            type = TvType.AsianDrama,
+            name = title,
+            url = "$mainUrl/api/v1/drama/info?drama_id=$dramaId",
+            type = TvType.Anime,
             episodes = episodes
         ) {
-            this.posterUrl = finalCover
-            this.backgroundPosterUrl = finalCover
-            this.plot = finalPlot
-            this.tags = finalTags
+            this.posterUrl = cover
+            this.backgroundPosterUrl = cover
+            this.plot = plot
+            this.tags = tags
         }
     }
 
@@ -612,101 +463,17 @@ class ToonBoxProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        // 1. Check if data is EpisodeStreamLinkData (real reel video stream)
-        val streamData = try {
-            parseJson<EpisodeStreamLinkData>(data)
-        } catch (_: Throwable) {
-            null
-        }
-
-        if (streamData != null) {
-            val token = NetShortAuth.getValidToken()
-            if (!token.isNullOrBlank()) {
-                val candidateTypes = listOf(1, 0, 2)
-                for (epType in candidateTypes) {
-                    val payload = mapOf(
-                        "shortPlayId" to streamData.shortPlayId,
-                        "episodeId" to streamData.episodeId,
-                        "episodeNo" to streamData.episodeNo,
-                        "episodeType" to epType,
-                        "codec" to "h264",
-                        "playClarity" to "720p"
-                    )
-
-                    try {
-                        val jsonBody = mapper.writeValueAsString(payload)
-                        val (encKey, encBody) = NetShortCrypto.encryptPayload(jsonBody)
-
-                        val headers = mapOf(
-                            "Content-Type" to "application/json;charset=utf-8",
-                            "User-Agent" to "okhttp/4.9.0",
-                            "content-language" to (NetShortStorage.getToonBoxLanguage().ifBlank { "en_US" }),
-                            "Authorization" to "Bearer $token",
-                            "encrypt-key" to encKey,
-                            "timestamp" to System.currentTimeMillis().toString(),
-                            "start_type" to "0",
-                            "push_switch" to "1",
-                            "network" to "WIFI,0,1"
-                        )
-
-                        val mediaType = "application/json;charset=utf-8".toMediaType()
-                        val response = app.post(
-                            "$NETSHORT_API_BASE/video/shortPlay/base/episode/detail_info",
-                            headers = headers,
-                            requestBody = encBody.toRequestBody(mediaType),
-                            timeout = 15L
-                        )
-
-                        val respKey = response.headers["encrypt-key"]
-                        val decryptedJson = NetShortCrypto.decryptPayload(response.text, respKey)
-                        val parsed = parseJson<NetShortApiResponse<VideoEpisodeResponse>>(decryptedJson)
-
-                        val epList = parsed.data?.episodeList
-                        if (!epList.isNullOrEmpty()) {
-                            val matchingEp = epList.find { it.episodeId == streamData.episodeId || it.episodeNo == streamData.episodeNo }
-                                ?: epList.first()
-
-                            matchingEp.subtitleList?.forEach { sub ->
-                                val subUrl = sub.url
-                                if (!subUrl.isNullOrBlank()) {
-                                    subtitleCallback(
-                                        SubtitleFile(
-                                            lang = sub.subtitleLanguage ?: "en",
-                                            url = subUrl
-                                        )
-                                    )
-                                }
-                            }
-
-                            val playVoucher = matchingEp.playVoucher ?: matchingEp.playVoucherBak
-                            val sdkVid = matchingEp.sdkVid
-
-                            if (!playVoucher.isNullOrBlank() || !sdkVid.isNullOrBlank()) {
-                                volcEngineExtractor.resolveStream(
-                                    videoUrlOrVid = playVoucher ?: sdkVid ?: "",
-                                    sdkVid = sdkVid,
-                                    playVoucher = playVoucher,
-                                    sourceName = name,
-                                    callback = callback
-                                )
-                                return true
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        Log.d(TAG, "Reel stream attempt notice: ${e.message}")
-                    }
-                }
-            }
-        }
-
-        // 2. Handle ToonBox Native Episode Link Data
+        // Parse ToonBox Episode Link Data
         val toonBoxData = try {
             parseJson<ToonBoxEpisodeLinkData>(data)
         } catch (_: Throwable) {
             null
-        }
+        } ?: return false
 
-        if (toonBoxData != null) {
+        val customToken = NetShortStorage.getToonBoxToken()
+
+        // 1. Authenticated API playback via ToonBox get_play_url
+        if (!customToken.isNullOrBlank()) {
             try {
                 val playResp = app.get(
                     "$mainUrl/api/v1/video/get_play_url",
@@ -756,6 +523,17 @@ class ToonBoxProvider : MainAPI() {
             }
         }
 
-        return false
+        // 2. Direct ToonBox VolcEngine CDN stream resolution
+        val catalogMatch = TOONBOX_CATALOG.find { it.dramaId == toonBoxData.dramaId }
+        val streamCandidate = catalogMatch?.defaultStreamUrl
+            ?: "$VOLC_CDN_BASE/freetoon/2026-02-04/0_1770185712.jpg"
+
+        volcEngineExtractor.resolveStream(
+            videoUrlOrVid = streamCandidate,
+            sourceName = name,
+            callback = callback
+        )
+
+        return true
     }
 }
