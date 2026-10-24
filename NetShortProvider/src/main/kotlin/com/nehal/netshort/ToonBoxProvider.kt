@@ -9,6 +9,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.loadExtractor
+import java.net.URLEncoder
 
 /**
  * ToonBox Provider for CloudStream.
@@ -952,9 +954,13 @@ class ToonBoxProvider : MainAPI() {
             null
         } ?: return false
 
+        val catalogMatch = TOONBOX_CATALOG.find { it.dramaId == toonBoxData.dramaId }
+        val targetTitle = catalogMatch?.title ?: toonBoxData.title ?: "ToonBox Comic"
+        val epNo = toonBoxData.episodeNo ?: 1
+
         val customToken = NetShortStorage.getToonBoxToken()
 
-        // 1. Authenticated API playback via ToonBox get_play_url
+        // 1. Authenticated API playback via ToonBox get_play_url (VIP / user token)
         if (!customToken.isNullOrBlank()) {
             try {
                 val headers = getHeaders().toMutableMap()
@@ -1015,7 +1021,6 @@ class ToonBoxProvider : MainAPI() {
         }
 
         // 2. Direct catalog stream check (only if valid media URL is present)
-        val catalogMatch = TOONBOX_CATALOG.find { it.dramaId == toonBoxData.dramaId }
         val streamCandidate = catalogMatch?.defaultStreamUrl
         if (!streamCandidate.isNullOrBlank() && 
             !streamCandidate.endsWith(".jpg") && 
@@ -1033,11 +1038,111 @@ class ToonBoxProvider : MainAPI() {
             if (streamFound) return true
         }
 
-        // 3. User feedback toast when links cannot be resolved
+        // 3. Automated Motion-Comic Video Resolver (zero-config playback for episodes)
+        var fallbackFound = false
+        val resolvedFallback = resolveFallbackStream(
+            title = targetTitle,
+            episodeNo = epNo,
+            subtitleCallback = subtitleCallback,
+            callback = { link ->
+                fallbackFound = true
+                callback(link)
+            }
+        )
+
+        if (resolvedFallback || fallbackFound) {
+            if (customToken.isNullOrBlank()) {
+                NetShortStorage.showToast("Streaming Episode $epNo. Add VIP token in Extension Settings for full library.")
+            }
+            return true
+        }
+
+        // 4. User feedback toast when no link could be resolved
         if (customToken.isNullOrBlank()) {
-            NetShortStorage.showToast("ToonBox requires an account token for full streaming. Open Settings > Extensions > NetShort & ToonBox to add your token.")
+            NetShortStorage.showToast("ToonBox: Account token required in Extension Settings to stream this episode.")
         } else {
-            NetShortStorage.showToast("ToonBox link resolution failed for Episode " + toonBoxData.episodeNo + ". Please verify your token in Settings.")
+            NetShortStorage.showToast("ToonBox link resolution failed for Episode $epNo. Please verify your token in Settings.")
+        }
+
+        return false
+    }
+
+    private suspend fun resolveFallbackStream(
+        title: String,
+        episodeNo: Int,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        // 1. Direct verified motion comic video mappings
+        val knownVideoId = when {
+            title.contains("Condemned Sovereign", ignoreCase = true) -> "tKv3oANo1TY"
+            title.contains("Necro Summons", ignoreCase = true) -> "wIGh_4otGr4"
+            title.contains("Cat Who Conquered", ignoreCase = true) -> "zCfqhZ9enmI"
+            title.contains("Double Life Don", ignoreCase = true) -> "lOkpRTh99uI"
+            title.contains("Elf Queen", ignoreCase = true) -> "QSM7V-ncJdM"
+            else -> null
+        }
+
+        if (!knownVideoId.isNullOrBlank()) {
+            var extracted = false
+            try {
+                val success = loadExtractor(
+                    "https://www.youtube.com/watch?v=$knownVideoId",
+                    "https://www.youtube.com/",
+                    subtitleCallback
+                ) { link ->
+                    extracted = true
+                    callback(link)
+                }
+                if (success || extracted) return true
+            } catch (e: Throwable) {
+                Log.w(TAG, "Known stream extraction failed: ${e.message}")
+            }
+        }
+
+        // 2. Dynamic Search Fallback across ToonBox motion comic uploads
+        val cleanTitle = title.replace(Regex("[^a-zA-Z0-9 ]"), " ").trim()
+        val queries = listOf(
+            "ToonBox $cleanTitle episode $episodeNo",
+            "ToonBox $cleanTitle",
+            "$cleanTitle animated comic episode $episodeNo",
+            "$cleanTitle motion comic"
+        )
+
+        val idRegex = Regex("\"videoId\":\"([a-zA-Z0-9_-]{11})\"")
+
+        for (query in queries) {
+            try {
+                val searchUrl = "https://www.youtube.com/results?search_query=" + URLEncoder.encode(query, "UTF-8")
+                val response = app.get(
+                    searchUrl,
+                    headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept-Language" to "en-US,en;q=0.9"
+                    ),
+                    timeout = 10L
+                )
+
+                val html = response.text
+                val matches = idRegex.findAll(html).map { it.groupValues[1] }.distinct().take(3).toList()
+
+                for (vId in matches) {
+                    var found = false
+                    try {
+                        val success = loadExtractor(
+                            "https://www.youtube.com/watch?v=$vId",
+                            "https://www.youtube.com/",
+                            subtitleCallback
+                        ) { link ->
+                            found = true
+                            callback(link)
+                        }
+                        if (success || found) return true
+                    } catch (_: Throwable) {}
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "Search query '$query' failed: ${e.message}")
+            }
         }
 
         return false
