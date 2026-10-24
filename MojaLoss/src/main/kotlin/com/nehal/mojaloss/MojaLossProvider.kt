@@ -515,8 +515,9 @@ class MojaLossProvider : MainAPI() {
         }
 
         val cookie = MojaLossStorage.getOrRefreshCookie()
+        val refererUrl = if (mediaData.url.isNotEmpty()) mediaData.url else "$mainUrl/"
         val headers = mutableMapOf(
-            "Referer" to "$mainUrl/",
+            "Referer" to refererUrl,
             "Origin" to mainUrl,
             "User-Agent" to USER_AGENT,
             "Accept" to "*/*"
@@ -710,7 +711,30 @@ class MojaLossProvider : MainAPI() {
             }
         }
 
-        // 2. Try MojaLoss Cast API (REST stream resolver with CSRF Nonce & Cookie auth)
+        // 2. Fallback: If postId was still missing, query REST search by slug
+        if (currentPostId.isNullOrEmpty() && mediaData.url.isNotEmpty()) {
+            val slug = mediaData.url.trimEnd('/').substringAfterLast('/')
+            if (slug.isNotEmpty()) {
+                try {
+                    val searchApi = "$mainUrl/wp-json/mojaloss/v1/search?q=$slug"
+                    val res = app.get(searchApi, headers = headers, timeout = 15L).parsedSafe<SearchApiResponse>()
+                    val match = res?.results?.firstOrNull { it.slug == slug } ?: res?.results?.firstOrNull()
+                    if (match?.id != null) {
+                        currentPostId = match.id
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 3. Fallback: If WP Nonce was missing, fetch home page to acquire nonce
+        if (wpNonce.isNullOrEmpty()) {
+            try {
+                val homeHtml = app.get("$mainUrl/", headers = headers, timeout = 15L).text
+                wpNonce = Regex(""""nonce"\s*:\s*"([a-zA-Z0-9]+)"""").find(homeHtml)?.groupValues?.getOrNull(1)
+            } catch (_: Exception) {}
+        }
+
+        // 4. Try MojaLoss Cast API (REST stream resolver with CSRF Nonce & Cookie auth)
         if (!currentPostId.isNullOrEmpty()) {
             val qualities = listOf("default", "4k")
             val castHeaders = headers.toMutableMap().apply {
@@ -719,6 +743,9 @@ class MojaLossProvider : MainAPI() {
                     put("X-WP-Nonce", wpNonce)
                 }
             }
+
+            val postIdInt = currentPostId.toIntOrNull()
+            val postIdPayload: Any = postIdInt ?: currentPostId
 
             for (q in qualities) {
                 try {
@@ -730,14 +757,14 @@ class MojaLossProvider : MainAPI() {
 
                     val postMap = if (mediaData.isTv) {
                         mapOf(
-                            "post_id" to currentPostId,
+                            "post_id" to postIdPayload,
                             "season" to (mediaData.season ?: 1),
                             "episode" to (mediaData.episode ?: 1),
                             "quality" to q
                         )
                     } else {
                         mapOf(
-                            "post_id" to currentPostId,
+                            "post_id" to postIdPayload,
                             "quality" to q
                         )
                     }
@@ -801,12 +828,12 @@ class MojaLossProvider : MainAPI() {
 
         if (!foundLinks) {
             val hasCookie = !MojaLossStorage.getCookie().isNullOrBlank()
-            val msg = if (!hasCookie) {
-                "MojaLoss requires an active session cookie or credentials to stream. Please open Plugin Settings (Settings -> Extensions -> MojaLoss -> Settings) to set your session cookie."
+            if (!hasCookie) {
+                MojaLossStorage.showToast("MojaLoss requires your session cookie to stream. Open Settings > Extensions > MojaLoss to configure.")
             } else {
-                "No stream link found. Your MojaLoss session cookie may have expired or this title requires an active subscription."
+                MojaLossStorage.showToast("No stream link found. Your MojaLoss session cookie may have expired or this title requires an active subscription.")
             }
-            throw ErrorLoadingException(msg)
+            return false
         }
 
         return foundLinks

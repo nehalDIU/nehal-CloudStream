@@ -2,25 +2,64 @@ package com.nehal.mojaloss
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.app
 
 object MojaLossStorage {
     private var prefs: SharedPreferences? = null
+    var appContext: Context? = null
 
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         if (prefs == null) {
             prefs = context.applicationContext.getSharedPreferences("MojaLossPrefs", Context.MODE_PRIVATE)
         }
     }
 
-    fun saveCookie(cookie: String) {
-        val clean = cookie.trim()
+    fun showToast(message: String) {
+        val ctx = appContext ?: return
+        try {
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
+            }
+        } catch (_: Throwable) {
+            Log.e("MojaLoss", "Failed to display toast: $message")
+        }
+    }
+
+    /**
+     * Normalizes cookie input:
+     * - Strips "Cookie:" prefix
+     * - Parses Cookie-Editor JSON array: [{"name": "...", "value": "..."}]
+     * - Cleans whitespace and newlines
+     */
+    fun parseCookieInput(input: String): String {
+        val clean = input.trim()
             .removePrefix("Cookie:")
             .removePrefix("cookie:")
             .trim()
+
+        // Handle Cookie-Editor JSON export format: [{"name":"x","value":"y"},...]
+        if (clean.startsWith("[") && clean.endsWith("]")) {
+            try {
+                val matches = Regex(""""name"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([^"]*)"""").findAll(clean)
+                val pairs = matches.map { "${it.groupValues[1]}=${it.groupValues[2]}" }.toList()
+                if (pairs.isNotEmpty()) {
+                    return pairs.joinToString("; ")
+                }
+            } catch (_: Throwable) {}
+        }
+
+        return clean.replace("\r", "").replace("\n", " ")
+    }
+
+    fun saveCookie(cookie: String) {
+        val clean = parseCookieInput(cookie)
         prefs?.edit()
             ?.putString("session_cookie", clean)
             ?.putLong("cookie_timestamp", System.currentTimeMillis())
@@ -41,10 +80,7 @@ object MojaLossStorage {
 
     suspend fun verifySession(cookie: String): Boolean {
         if (cookie.isBlank()) return false
-        val cleanCookie = cookie.trim()
-            .removePrefix("Cookie:")
-            .removePrefix("cookie:")
-            .trim()
+        val cleanCookie = parseCookieInput(cookie)
         return try {
             val res = app.get(
                 "https://www.mojaloss.stream/wp-admin/",
