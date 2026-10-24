@@ -724,7 +724,7 @@ class MovieBoxProvider : MainAPI() {
         val seenUrls = mutableSetOf<String>()
 
         suspend fun emitStream(streamUrl: String, resolution: Int = 0, codecName: String = ""): Boolean {
-            if (streamUrl.isBlank() || isDecoyStream(streamUrl)) return false
+            if (streamUrl.isBlank() || !isMediaUrl(streamUrl) || isDecoyStream(streamUrl)) return false
             if (!seenUrls.add(streamUrl)) return false
 
             val quality = when {
@@ -749,7 +749,7 @@ class MovieBoxProvider : MainAPI() {
 
             callback(newExtractorLink(name, label, streamUrl, type) {
                 this.quality = quality
-                this.referer = host
+                this.referer = ""
                 this.headers = mapOf("User-Agent" to modernUserAgent)
             })
             emittedCount++
@@ -769,7 +769,7 @@ class MovieBoxProvider : MainAPI() {
                     val url = st.get("url")?.asText() ?: continue
                     val duration = st.get("duration")?.asLong()
                     val size = st.get("size")?.asText()?.toLongOrNull() ?: st.get("size")?.asLong()
-                    if (isDecoyStream(url, duration, size)) continue
+                    if (!isMediaUrl(url) || isDecoyStream(url, duration, size)) continue
 
                     val resVal = st.get("resolution")?.asInt() ?: 0
                     val codec = st.get("codecName")?.asText() ?: ""
@@ -807,15 +807,15 @@ class MovieBoxProvider : MainAPI() {
                                 ?: continue
                             val duration = item.get("duration")?.asLong()
                             val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
-                            if (isDecoyStream(resUrl, duration, size)) continue
+                            if (!isMediaUrl(resUrl) || isDecoyStream(resUrl, duration, size)) continue
 
                             val resVal = item.get("resolution")?.asInt(0) ?: 0
                             val codec = item.get("codecName")?.asText() ?: ""
                             emitStream(resUrl, resVal, codec)
                         }
                     } else {
-                        val dlUrl = d.get("downloadUrl")?.asText() ?: d.get("resourceLink")?.asText()
-                        if (!dlUrl.isNullOrBlank()) {
+                        val dlUrl = d.get("downloadUrl")?.asText()
+                        if (!dlUrl.isNullOrBlank() && isMediaUrl(dlUrl) && !isDecoyStream(dlUrl)) {
                             val codec = d.get("codecName")?.asText() ?: ""
                             emitStream(dlUrl, 0, codec)
                         }
@@ -839,10 +839,10 @@ class MovieBoxProvider : MainAPI() {
                         val matchEpisode = (se == 0 && ep == 0) || (itemSe == se && itemEp == ep)
                         if (!matchEpisode) continue
 
-                        val link = item.get("resourceLink")?.asText() ?: continue
+                        val link = item.get("resourceLink")?.asText() ?: item.get("downloadUrl")?.asText() ?: continue
                         val duration = item.get("duration")?.asLong()
                         val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
-                        if (isDecoyStream(link, duration, size)) continue
+                        if (!isMediaUrl(link) || isDecoyStream(link, duration, size)) continue
 
                         val resVal = item.get("resolution")?.asInt(0) ?: 0
                         val codec = item.get("codecName")?.asText() ?: ""
@@ -912,5 +912,17 @@ class MovieBoxProvider : MainAPI() {
         if (duration != null && duration in 1..300) return true
         if (size != null && size in 1..2000000) return true
         return false
+    }
+
+    private fun isMediaUrl(url: String): Boolean {
+        if (url.isBlank()) return false
+        val lower = url.lowercase()
+        return lower.contains(".mp4") ||
+               lower.contains(".mkv") ||
+               lower.contains(".m3u8") ||
+               lower.contains(".mpd") ||
+               lower.contains("hakunaymatata.com") ||
+               lower.contains("aoneroom.com") ||
+               lower.contains("inmoviebox.com")
     }
 }
