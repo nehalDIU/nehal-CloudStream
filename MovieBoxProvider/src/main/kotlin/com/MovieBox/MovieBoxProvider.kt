@@ -740,9 +740,26 @@ class MovieBoxProvider : MainAPI() {
             p[0] to (p.getOrNull(1) ?: "")
         } ?: emptyMap()
 
-        val subjectId = queryMap["subjectId"] ?: data.substringAfter("subjectId=").substringBefore("&")
-        val se = queryMap["se"]?.toIntOrNull() ?: queryMap["seasonNumber"]?.toIntOrNull() ?: 0
-        val ep = queryMap["ep"]?.toIntOrNull() ?: queryMap["episodeNumber"]?.toIntOrNull() ?: 0
+        val parts = if (data.contains("|")) data.split("|") else emptyList()
+        val subjectId = when {
+            parts.isNotEmpty() -> parts[0]
+            queryMap.containsKey("subjectId") -> queryMap["subjectId"] ?: ""
+            data.contains("subjectId=") -> data.substringAfter("subjectId=").substringBefore("&")
+            data.startsWith("http") -> data.substringAfterLast("/")
+            else -> data
+        }
+        val se = when {
+            parts.size > 1 -> parts[1].toIntOrNull() ?: 0
+            queryMap.containsKey("se") -> queryMap["se"]?.toIntOrNull() ?: 0
+            queryMap.containsKey("seasonNumber") -> queryMap["seasonNumber"]?.toIntOrNull() ?: 0
+            else -> 0
+        }
+        val ep = when {
+            parts.size > 2 -> parts[2].toIntOrNull() ?: 0
+            queryMap.containsKey("ep") -> queryMap["ep"]?.toIntOrNull() ?: 0
+            queryMap.containsKey("episodeNumber") -> queryMap["episodeNumber"]?.toIntOrNull() ?: 0
+            else -> 0
+        }
 
         // 1. Subtitles
         loadCaptions(subjectId, subtitleCallback)
@@ -750,11 +767,22 @@ class MovieBoxProvider : MainAPI() {
         var emittedCount = 0
         val seenUrls = mutableSetOf<String>()
 
-        suspend fun emitStream(streamUrl: String, resolution: Int = 0, codecName: String = ""): Boolean {
+        suspend fun emitStream(
+            streamUrl: String,
+            resolution: Int = 0,
+            codecName: String = "",
+            langLabel: String = "",
+            subDomain: String = "",
+            subPath: String = "",
+            signCookieRaw: String? = null,
+            signHeaderKey: String = "X-MB-Token"
+        ): Boolean {
             if (streamUrl.isBlank() || !isMediaUrl(streamUrl) || isDecoyStream(streamUrl)) return false
             if (!seenUrls.add(streamUrl)) return false
 
             val quality = when {
+                resolution >= 2160 -> Qualities.P2160.value
+                resolution >= 1440 -> Qualities.P1440.value
                 resolution >= 1080 -> Qualities.P1080.value
                 resolution >= 720 -> Qualities.P720.value
                 resolution >= 480 -> Qualities.P480.value
@@ -770,88 +798,256 @@ class MovieBoxProvider : MainAPI() {
 
             val label = buildString {
                 append(name)
+                if (langLabel.isNotBlank()) append(" ($langLabel)")
                 if (codecName.isNotBlank()) append(" (${codecName.uppercase()})")
                 if (resolution > 0) append(" ${resolution}p")
             }
 
             callback(newExtractorLink(name, label, streamUrl, type) {
                 this.quality = quality
-                this.referer = ""
-                this.headers = mapOf("User-Agent" to modernUserAgent)
+                if (type == ExtractorLinkType.VIDEO) {
+                    this.referer = "https://movie-box.co/"
+                    this.headers = mapOf(
+                        "Referer" to "https://movie-box.co/",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+                    )
+                } else {
+                    val origin = if (subDomain.isNotBlank()) subDomain else "https://movie-box.co"
+                    val refererUrl = if (subDomain.isNotBlank() && subPath.isNotBlank()) {
+                        "$subDomain/movies/$subPath?id=$subjectId&type=/movie/detail&detailSe=&detailEp=&lang=en"
+                    } else {
+                        "https://movie-box.co/"
+                    }
+                    val h = mutableMapOf(
+                        "Origin" to origin,
+                        "Referer" to refererUrl,
+                        "User-Agent" to WEB_USER_AGENT
+                    )
+                    if (!signCookieRaw.isNullOrBlank()) {
+                        h[signHeaderKey] = signCookieRaw
+                    }
+                    this.referer = refererUrl
+                    this.headers = h
+                }
             })
             emittedCount++
             return true
         }
 
-        // 2. Play-info extraction (checks duration, size, and policy resource)
-        try {
-            val playInfoUrl = if (data.startsWith("http")) data else "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$se&ep=$ep"
-            val headers = buildAuthHeaders("GET", url = playInfoUrl)
-            val res = app.get(playInfoUrl, headers = headers)
-            val root = mapper.readTree(res.body.string())
-            val dataNode = root.get("data")
-            val streams = dataNode?.get("streams") ?: dataNode?.get("list")
-            if (streams != null && streams.isArray) {
-                for (st in streams) {
-                    val url = st.get("url")?.asText() ?: continue
-                    val duration = st.get("duration")?.asLong()
-                    val size = st.get("size")?.asText()?.toLongOrNull() ?: st.get("size")?.asLong()
-                    if (!isMediaUrl(url) || isDecoyStream(url, duration, size)) continue
+        suspend fun resolveH5Streams(targetSubjectId: String, seasonNum: Int, episodeNum: Int): Boolean {
+            return try {
+                val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$targetSubjectId"
+                var headers = buildAuthHeaders("GET", url = detailUrl)
+                var res = app.get(detailUrl, headers = headers)
+                if (res.code == 401 || res.code == 441) {
+                    fetchAnonymousToken(forceRefresh = true)
+                    headers = buildAuthHeaders("GET", url = detailUrl)
+                    res = app.get(detailUrl, headers = headers)
+                }
 
-                    val resVal = st.get("resolution")?.asInt() ?: 0
-                    val codec = st.get("codecName")?.asText() ?: ""
-                    emitStream(url, resVal, codec)
+                if (res.code != 200) return false
+                val root = mapper.readTree(res.body.string())
+                val dataNode = root.get("data") ?: return false
 
-                    val signCookie = st.get("signCookie")?.asText()
-                    if (!signCookie.isNullOrBlank()) {
-                        extractPolicyResource(signCookie)?.let { policyUrl ->
-                            emitStream(policyUrl, resVal, codec)
+                val rawDetailUrl = dataNode.get("detailUrl")?.asText() ?: ""
+                val uriDetail = runCatching { URI(rawDetailUrl) }.getOrNull()
+                val subDomain = if (uriDetail != null && !uriDetail.scheme.isNullOrBlank() && !uriDetail.host.isNullOrBlank()) {
+                    "${uriDetail.scheme}://${uriDetail.host}"
+                } else {
+                    "https://movie-box.co"
+                }
+                val subPath = if (rawDetailUrl.isNotBlank()) {
+                    rawDetailUrl.trimEnd('/').substringAfterLast('/')
+                } else ""
+
+                if (subPath.isBlank()) return false
+
+                val languages = mutableListOf<Pair<String, String>>()
+                var originalLangName = "Original"
+                val dubsNode = dataNode.get("dubs")
+                if (dubsNode != null && dubsNode.isArray) {
+                    for (dub in dubsNode) {
+                        val dubId = dub.get("subjectId")?.asText()
+                        val lanName = dub.get("lanName")?.asText()
+                        if (!dubId.isNullOrBlank() && !lanName.isNullOrBlank()) {
+                            if (dubId == targetSubjectId) {
+                                originalLangName = lanName
+                            } else {
+                                languages.add(Pair(dubId, lanName))
+                            }
                         }
                     }
                 }
+                languages.add(0, Pair(targetSubjectId, originalLangName))
+
+                val dubMap = fetchDubDetailPaths(subPath)
+                val token = bearerToken ?: fetchAnonymousToken()
+
+                for ((subId, rawLan) in languages) {
+                    val langLabel = rawLan.replace("dub", "Audio", ignoreCase = true)
+                    val currentPath = if (subId == targetSubjectId) subPath else (dubMap[subId] ?: subPath)
+
+                    val playUrl = "$subDomain/wefeed-h5api-bff/subject/play?subjectId=$subId&se=$seasonNum&ep=$episodeNum&detailPath=$currentPath&streamSignType=1&supportCodecs[hevc]=1&supportCodecs[h264]=1"
+                    val playHeaders = mutableMapOf(
+                        "User-Agent" to WEB_USER_AGENT,
+                        "Referer" to "$subDomain/movies/$currentPath?id=$subId&type=/movie/detail&detailSe=&detailEp=&lang=en",
+                        "Accept" to "application/json",
+                        "x-client-info" to """{"timezone":"Asia/Calcutta"}""",
+                        "x-request-lang" to "en",
+                        "x-vip-restrict" to "0",
+                        "x-no-high-risk-restrict" to "0",
+                        "x-source" to ""
+                    )
+                    if (!token.isNullOrBlank()) {
+                        playHeaders["Authorization"] = "Bearer $token"
+                    }
+
+                    val playRes = app.get(playUrl, headers = playHeaders)
+                    if (playRes.code == 200) {
+                        val playRoot = mapper.readTree(playRes.body.string())
+                        val playData = playRoot.get("data")
+                        if (playData != null) {
+                            // 1. MP4 / regular streams
+                            val streamsList = playData.get("streams")
+                            if (streamsList != null && streamsList.isArray) {
+                                for (st in streamsList) {
+                                    val u = st.get("url")?.asText() ?: continue
+                                    val duration = st.get("duration")?.asLong()
+                                    val size = st.get("size")?.asText()?.toLongOrNull() ?: st.get("size")?.asLong()
+                                    if (!isMediaUrl(u) || isDecoyStream(u, duration, size)) continue
+
+                                    val resVal = parseResolution(st.get("resolutions") ?: st.get("resolution"))
+                                    val codec = st.get("codecName")?.asText() ?: st.get("codec")?.asText() ?: ""
+                                    val signCookie = st.get("signCookie")?.asText()
+                                    val signHeaderKey = st.get("signHeaderKey")?.asText() ?: "X-MB-Token"
+                                    emitStream(u, resVal, codec, langLabel, subDomain, currentPath, signCookie, signHeaderKey)
+
+                                    val streamId = st.get("id")?.asText()
+                                    if (!streamId.isNullOrBlank()) {
+                                        loadStreamCaptions(subId, streamId, langLabel, subtitleCallback)
+                                    }
+                                }
+                            }
+
+                            // 2. DASH streams
+                            val dashList = playData.get("dash")
+                            if (dashList != null && dashList.isArray) {
+                                for (d in dashList) {
+                                    val u = d.get("url")?.asText() ?: continue
+                                    val duration = d.get("duration")?.asLong()
+                                    val size = d.get("size")?.asText()?.toLongOrNull() ?: d.get("size")?.asLong()
+                                    if (!isMediaUrl(u) || isDecoyStream(u, duration, size)) continue
+
+                                    val resVal = parseResolution(d.get("resolutions") ?: d.get("resolution"))
+                                    val signCookie = d.get("signCookie")?.asText()
+                                    val signHeaderKey = d.get("signHeaderKey")?.asText() ?: "X-MB-Token"
+                                    emitStream(u, resVal, "DASH", langLabel, subDomain, currentPath, signCookie, signHeaderKey)
+                                }
+                            }
+
+                            // 3. HLS streams
+                            val hlsList = playData.get("hls")
+                            if (hlsList != null && hlsList.isArray) {
+                                for (h in hlsList) {
+                                    val u = h.get("url")?.asText() ?: continue
+                                    val resVal = parseResolution(h.get("resolutions") ?: h.get("resolution"))
+                                    val signCookie = h.get("signCookie")?.asText()
+                                    val signHeaderKey = h.get("signHeaderKey")?.asText() ?: "X-MB-Token"
+                                    emitStream(u, resVal, "HLS", langLabel, subDomain, currentPath, signCookie, signHeaderKey)
+                                }
+                            }
+                        }
+                    }
+                }
+                emittedCount > 0
+            } catch (_: Exception) {
+                false
             }
-        } catch (_: Exception) {}
+        }
+
+        val isSeries = se > 0 || ep > 0
+        if (isSeries) {
+            resolveH5Streams(subjectId, se, ep)
+        }
+
+        // 2. Play-info extraction (checks duration, size, and policy resource)
+        if (emittedCount == 0) {
+            try {
+                val playInfoUrl = if (data.startsWith("http")) data else "$host/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$se&ep=$ep"
+                val headers = buildAuthHeaders("GET", url = playInfoUrl)
+                val res = app.get(playInfoUrl, headers = headers)
+                val root = mapper.readTree(res.body.string())
+                val dataNode = root.get("data")
+                val streams = dataNode?.get("streams") ?: dataNode?.get("list")
+                if (streams != null && streams.isArray) {
+                    for (st in streams) {
+                        val url = st.get("url")?.asText() ?: continue
+                        val duration = st.get("duration")?.asLong()
+                        val size = st.get("size")?.asText()?.toLongOrNull() ?: st.get("size")?.asLong()
+                        if (!isMediaUrl(url) || isDecoyStream(url, duration, size)) continue
+
+                        val resVal = parseResolution(st.get("resolution") ?: st.get("resolutions"))
+                        val codec = st.get("codecName")?.asText() ?: ""
+                        emitStream(url, resVal, codec)
+
+                        val signCookie = st.get("signCookie")?.asText()
+                        if (!signCookie.isNullOrBlank()) {
+                            extractPolicyResource(signCookie)?.let { policyUrl ->
+                                emitStream(policyUrl, resVal, codec)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
 
         // 3. ResourceDetectors via subject-api/get (real full HD media streams)
-        try {
-            val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId"
-            val headers = buildAuthHeaders("GET", url = detailUrl)
-            val res = app.get(detailUrl, headers = headers)
-            val root = mapper.readTree(res.body.string())
-            val detectors = root.get("data")?.get("resourceDetectors")
-            if (detectors != null && detectors.isArray) {
-                for (d in detectors) {
-                    val list = d.get("resolutionList")
-                    if (list != null && list.isArray && list.size() > 0) {
-                        for (item in list) {
-                            val itemSe = item.get("se")?.asInt(0) ?: 0
-                            val itemEp = item.get("ep")?.asInt(0) ?: item.get("episode")?.asInt(0) ?: 0
-                            val matchEpisode = (se == 0 && ep == 0) || (itemSe == se && itemEp == ep)
-                            if (!matchEpisode) continue
+        if (emittedCount == 0) {
+            try {
+                val detailUrl = "$host/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId"
+                val headers = buildAuthHeaders("GET", url = detailUrl)
+                val res = app.get(detailUrl, headers = headers)
+                val root = mapper.readTree(res.body.string())
+                val detectors = root.get("data")?.get("resourceDetectors")
+                if (detectors != null && detectors.isArray) {
+                    for (d in detectors) {
+                        val list = d.get("resolutionList")
+                        if (list != null && list.isArray && list.size() > 0) {
+                            for (item in list) {
+                                val itemSe = item.get("se")?.asInt(0) ?: 0
+                                val itemEp = item.get("ep")?.asInt(0) ?: item.get("episode")?.asInt(0) ?: 0
+                                val matchEpisode = (se == 0 && ep == 0) || (itemSe == se && itemEp == ep)
+                                if (!matchEpisode) continue
 
-                            val resUrl = item.get("resourceLink")?.asText()
-                                ?: item.get("downloadUrl")?.asText()
-                                ?: continue
-                            val duration = item.get("duration")?.asLong()
-                            val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
-                            if (!isMediaUrl(resUrl) || isDecoyStream(resUrl, duration, size)) continue
+                                val resUrl = item.get("resourceLink")?.asText()
+                                    ?: item.get("downloadUrl")?.asText()
+                                    ?: continue
+                                val duration = item.get("duration")?.asLong()
+                                val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
+                                if (!isMediaUrl(resUrl) || isDecoyStream(resUrl, duration, size)) continue
 
-                            val resVal = item.get("resolution")?.asInt(0) ?: 0
-                            val codec = item.get("codecName")?.asText() ?: ""
-                            emitStream(resUrl, resVal, codec)
-                        }
-                    } else {
-                        val dlUrl = d.get("downloadUrl")?.asText()
-                        if (!dlUrl.isNullOrBlank() && isMediaUrl(dlUrl) && !isDecoyStream(dlUrl)) {
-                            val codec = d.get("codecName")?.asText() ?: ""
-                            emitStream(dlUrl, 0, codec)
+                                val resVal = parseResolution(item.get("resolution") ?: item.get("resolutions"))
+                                val codec = item.get("codecName")?.asText() ?: ""
+                                emitStream(resUrl, resVal, codec)
+                            }
+                        } else {
+                            val dlUrl = d.get("downloadUrl")?.asText()
+                            if (!dlUrl.isNullOrBlank() && isMediaUrl(dlUrl) && !isDecoyStream(dlUrl)) {
+                                val codec = d.get("codecName")?.asText() ?: ""
+                                emitStream(dlUrl, 0, codec)
+                            }
                         }
                     }
                 }
-            }
-        } catch (_: Exception) {}
+            } catch (_: Exception) {}
+        }
 
-        // 4. Fallback to /subject-api/resource
+        // 4. H5 stream resolver fallback for movies / edge-cases
+        if (emittedCount == 0 && !isSeries) {
+            resolveH5Streams(subjectId, se, ep)
+        }
+
+        // 5. Fallback to /subject-api/resource
         if (emittedCount == 0) {
             try {
                 val resUrl = if (se > 0 || ep > 0) {
@@ -875,7 +1071,7 @@ class MovieBoxProvider : MainAPI() {
                         val size = item.get("size")?.asText()?.toLongOrNull() ?: item.get("size")?.asLong()
                         if (!isMediaUrl(link) || isDecoyStream(link, duration, size)) continue
 
-                        val resVal = item.get("resolution")?.asInt(0) ?: 0
+                        val resVal = parseResolution(item.get("resolution") ?: item.get("resolutions"))
                         val codec = item.get("codecName")?.asText() ?: ""
                         emitStream(link, resVal, codec)
                     }
@@ -930,17 +1126,84 @@ class MovieBoxProvider : MainAPI() {
         }
     }
 
+    private suspend fun loadStreamCaptions(
+        subjectId: String,
+        streamId: String,
+        langLabel: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        val host = getActiveHost()
+        val capUrl = "$host/wefeed-mobile-bff/subject-api/get-stream-captions?subjectId=$subjectId&streamId=$streamId"
+        try {
+            val headers = buildAuthHeaders("GET", url = capUrl)
+            val res = app.get(capUrl, headers = headers)
+            val root = mapper.readTree(res.body.string())
+            val capData = root.get("data")
+            val captions = capData?.get("extCaptions") ?: capData?.get("captions")
+            if (captions != null && captions.isArray) {
+                for (cap in captions) {
+                    val subUrl = cap.get("url")?.asText() ?: continue
+                    val capLang = cap.get("lanName")?.asText()
+                        ?: cap.get("language")?.asText()
+                        ?: cap.get("lan")?.asText()
+                        ?: "Unknown"
+                    val label = if (langLabel.isNotBlank()) "$capLang ($langLabel)" else capLang
+                    subtitleCallback(newSubtitleFile(label, subUrl))
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun fetchDubDetailPaths(detailPath: String): Map<String, String> {
+        return try {
+            val url = "https://movie-box.co/wefeed-h5api-bff/detail?detailPath=$detailPath"
+            val headers = mapOf(
+                "Accept" to "application/json",
+                "Origin" to "https://movie-box.co",
+                "Referer" to "https://movie-box.co/",
+                "User-Agent" to WEB_USER_AGENT,
+                "x-client-info" to """{"timezone":"Asia/Calcutta"}"""
+            )
+            val res = app.get(url, headers = headers)
+            val root = mapper.readTree(res.body.string())
+            val dubsNode = root.get("data")?.get("subject")?.get("dubs")
+            val map = mutableMapOf<String, String>()
+            if (dubsNode != null && dubsNode.isArray) {
+                for (item in dubsNode) {
+                    val sId = item.get("subjectId")?.asText() ?: continue
+                    val dPath = item.get("detailPath")?.asText()
+                    if (!dPath.isNullOrBlank()) {
+                        map[sId] = dPath
+                    }
+                }
+            }
+            map
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun parseResolution(node: JsonNode?): Int {
+        if (node == null || node.isNull) return 0
+        if (node.isInt) return node.asInt()
+        val text = node.asText().trim()
+        text.toIntOrNull()?.let { return it }
+        val match = Regex("""(\d{3,4})""").find(text)
+        return match?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    }
+
     private fun isDecoyStream(url: String, duration: Long? = null, size: Long? = null): Boolean {
         if (url.isBlank()) return true
         val lower = url.lowercase()
         if (lower.contains("b164fbfb4347792950bdfbfb563d39d9") ||
             lower.contains("80da52722ee7de7a4303290af6783424") ||
+            lower.contains("5bebb475ecb0eb4fbb4e2f3bcbcde7b5") ||
             lower.contains("blank.mp4") ||
             lower.contains("decoy") ||
             lower.contains("sample") ||
             lower.contains("/other/")
         ) return true
-        if (duration != null && duration in 1..300) return true
+        if (duration != null && duration in 1..45) return true
         if (size != null && size in 1..2000000) return true
         return false
     }
